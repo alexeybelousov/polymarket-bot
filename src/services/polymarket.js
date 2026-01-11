@@ -7,12 +7,13 @@ const gamma = axios.create({
 });
 
 /**
- * Получить текущий timestamp окончания 15-минутного интервала
+ * Получить текущий timestamp НАЧАЛА 15-минутного интервала
+ * Slug рынка содержит start time, а не end time!
  */
-function getCurrentIntervalEnd() {
+function getCurrentIntervalStart() {
   const now = Math.floor(Date.now() / 1000);
   const interval = 900; // 15 минут в секундах
-  return Math.ceil(now / interval) * interval;
+  return Math.floor(now / interval) * interval;
 }
 
 /**
@@ -33,14 +34,18 @@ function parse15mSlug(slug) {
  * Получить slug'и: текущий, -15 мин, -30 мин
  */
 function getPrev15mSlugs(baseSlug) {
-  const ts = getCurrentIntervalEnd();
+  const ts = getCurrentIntervalStart();
   const step = 900;
+
+  // Время окончания текущего интервала (для расчёта timeToEnd)
+  const currentIntervalEnd = ts + step;
 
   return {
     current: `${baseSlug}-${ts}`,
     prev1: `${baseSlug}-${ts - step}`,
     prev2: `${baseSlug}-${ts - 2 * step}`,
     currentTs: ts,
+    currentIntervalEnd,
   };
 }
 
@@ -204,7 +209,7 @@ async function get15mContext(baseSlug) {
 
   // Время до конца рынка в секундах
   const now = Math.floor(Date.now() / 1000);
-  const timeToEnd = slugs.currentTs - now;
+  const timeToEnd = slugs.currentIntervalEnd - now;
 
   return {
     slugs,
@@ -244,6 +249,6 @@ module.exports = {
   get15mContext,
   getMarketUrl,
   formatTimeToEnd,
-  getCurrentIntervalEnd,
+  getCurrentIntervalStart,
 };
 
