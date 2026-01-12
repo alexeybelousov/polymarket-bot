@@ -22,6 +22,8 @@ async function safeEditMessage(ctx, text, extra = {}) {
  * Команда /start
  */
 async function handleStart(ctx) {
+  console.log(`[START] User ${ctx.from.id} sent /start, update_id: ${ctx.update.update_id}`);
+  
   const user = storage.getOrCreateUser(ctx.from.id, {
     username: ctx.from.username,
     firstName: ctx.from.first_name,
