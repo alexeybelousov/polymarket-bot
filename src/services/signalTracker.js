@@ -84,10 +84,9 @@ class SignalTracker {
       const formatColorInfo = (data) => {
         let info = `${data.color} [${data.source}]`;
         if (data.prices) {
-          info += ` (Up:${data.prices.up.toFixed(2)} Down:${data.prices.down.toFixed(2)})`;
-        }
-        if (data.winningOutcome) {
-          info += ` winner:${data.winningOutcome}`;
+          const start = data.prices.start ?? 0;
+          const current = data.prices.current ?? 0;
+          info += ` (Start:${start.toFixed(3)} Current:${current.toFixed(3)})`;
         }
         return info;
       };
