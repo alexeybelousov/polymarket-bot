@@ -96,10 +96,12 @@ class SignalTracker {
       
       // Форматирование информации о цвете для логов
       const formatColorInfo = (data) => {
-        let info = `${data.color} [${data.source}]`;
-        if (data.prices && typeof data.prices.start === 'number' && typeof data.prices.current === 'number') {
-          info += ` (Start:${data.prices.start.toFixed(3)} Current:${data.prices.current.toFixed(3)})`;
-        }
+        let info = `${data?.color || 'unknown'} [${data?.source || '?'}]`;
+        try {
+          if (data?.prices?.start != null && data?.prices?.current != null) {
+            info += ` (Start:${Number(data.prices.start).toFixed(3)} Current:${Number(data.prices.current).toFixed(3)})`;
+          }
+        } catch { /* ignore */ }
         return info;
       };
       
