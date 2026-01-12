@@ -17,15 +17,21 @@ class SignalTracker {
     this.bot = bot;
     this.interval = null;
     
-    // Состояние для отслеживания сигналов
-    // Храним время когда цвет стал текущим
+    // Состояние для отслеживания цвета и времени удержания
     this.colorState = {
-      eth: { color: null, since: null, signalSent: false },
-      btc: { color: null, since: null, signalSent: false },
+      eth: { color: null, since: null },
+      btc: { color: null, since: null },
     };
     
     // Отслеживаем последний интервал чтобы сбрасывать состояние при смене
     this.lastInterval = {
+      eth: null,
+      btc: null,
+    };
+    
+    // Отдельно храним для какого интервала уже отправлен сигнал
+    // Не сбрасывается при изменении цвета!
+    this.signalSentFor = {
       eth: null,
       btc: null,
     };
@@ -71,8 +77,16 @@ class SignalTracker {
       // Проверяем смену интервала - сбрасываем состояние
       if (this.lastInterval[type] !== context.slugs.current) {
         this.lastInterval[type] = context.slugs.current;
-        this.colorState[type] = { color: null, since: null, signalSent: false };
+        this.colorState[type] = { color: null, since: null };
+        // signalSentFor сбрасывается только при смене интервала
+        this.signalSentFor[type] = null;
         console.log(`📊 New interval for ${asset}: ${context.slugs.current}`);
+      }
+      
+      // Проверяем, был ли уже отправлен сигнал для этого интервала
+      if (this.signalSentFor[type] === context.slugs.current) {
+        debug(`  ⏸ Signal already sent for ${context.slugs.current}`);
+        return;
       }
 
       // Проверяем условия для сигнала
@@ -128,8 +142,8 @@ class SignalTracker {
       // 4. Текущая свеча того же цвета
       if (current.color !== targetColor) {
         debug(`  ❌ Current candle is ${current.color}, need ${targetColor}`);
-        // Цвет изменился - сбрасываем таймер
-        this.colorState[type] = { color: null, since: null, signalSent: false };
+        // Цвет изменился - сбрасываем таймер (но НЕ signalSentFor!)
+        this.colorState[type] = { color: null, since: null };
         return;
       }
 
@@ -145,7 +159,6 @@ class SignalTracker {
         this.colorState[type] = {
           color: targetColor,
           since: now,
-          signalSent: false,
         };
         return;
       }
@@ -154,16 +167,12 @@ class SignalTracker {
       const holdTime = (now - state.since) / 1000;
       debug(`  Hold time: ${holdTime.toFixed(1)}s / ${config.polymarket.colorHoldTime}s`);
       
-      if (state.signalSent) {
-        debug(`  ⏸ Signal already sent for this interval`);
-        return;
-      }
-      
       if (holdTime >= config.polymarket.colorHoldTime) {
         debug(`  🎯 SIGNAL TRIGGERED!`);
         // Сигнал! Отправляем
         await this.sendSignal(type, targetColor, current, context.slugs.current);
-        this.colorState[type].signalSent = true;
+        // Запоминаем что для этого интервала сигнал уже отправлен
+        this.signalSentFor[type] = context.slugs.current;
       } else {
         debug(`  ⏳ Waiting... ${(config.polymarket.colorHoldTime - holdTime).toFixed(1)}s left`);
       }
