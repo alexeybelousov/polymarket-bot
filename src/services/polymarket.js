@@ -1,13 +1,13 @@
 const axios = require('axios');
 const config = require('../config');
 
-// Gamma API - для получения conditionId и базовой инфы
+// Gamma API - для получения token IDs и базовой инфы
 const gamma = axios.create({
   baseURL: config.polymarket.gammaApiUrl,
   timeout: 10000,
 });
 
-// CLOB API - для актуальных цен в реальном времени
+// CLOB API - для актуальных цен
 const clob = axios.create({
   baseURL: 'https://clob.polymarket.com',
   timeout: 10000,
@@ -40,7 +40,7 @@ function getPrev15mSlugs(baseSlug) {
 }
 
 /**
- * Получить базовую инфу о рынке из Gamma API (conditionId, tokenIds)
+ * Получить информацию о рынке из Gamma API (tokenIds, conditionId)
  */
 async function fetchMarketInfo(slug) {
   try {
@@ -48,10 +48,20 @@ async function fetchMarketInfo(slug) {
     if (!data || !data.markets?.[0]) return null;
     
     const market = data.markets[0];
+    const tokenIds = JSON.parse(market.clobTokenIds || '[]');
+    const outcomes = JSON.parse(market.outcomes || '[]');
+    
+    // Находим индекс Up токена
+    const upIndex = outcomes.findIndex(o => /up/i.test(o));
+    const downIndex = outcomes.findIndex(o => /down/i.test(o));
+    
     return {
       slug,
       conditionId: market.conditionId,
-      tokenIds: JSON.parse(market.clobTokenIds || '[]'),
+      upTokenId: tokenIds[upIndex] || tokenIds[0],
+      downTokenId: tokenIds[downIndex] || tokenIds[1],
+      active: market.active,
+      closed: market.closed,
     };
   } catch (error) {
     if (error.response?.status === 404 || error.response?.status === 422) {
@@ -62,75 +72,150 @@ async function fetchMarketInfo(slug) {
 }
 
 /**
- * Получить актуальные цены из CLOB API
- * @returns {{ color: string, source: string, prices: { up: number, down: number }, winner?: string }}
+ * Получить начальную цену рынка (при открытии)
  */
-async function fetchClobPrices(conditionId) {
+async function getStartPrice(tokenId) {
   try {
-    const { data } = await clob.get(`/markets/${conditionId}`);
+    const { data } = await clob.get('/prices-history', {
+      params: {
+        market: tokenId,
+        interval: 'max',
+        fidelity: 60,
+      },
+    });
     
-    if (!data || !data.tokens || data.tokens.length < 2) {
-      return { color: 'unknown', source: 'clob_no_tokens', prices: { up: 0, down: 0 } };
+    if (data.history && data.history.length > 0) {
+      return parseFloat(data.history[0].p);
     }
-
-    // Находим Up и Down токены
-    const upToken = data.tokens.find(t => /up/i.test(t.outcome));
-    const downToken = data.tokens.find(t => /down/i.test(t.outcome));
-
-    if (!upToken || !downToken) {
-      return { color: 'unknown', source: 'clob_no_outcomes', prices: { up: 0, down: 0 } };
-    }
-
-    const pUp = parseFloat(upToken.price) || 0;
-    const pDown = parseFloat(downToken.price) || 0;
-    const priceInfo = { up: pUp, down: pDown };
-
-    // Проверяем победителя (для резолвнутых рынков)
-    if (upToken.winner === true) {
-      return { color: 'green', source: 'clob_winner', prices: priceInfo, winner: 'Up' };
-    }
-    if (downToken.winner === true) {
-      return { color: 'red', source: 'clob_winner', prices: priceInfo, winner: 'Down' };
-    }
-
-    // Для не резолвнутых - по цене
-    if (pUp > 0.9) return { color: 'green', source: 'clob_price_resolved', prices: priceInfo };
-    if (pDown > 0.9) return { color: 'red', source: 'clob_price_resolved', prices: priceInfo };
-
-    // По лидирующей цене
-    if (pUp > pDown) return { color: 'green', source: 'clob_price', prices: priceInfo };
-    if (pDown > pUp) return { color: 'red', source: 'clob_price', prices: priceInfo };
-
-    return { color: 'neutral', source: 'clob_prices_equal', prices: priceInfo };
-
+    return null;
   } catch (error) {
-    console.error(`CLOB API error for ${conditionId}:`, error.message);
-    return { color: 'unknown', source: 'clob_error', prices: { up: 0, down: 0 } };
+    console.error('Error fetching start price:', error.message);
+    return null;
   }
 }
 
 /**
- * Получить цвет рынка (с fallback на Gamma если CLOB недоступен)
+ * Получить текущую цену токена (или последнюю из истории для закрытых рынков)
+ */
+async function getCurrentPrice(tokenId) {
+  try {
+    const { data } = await clob.get('/price', {
+      params: {
+        token_id: tokenId,
+        side: 'buy',
+      },
+    });
+    return parseFloat(data.price);
+  } catch (error) {
+    // Для закрытых рынков /price может вернуть 404
+    // Берём последнюю цену из истории
+    if (error.response?.status === 404) {
+      return await getLastPriceFromHistory(tokenId);
+    }
+    console.error('Error fetching current price:', error.message);
+    return null;
+  }
+}
+
+/**
+ * Получить последнюю цену из истории (для закрытых рынков)
+ */
+async function getLastPriceFromHistory(tokenId) {
+  try {
+    const { data } = await clob.get('/prices-history', {
+      params: {
+        market: tokenId,
+        interval: 'max',
+        fidelity: 60,
+      },
+    });
+    
+    if (data.history && data.history.length > 0) {
+      // Последний элемент = последняя цена
+      return parseFloat(data.history[data.history.length - 1].p);
+    }
+    return null;
+  } catch (error) {
+    console.error('Error fetching last price from history:', error.message);
+    return null;
+  }
+}
+
+/**
+ * Получить цену Up токена из markets endpoint
+ */
+async function getUpPriceFromMarkets(conditionId) {
+  try {
+    const { data } = await clob.get(`/markets/${conditionId}`);
+    const upToken = data.tokens?.find(t => /up/i.test(t.outcome));
+    return {
+      price: parseFloat(upToken?.price || 0),
+      winner: upToken?.winner === true ? 'up' : (data.tokens?.find(t => /down/i.test(t.outcome))?.winner === true ? 'down' : null),
+      closed: data.closed,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Определить цвет рынка (GREEN/RED)
+ * Логика: текущая цена Up >= начальной цены Up → GREEN
  */
 async function getMarketColor(slug) {
-  // Сначала получаем conditionId из Gamma
   const marketInfo = await fetchMarketInfo(slug);
   
-  if (!marketInfo || !marketInfo.conditionId) {
-    return { color: 'unknown', source: 'no_market_info', prices: { up: 0, down: 0 } };
+  if (!marketInfo || !marketInfo.upTokenId) {
+    return { color: 'unknown', source: 'no_market_info', prices: { start: 0, current: 0 } };
   }
 
-  // Получаем актуальные цены из CLOB
-  const clobResult = await fetchClobPrices(marketInfo.conditionId);
-  return clobResult;
+  // Получаем начальную цену
+  const startPrice = await getStartPrice(marketInfo.upTokenId);
+  if (startPrice === null) {
+    return { color: 'unknown', source: 'no_start_price', prices: { start: null, current: null } };
+  }
+
+  // Проверяем winner и текущую цену через markets endpoint
+  const marketData = await getUpPriceFromMarkets(marketInfo.conditionId);
+  
+  if (marketData?.winner === 'up') {
+    return { color: 'green', source: 'winner', prices: { start: startPrice, current: 1 } };
+  }
+  if (marketData?.winner === 'down') {
+    return { color: 'red', source: 'winner', prices: { start: startPrice, current: 0 } };
+  }
+
+  // Получаем текущую цену - сначала пробуем live endpoint
+  let currentPrice = await getCurrentPrice(marketInfo.upTokenId);
+  
+  // Если live недоступен, берём из markets
+  if (currentPrice === null && marketData) {
+    currentPrice = marketData.price;
+  }
+
+  if (currentPrice === null) {
+    return { color: 'unknown', source: 'no_current_price', prices: { start: startPrice, current: null } };
+  }
+
+  const prices = { start: startPrice, current: currentPrice };
+
+  // Основная логика: сравниваем текущую цену с начальной
+  if (currentPrice >= startPrice) {
+    return { color: 'green', source: 'price_vs_start', prices };
+  } else {
+    return { color: 'red', source: 'price_vs_start', prices };
+  }
 }
 
 /**
- * Проверить активен ли рынок (принимает ордера)
+ * Проверить активен ли рынок
  */
-async function isMarketActive(conditionId) {
+async function isMarketActive(slug) {
+  const marketInfo = await fetchMarketInfo(slug);
+  if (!marketInfo) return false;
+  
   try {
-    const { data } = await clob.get(`/markets/${conditionId}`);
+    const { data } = await clob.get(`/markets/${marketInfo.conditionId}`);
     return data.active === true && data.accepting_orders === true && data.closed === false;
   } catch {
     return false;
@@ -139,12 +224,11 @@ async function isMarketActive(conditionId) {
 
 /**
  * Получить контекст 15-минутных рынков (текущий + 2 предыдущих)
- * Использует CLOB API для актуальных цен!
  */
 async function get15mContext(baseSlug) {
   const slugs = getPrev15mSlugs(baseSlug);
   
-  // Получаем цвета всех трёх рынков через CLOB API
+  // Получаем цвета всех трёх рынков
   const [currentColor, prev1Color, prev2Color] = await Promise.all([
     getMarketColor(slugs.current),
     getMarketColor(slugs.prev1),
@@ -152,10 +236,7 @@ async function get15mContext(baseSlug) {
   ]);
 
   // Проверяем активность текущего рынка
-  const currentMarketInfo = await fetchMarketInfo(slugs.current);
-  const active = currentMarketInfo?.conditionId 
-    ? await isMarketActive(currentMarketInfo.conditionId)
-    : false;
+  const active = await isMarketActive(slugs.current);
 
   // Время до конца рынка в секундах
   const now = Math.floor(Date.now() / 1000);
