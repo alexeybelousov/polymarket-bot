@@ -33,8 +33,8 @@ async function main() {
   const signalTracker = new SignalTracker(bot);
   signalTracker.start();
 
-  // Запускаем бота
-  bot.launch();
+  // Запускаем бота (dropPendingUpdates игнорирует старые сообщения)
+  bot.launch({ dropPendingUpdates: true });
   console.log('✅ Bot is running!');
 
   // Graceful shutdown
