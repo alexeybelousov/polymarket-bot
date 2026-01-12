@@ -188,18 +188,20 @@ class SignalTracker {
     const asset = type.toUpperCase();
     const timeText = polymarket.formatTimeToEnd(context.current.timeToEnd);
 
-    // Получаем времена для каждой свечи
+    // Получаем времена ОКОНЧАНИЯ для каждой свечи (+15 мин к началу)
+    const step = 900; // 15 минут
     const prev2Ts = polymarket.getTimestampFromSlug(context.slugs.prev2);
     const prev1Ts = polymarket.getTimestampFromSlug(context.slugs.prev1);
     const currentTs = polymarket.getTimestampFromSlug(context.slugs.current);
 
-    const prev2Time = polymarket.formatTimeET(prev2Ts);
-    const prev1Time = polymarket.formatTimeET(prev1Ts);
-    const currentTime = polymarket.formatTimeET(currentTs);
+    // Показываем время окончания (как на сайте Polymarket)
+    const prev2Time = polymarket.formatTimeET(prev2Ts + step);
+    const prev1Time = polymarket.formatTimeET(prev1Ts + step);
+    const currentTime = polymarket.formatTimeET(currentTs + step);
 
     // Следующий рынок (для торговли)
-    const nextTs = currentTs + 900; // +15 минут
-    const nextTime = polymarket.formatTimeET(nextTs);
+    const nextTs = currentTs + step;
+    const nextTime = polymarket.formatTimeET(nextTs + step); // время окончания следующего
     const baseSlug = context.slugs.current.replace(/-\d+$/, ''); // eth-updown-15m
     const nextSlug = `${baseSlug}-${nextTs}`;
     const nextUrl = polymarket.getMarketUrl(nextSlug);
