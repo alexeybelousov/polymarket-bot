@@ -199,18 +199,19 @@ async function getMarketColor(slug) {
   }
 
   const prices = { start: startPrice, current: currentPrice };
+  const isClosed = marketData?.closed === true;
 
-  // Если рынок НЕ зарезолвлен и цена между 0.4 и 0.6 - неопределённый результат
-  // (слишком близко к 50/50, нельзя надёжно определить цвет)
-  if (currentPrice >= 0.4 && currentPrice <= 0.6) {
+  // Если рынок ЗАКРЫТ но НЕ резолвнут и цена между 0.4 и 0.6 - неопределённый результат
+  // (для активных рынков это нормально, проблема только для закрытых)
+  if (isClosed && currentPrice >= 0.4 && currentPrice <= 0.6) {
     return { color: 'unknown', source: 'price_uncertain', resolved: false, prices };
   }
 
-  // Основная логика: цена явно указывает на направление (< 0.4 или > 0.6)
-  if (currentPrice > 0.6) {
-    return { color: 'green', source: 'price_high', resolved: false, prices };
+  // Основная логика: сравниваем текущую цену с начальной
+  if (currentPrice >= startPrice) {
+    return { color: 'green', source: 'price_vs_start', resolved: false, prices };
   } else {
-    return { color: 'red', source: 'price_low', resolved: false, prices };
+    return { color: 'red', source: 'price_vs_start', resolved: false, prices };
   }
 }
 
