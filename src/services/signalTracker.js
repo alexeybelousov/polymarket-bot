@@ -217,7 +217,7 @@ class SignalTracker {
     const nextSlug = `${baseSlug}-${nextTs}`;
     const nextUrl = polymarket.getMarketUrl(nextSlug);
 
-    const message = `${colorEmoji} *3 ${colorText} свечи ${asset}!*\n\n` +
+    const message = `*Сигнал ${asset}*\n\n` +
       `📊 Свечи:\n` +
       `  ${prev2Time} ${colorEmoji}\n` +
       `  ${prev1Time} ${colorEmoji}\n` +
