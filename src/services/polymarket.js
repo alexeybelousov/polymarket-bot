@@ -200,17 +200,17 @@ async function getMarketColor(slug) {
 
   const prices = { start: startPrice, current: currentPrice };
 
-  // Если рынок не зарезолвлен и цена между 0.4 и 0.6 - неопределённый результат
+  // Если рынок НЕ зарезолвлен и цена между 0.4 и 0.6 - неопределённый результат
+  // (слишком близко к 50/50, нельзя надёжно определить цвет)
   if (currentPrice >= 0.4 && currentPrice <= 0.6) {
     return { color: 'unknown', source: 'price_uncertain', resolved: false, prices };
   }
 
-  // Основная логика: сравниваем текущую цену с начальной
-  // resolved: false - рынок ещё не зарезолвлен официально
-  if (currentPrice >= startPrice) {
-    return { color: 'green', source: 'price_vs_start', resolved: false, prices };
+  // Основная логика: цена явно указывает на направление (< 0.4 или > 0.6)
+  if (currentPrice > 0.6) {
+    return { color: 'green', source: 'price_high', resolved: false, prices };
   } else {
-    return { color: 'red', source: 'price_vs_start', resolved: false, prices };
+    return { color: 'red', source: 'price_low', resolved: false, prices };
   }
 }
 
