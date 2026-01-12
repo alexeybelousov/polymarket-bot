@@ -83,10 +83,8 @@ class SignalTracker {
       // Форматирование информации о цвете для логов
       const formatColorInfo = (data) => {
         let info = `${data.color} [${data.source}]`;
-        if (data.prices) {
-          const start = data.prices.start ?? 0;
-          const current = data.prices.current ?? 0;
-          info += ` (Start:${start.toFixed(3)} Current:${current.toFixed(3)})`;
+        if (data.prices && typeof data.prices.start === 'number' && typeof data.prices.current === 'number') {
+          info += ` (Start:${data.prices.start.toFixed(3)} Current:${data.prices.current.toFixed(3)})`;
         }
         return info;
       };
