@@ -1,33 +1,25 @@
 const axios = require('axios');
 const config = require('../config');
 
+// Gamma API - для получения conditionId и базовой инфы
 const gamma = axios.create({
   baseURL: config.polymarket.gammaApiUrl,
   timeout: 10000,
 });
 
+// CLOB API - для актуальных цен в реальном времени
+const clob = axios.create({
+  baseURL: 'https://clob.polymarket.com',
+  timeout: 10000,
+});
+
 /**
  * Получить текущий timestamp НАЧАЛА 15-минутного интервала
- * Slug рынка содержит start time, а не end time!
  */
 function getCurrentIntervalStart() {
   const now = Math.floor(Date.now() / 1000);
-  const interval = 900; // 15 минут в секундах
+  const interval = 900;
   return Math.floor(now / interval) * interval;
-}
-
-/**
- * Разобрать slug формата "eth-updown-15m-1768168800"
- */
-function parse15mSlug(slug) {
-  const parts = slug.split('-');
-  const tsStr = parts.pop();
-  const base = parts.join('-');
-  const ts = Number(tsStr);
-  if (!Number.isFinite(ts)) {
-    throw new Error(`Неверный slug: ${slug}`);
-  }
-  return { base, ts };
 }
 
 /**
@@ -36,8 +28,6 @@ function parse15mSlug(slug) {
 function getPrev15mSlugs(baseSlug) {
   const ts = getCurrentIntervalStart();
   const step = 900;
-
-  // Время окончания текущего интервала (для расчёта timeToEnd)
   const currentIntervalEnd = ts + step;
 
   return {
@@ -50,12 +40,19 @@ function getPrev15mSlugs(baseSlug) {
 }
 
 /**
- * Забрать событие (event) по slug из Gamma API
+ * Получить базовую инфу о рынке из Gamma API (conditionId, tokenIds)
  */
-async function fetchEvent(slug) {
+async function fetchMarketInfo(slug) {
   try {
     const { data } = await gamma.get(`/events/slug/${slug}`);
-    return data;
+    if (!data || !data.markets?.[0]) return null;
+    
+    const market = data.markets[0];
+    return {
+      slug,
+      conditionId: market.conditionId,
+      tokenIds: JSON.parse(market.clobTokenIds || '[]'),
+    };
   } catch (error) {
     if (error.response?.status === 404 || error.response?.status === 422) {
       return null;
@@ -65,147 +62,100 @@ async function fetchEvent(slug) {
 }
 
 /**
- * Проверка, активен ли рынок
+ * Получить актуальные цены из CLOB API
+ * @returns {{ color: string, source: string, prices: { up: number, down: number }, winner?: string }}
  */
-function isMarketActive(market) {
-  if (!market) return false;
-
-  if (typeof market.status === 'string') {
-    return market.status === 'open';
-  }
-  if (typeof market.active === 'boolean') {
-    if (market.closed === true) return false;
-    return market.active;
-  }
-
-  if (market.resolution || market.winningOutcome) return false;
-
-  return true;
-}
-
-/**
- * Парсинг outcomes/prices (могут быть строкой JSON или массивом)
- */
-function parseArray(value) {
-  if (Array.isArray(value)) return value;
-  if (typeof value === 'string') {
-    try {
-      return JSON.parse(value);
-    } catch {
-      return [];
+async function fetchClobPrices(conditionId) {
+  try {
+    const { data } = await clob.get(`/markets/${conditionId}`);
+    
+    if (!data || !data.tokens || data.tokens.length < 2) {
+      return { color: 'unknown', source: 'clob_no_tokens', prices: { up: 0, down: 0 } };
     }
+
+    // Находим Up и Down токены
+    const upToken = data.tokens.find(t => /up/i.test(t.outcome));
+    const downToken = data.tokens.find(t => /down/i.test(t.outcome));
+
+    if (!upToken || !downToken) {
+      return { color: 'unknown', source: 'clob_no_outcomes', prices: { up: 0, down: 0 } };
+    }
+
+    const pUp = parseFloat(upToken.price) || 0;
+    const pDown = parseFloat(downToken.price) || 0;
+    const priceInfo = { up: pUp, down: pDown };
+
+    // Проверяем победителя (для резолвнутых рынков)
+    if (upToken.winner === true) {
+      return { color: 'green', source: 'clob_winner', prices: priceInfo, winner: 'Up' };
+    }
+    if (downToken.winner === true) {
+      return { color: 'red', source: 'clob_winner', prices: priceInfo, winner: 'Down' };
+    }
+
+    // Для не резолвнутых - по цене
+    if (pUp > 0.9) return { color: 'green', source: 'clob_price_resolved', prices: priceInfo };
+    if (pDown > 0.9) return { color: 'red', source: 'clob_price_resolved', prices: priceInfo };
+
+    // По лидирующей цене
+    if (pUp > pDown) return { color: 'green', source: 'clob_price', prices: priceInfo };
+    if (pDown > pUp) return { color: 'red', source: 'clob_price', prices: priceInfo };
+
+    return { color: 'neutral', source: 'clob_prices_equal', prices: priceInfo };
+
+  } catch (error) {
+    console.error(`CLOB API error for ${conditionId}:`, error.message);
+    return { color: 'unknown', source: 'clob_error', prices: { up: 0, down: 0 } };
   }
-  return [];
 }
 
 /**
- * Цвет для уже РЕЗОЛВНУТОГО (или завершившегося) рынка
- * Примечание: Polymarket резолвит рынки не мгновенно, поэтому
- * для недавно закрытых рынков определяем цвет по текущим ценам
- * 
- * @returns {{ color: string, source: string, prices?: { up: number, down: number } }}
+ * Получить цвет рынка (с fallback на Gamma если CLOB недоступен)
  */
-function getResolvedMarketColor(eventJson) {
-  if (!eventJson) return { color: 'unknown', source: 'no_data' };
+async function getMarketColor(slug) {
+  // Сначала получаем conditionId из Gamma
+  const marketInfo = await fetchMarketInfo(slug);
   
-  const market = eventJson.markets?.[0];
-  if (!market) return { color: 'unknown', source: 'no_market' };
-
-  // 1. Сначала проверяем официальный результат резолюции
-  const win =
-    market.winningOutcome ||
-    market.resolution ||
-    market.result ||
-    null;
-
-  if (typeof win === 'string') {
-    const w = win.toLowerCase();
-    if (/up|higher|above|yes/.test(w)) return { color: 'green', source: 'resolved', winningOutcome: win };
-    if (/down|lower|below|no/.test(w)) return { color: 'red', source: 'resolved', winningOutcome: win };
+  if (!marketInfo || !marketInfo.conditionId) {
+    return { color: 'unknown', source: 'no_market_info', prices: { up: 0, down: 0 } };
   }
 
-  // 2. Fallback: по ценам исходов
-  const outcomes = parseArray(market.outcomes);
-  const prices = parseArray(market.outcomePrices || market.prices);
-
-  const idxUp = outcomes.findIndex(
-    (o) => typeof o === 'string' && /up|higher|above|yes/i.test(o)
-  );
-  const idxDown = outcomes.findIndex(
-    (o) => typeof o === 'string' && /down|lower|below|no/i.test(o)
-  );
-
-  if (idxUp === -1 || idxDown === -1) return { color: 'unknown', source: 'no_outcomes' };
-
-  const pUp = parseFloat(prices[idxUp]) || 0;
-  const pDown = parseFloat(prices[idxDown]) || 0;
-  const priceInfo = { up: pUp, down: pDown };
-
-  // Если цены близки к 1/0 - рынок резолвнут
-  if (pUp > 0.9) return { color: 'green', source: 'price_resolved', prices: priceInfo };
-  if (pDown > 0.9) return { color: 'red', source: 'price_resolved', prices: priceInfo };
-
-  // 3. Если рынок закончился но ещё не резолвнут официально - 
-  // определяем цвет по текущим ценам (кто лидирует)
-  if (pUp > pDown) return { color: 'green', source: 'price_leading', prices: priceInfo };
-  if (pDown > pUp) return { color: 'red', source: 'price_leading', prices: priceInfo };
-
-  return { color: 'unknown', source: 'prices_equal', prices: priceInfo };
+  // Получаем актуальные цены из CLOB
+  const clobResult = await fetchClobPrices(marketInfo.conditionId);
+  return clobResult;
 }
 
 /**
- * Цвет для АКТИВНОГО рынка
- * 
- * @returns {{ color: string, source: string, prices?: { up: number, down: number } }}
+ * Проверить активен ли рынок (принимает ордера)
  */
-function getActiveMarketColor(eventJson) {
-  if (!eventJson) return { color: 'neutral', source: 'no_data' };
-  
-  const market = eventJson.markets?.[0];
-  if (!market) return { color: 'neutral', source: 'no_market' };
-
-  const outcomes = parseArray(market.outcomes);
-  const prices = parseArray(market.outcomePrices || market.prices);
-
-  const idxUp = outcomes.findIndex(
-    (o) => typeof o === 'string' && /up|higher|above|yes/i.test(o)
-  );
-  const idxDown = outcomes.findIndex(
-    (o) => typeof o === 'string' && /down|lower|below|no/i.test(o)
-  );
-
-  if (idxUp === -1 || idxDown === -1) return { color: 'neutral', source: 'no_outcomes' };
-
-  const pUp = parseFloat(prices[idxUp]) || 0;
-  const pDown = parseFloat(prices[idxDown]) || 0;
-  const priceInfo = { up: pUp, down: pDown };
-
-  if (pUp > pDown) return { color: 'green', source: 'active_price', prices: priceInfo };
-  if (pDown > pUp) return { color: 'red', source: 'active_price', prices: priceInfo };
-  return { color: 'neutral', source: 'prices_equal', prices: priceInfo };
+async function isMarketActive(conditionId) {
+  try {
+    const { data } = await clob.get(`/markets/${conditionId}`);
+    return data.active === true && data.accepting_orders === true && data.closed === false;
+  } catch {
+    return false;
+  }
 }
 
 /**
  * Получить контекст 15-минутных рынков (текущий + 2 предыдущих)
+ * Использует CLOB API для актуальных цен!
  */
 async function get15mContext(baseSlug) {
   const slugs = getPrev15mSlugs(baseSlug);
   
-  const [current, prev1, prev2] = await Promise.all([
-    fetchEvent(slugs.current),
-    fetchEvent(slugs.prev1),
-    fetchEvent(slugs.prev2),
+  // Получаем цвета всех трёх рынков через CLOB API
+  const [currentColor, prev1Color, prev2Color] = await Promise.all([
+    getMarketColor(slugs.current),
+    getMarketColor(slugs.prev1),
+    getMarketColor(slugs.prev2),
   ]);
 
-  const currentMarket = current?.markets?.[0];
-  const active = isMarketActive(currentMarket);
-  
-  const currentColorInfo = active
-    ? getActiveMarketColor(current)
-    : getResolvedMarketColor(current);
-
-  const prev1ColorInfo = getResolvedMarketColor(prev1);
-  const prev2ColorInfo = getResolvedMarketColor(prev2);
+  // Проверяем активность текущего рынка
+  const currentMarketInfo = await fetchMarketInfo(slugs.current);
+  const active = currentMarketInfo?.conditionId 
+    ? await isMarketActive(currentMarketInfo.conditionId)
+    : false;
 
   // Время до конца рынка в секундах
   const now = Math.floor(Date.now() / 1000);
@@ -214,13 +164,13 @@ async function get15mContext(baseSlug) {
   return {
     slugs,
     previous: [
-      { slug: slugs.prev2, ...prev2ColorInfo },
-      { slug: slugs.prev1, ...prev1ColorInfo },
+      { slug: slugs.prev2, ...prev2Color },
+      { slug: slugs.prev1, ...prev1Color },
     ],
     current: {
       slug: slugs.current,
       active,
-      ...currentColorInfo,
+      ...currentColor,
       timeToEnd,
     },
   };
@@ -251,4 +201,3 @@ module.exports = {
   formatTimeToEnd,
   getCurrentIntervalStart,
 };
-
