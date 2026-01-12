@@ -276,9 +276,35 @@ function formatTimeToEnd(seconds) {
   return `${secs} сек`;
 }
 
+/**
+ * Форматирование timestamp в время ET (Eastern Time)
+ * Polymarket использует ET для отображения времени рынков
+ */
+function formatTimeET(timestamp) {
+  const date = new Date(timestamp * 1000);
+  // ET = UTC - 5 часов (EST) или UTC - 4 (EDT летом)
+  // Для простоты используем -5
+  const etDate = new Date(date.getTime() - 5 * 60 * 60 * 1000);
+  const hours = etDate.getUTCHours();
+  const minutes = etDate.getUTCMinutes();
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  const hour12 = hours % 12 || 12;
+  return `${hour12}:${minutes.toString().padStart(2, '0')}${ampm}`;
+}
+
+/**
+ * Получить время начала рынка из slug
+ */
+function getTimestampFromSlug(slug) {
+  const match = slug.match(/-(\d+)$/);
+  return match ? parseInt(match[1], 10) : null;
+}
+
 module.exports = {
   get15mContext,
   getMarketUrl,
   formatTimeToEnd,
+  formatTimeET,
+  getTimestampFromSlug,
   getCurrentIntervalStart,
 };

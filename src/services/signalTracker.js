@@ -169,8 +169,8 @@ class SignalTracker {
       
       if (holdTime >= config.polymarket.colorHoldTime) {
         debug(`  🎯 SIGNAL TRIGGERED!`);
-        // Сигнал! Отправляем
-        await this.sendSignal(type, targetColor, current, context.slugs.current);
+        // Сигнал! Отправляем с контекстом
+        await this.sendSignal(type, targetColor, context);
         // Запоминаем что для этого интервала сигнал уже отправлен
         this.signalSentFor[type] = context.slugs.current;
       } else {
@@ -182,16 +182,35 @@ class SignalTracker {
     }
   }
 
-  async sendSignal(type, color, current, slug) {
+  async sendSignal(type, color, context) {
     const colorEmoji = color === 'green' ? '🟢' : '🔴';
     const colorText = color === 'green' ? 'зелёных' : 'красных';
     const asset = type.toUpperCase();
-    const timeText = polymarket.formatTimeToEnd(current.timeToEnd);
-    const url = polymarket.getMarketUrl(slug);
+    const timeText = polymarket.formatTimeToEnd(context.current.timeToEnd);
+
+    // Получаем времена для каждой свечи
+    const prev2Ts = polymarket.getTimestampFromSlug(context.slugs.prev2);
+    const prev1Ts = polymarket.getTimestampFromSlug(context.slugs.prev1);
+    const currentTs = polymarket.getTimestampFromSlug(context.slugs.current);
+
+    const prev2Time = polymarket.formatTimeET(prev2Ts);
+    const prev1Time = polymarket.formatTimeET(prev1Ts);
+    const currentTime = polymarket.formatTimeET(currentTs);
+
+    // Следующий рынок (для торговли)
+    const nextTs = currentTs + 900; // +15 минут
+    const nextTime = polymarket.formatTimeET(nextTs);
+    const baseSlug = context.slugs.current.replace(/-\d+$/, ''); // eth-updown-15m
+    const nextSlug = `${baseSlug}-${nextTs}`;
+    const nextUrl = polymarket.getMarketUrl(nextSlug);
 
     const message = `${colorEmoji} *3 ${colorText} свечи ${asset}!*\n\n` +
+      `📊 Свечи:\n` +
+      `  ${prev2Time} ${colorEmoji}\n` +
+      `  ${prev1Time} ${colorEmoji}\n` +
+      `  ${currentTime} ${colorEmoji} ← текущая\n\n` +
       `До конца рынка: ${timeText}\n\n` +
-      `[Открыть на Polymarket](${url})`;
+      `[Открыть ${nextTime}](${nextUrl})`;
 
     // Получаем пользователей с включёнными сигналами для этого типа
     // TODO: Раскомментировать когда MongoDB будет готова
