@@ -9,7 +9,7 @@ module.exports = {
     uri: process.env.MONGODB_URI || 'mongodb://localhost:27017/polymarket-bot',
   },
   polymarket: {
-    checkInterval: parseInt(process.env.POLYMARKET_CHECK_INTERVAL) || 10000,
+    checkInterval: parseInt(process.env.POLYMARKET_CHECK_INTERVAL) || 5000, // 5 секунд
     gammaApiUrl: 'https://gamma-api.polymarket.com',
     markets: {
       eth: 'eth-updown-15m',
@@ -18,7 +18,7 @@ module.exports = {
     // Минимальное время до конца рынка для отправки сигнала (в секундах)
     minTimeBeforeEnd: 60,
     // Время удержания цвета на текущей свече (в секундах)
-    colorHoldTime: 10,
+    colorHoldTime: 5, // 5 секунд
   },
 };
 

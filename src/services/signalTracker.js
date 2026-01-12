@@ -136,10 +136,21 @@ class SignalTracker {
         return;
       }
 
+      // 4. Предыдущие рынки должны быть официально зарезолвлены
+      if (!prev2Data.resolved) {
+        debug(`  ❌ Prev2 not resolved yet`);
+        return;
+      }
+      if (!prev1Data.resolved) {
+        debug(`  ❌ Prev1 not resolved yet`);
+        return;
+      }
+      debug(`  ✓ Previous markets resolved`);
+
       const targetColor = prev1Color; // green или red
       debug(`  ✓ Target color: ${targetColor}`);
 
-      // 4. Текущая свеча того же цвета
+      // 5. Текущая свеча того же цвета
       if (current.color !== targetColor) {
         debug(`  ❌ Current candle is ${current.color}, need ${targetColor}`);
         // Цвет изменился - сбрасываем таймер (но НЕ signalSentFor!)

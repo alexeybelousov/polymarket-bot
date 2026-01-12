@@ -178,11 +178,12 @@ async function getMarketColor(slug) {
   // Проверяем winner и текущую цену через markets endpoint
   const marketData = await getUpPriceFromMarkets(marketInfo.conditionId);
   
+  // Если есть официальный winner - рынок зарезолвлен
   if (marketData?.winner === 'up') {
-    return { color: 'green', source: 'winner', prices: { start: startPrice, current: 1 } };
+    return { color: 'green', source: 'winner', resolved: true, prices: { start: startPrice, current: 1 } };
   }
   if (marketData?.winner === 'down') {
-    return { color: 'red', source: 'winner', prices: { start: startPrice, current: 0 } };
+    return { color: 'red', source: 'winner', resolved: true, prices: { start: startPrice, current: 0 } };
   }
 
   // Получаем текущую цену - сначала пробуем live endpoint
@@ -200,10 +201,11 @@ async function getMarketColor(slug) {
   const prices = { start: startPrice, current: currentPrice };
 
   // Основная логика: сравниваем текущую цену с начальной
+  // resolved: false - рынок ещё не зарезолвлен официально
   if (currentPrice >= startPrice) {
-    return { color: 'green', source: 'price_vs_start', prices };
+    return { color: 'green', source: 'price_vs_start', resolved: false, prices };
   } else {
-    return { color: 'red', source: 'price_vs_start', prices };
+    return { color: 'red', source: 'price_vs_start', resolved: false, prices };
   }
 }
 
