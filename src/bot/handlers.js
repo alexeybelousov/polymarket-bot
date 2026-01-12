@@ -4,6 +4,10 @@
 const storage = require('../services/storage');
 const keyboards = require('./keyboards');
 
+// Debounce для /start - не отвечаем чаще чем раз в 2 секунды на пользователя
+const lastStartTime = new Map();
+const START_DEBOUNCE_MS = 2000;
+
 /**
  * Безопасное редактирование сообщения (игнорирует ошибку "message is not modified")
  */
@@ -22,9 +26,20 @@ async function safeEditMessage(ctx, text, extra = {}) {
  * Команда /start
  */
 async function handleStart(ctx) {
-  console.log(`[START] User ${ctx.from.id} sent /start, update_id: ${ctx.update.update_id}`);
+  const userId = ctx.from.id;
+  const now = Date.now();
   
-  const user = storage.getOrCreateUser(ctx.from.id, {
+  // Debounce - игнорируем если прошло меньше 2 секунд
+  const lastTime = lastStartTime.get(userId) || 0;
+  if (now - lastTime < START_DEBOUNCE_MS) {
+    console.log(`[START] Debounce: ignoring /start from ${userId} (too fast)`);
+    return;
+  }
+  lastStartTime.set(userId, now);
+  
+  console.log(`[START] User ${userId} sent /start, update_id: ${ctx.update.update_id}`);
+  
+  const user = storage.getOrCreateUser(userId, {
     username: ctx.from.username,
     firstName: ctx.from.first_name,
   });
@@ -34,9 +49,7 @@ async function handleStart(ctx) {
     `Это бот для отслеживания сигналов на Polymarket.\n\n` +
     `Выбери действие:`;
 
-  console.log(`[START] Sending reply...`);
-  const result = await ctx.reply(welcomeMessage, keyboards.mainMenu());
-  console.log(`[START] Reply sent, message_id: ${result.message_id}`);
+  await ctx.reply(welcomeMessage, keyboards.mainMenu());
 }
 
 /**
