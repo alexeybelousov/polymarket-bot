@@ -200,6 +200,11 @@ async function getMarketColor(slug) {
 
   const prices = { start: startPrice, current: currentPrice };
 
+  // Если рынок не зарезолвлен и цена между 0.4 и 0.6 - неопределённый результат
+  if (currentPrice >= 0.4 && currentPrice <= 0.6) {
+    return { color: 'unknown', source: 'price_uncertain', resolved: false, prices };
+  }
+
   // Основная логика: сравниваем текущую цену с начальной
   // resolved: false - рынок ещё не зарезолвлен официально
   if (currentPrice >= startPrice) {
