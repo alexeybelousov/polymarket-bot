@@ -34,7 +34,9 @@ async function handleStart(ctx) {
     `Это бот для отслеживания сигналов на Polymarket.\n\n` +
     `Выбери действие:`;
 
-  await ctx.reply(welcomeMessage, keyboards.mainMenu());
+  console.log(`[START] Sending reply...`);
+  const result = await ctx.reply(welcomeMessage, keyboards.mainMenu());
+  console.log(`[START] Reply sent, message_id: ${result.message_id}`);
 }
 
 /**
