@@ -149,6 +149,30 @@
     .period-btn:hover { border-color: var(--blue); color: var(--text); }
     .period-btn.active { border-color: var(--blue); background: rgba(59, 130, 246, 0.1); color: var(--text); }
     
+    .stats-toggle-btn {
+      margin-left: auto;
+      padding: 6px 10px;
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text2);
+      font-family: inherit;
+      font-size: 11px;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .stats-toggle-btn:hover { border-color: var(--blue); color: var(--text); }
+    .stats-section.hidden {
+      display: none;
+    }
+    #stats-toggle-icon {
+      transition: transform 0.2s;
+      display: inline-block;
+    }
+    
     /* View toggle */
     .series-header-row {
       display: flex;
@@ -182,6 +206,27 @@
       padding: 16px;
       height: 300px;
     }
+    .chart-filter {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 12px;
+      font-size: 11px;
+      color: var(--text2);
+    }
+    .chart-filter-btn {
+      padding: 4px 10px;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text2);
+      font-family: inherit;
+      font-size: 11px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .chart-filter-btn:hover { border-color: var(--blue); color: var(--text); }
+    .chart-filter-btn.active { border-color: var(--blue); background: rgba(59, 130, 246, 0.15); color: var(--text); }
   </style>
 </head>
 <body>
@@ -223,8 +268,11 @@
     <div class="period-toggle">
       <button class="period-btn active" data-period="all" onclick="setPeriod('all')">Всего</button>
       <button class="period-btn" data-period="day" onclick="setPeriod('day')">За сутки</button>
+      <button class="stats-toggle-btn" onclick="toggleStats()" title="Скрыть/показать статистику">
+        <span id="stats-toggle-icon">▼</span>
+      </button>
     </div>
-    <div class="stats-section">
+    <div class="stats-section" id="stats-section">
       <div class="stats-row">
         <div class="stat-item">
           <div class="stat-value" id="stat-balance">$100</div>
@@ -280,6 +328,12 @@
         <div class="no-series">Нет серий торговли</div>
       </div>
       <div id="series-chart" class="chart-container" style="display: none;">
+        <div class="chart-filter">
+          <span>Показать:</span>
+          <button class="chart-filter-btn active" data-limit="10" onclick="setChartLimit(10)">10</button>
+          <button class="chart-filter-btn" data-limit="20" onclick="setChartLimit(20)">20</button>
+          <button class="chart-filter-btn" data-limit="all" onclick="setChartLimit('all')">Все</button>
+        </div>
         <canvas id="balanceChart"></canvas>
       </div>
     </div>
@@ -296,6 +350,7 @@
     let allSeries = [];
     let showAll = false;
     let balanceChart = null;
+    let chartLimit = 10; // Лимит серий на графике
     const DEFAULT_LIMIT = 5;
     
     function setView(view) {
@@ -310,9 +365,26 @@
       }
     }
     
+    function setChartLimit(limit) {
+      chartLimit = limit;
+      // Обновляем активный класс кнопок
+      document.querySelectorAll('.chart-filter-btn').forEach(el => {
+        el.classList.toggle('active', el.dataset.limit == limit);
+      });
+      // Перерисовываем график
+      if (currentView === 'chart') {
+        renderChart();
+      }
+    }
+    
     function renderChart() {
       const periodSeries = filterByPeriod(allSeries);
-      const completedSeries = periodSeries.filter(s => s.status !== 'active').sort((a, b) => new Date(a.startedAt) - new Date(b.startedAt));
+      let completedSeries = periodSeries.filter(s => s.status !== 'active').sort((a, b) => new Date(a.startedAt) - new Date(b.startedAt));
+      
+      // Применяем лимит для графика (берем последние N серий)
+      if (chartLimit !== 'all' && completedSeries.length > chartLimit) {
+        completedSeries = completedSeries.slice(-chartLimit);
+      }
       
       if (completedSeries.length === 0) {
         if (balanceChart) {
@@ -329,7 +401,7 @@
       const labels = ['Старт'];
       const balanceData = [initialDeposit];
       const pointColors = ['#3b82f6'];
-      const pointSizes = [6];
+      const pointSizes = [3];
       const tooltips = ['Начальный депозит: $' + initialDeposit];
       
       completedSeries.forEach(s => {
@@ -340,7 +412,7 @@
         
         const color = s.status === 'won' ? '#22c55e' : s.status === 'lost' ? '#ef4444' : '#eab308';
         pointColors.push(color);
-        pointSizes.push(s.status === 'cancelled' ? 6 : 8);
+        pointSizes.push(3);
         
         const pnl = s.totalPnL >= 0 ? `+$${s.totalPnL.toFixed(2)}` : `-$${Math.abs(s.totalPnL).toFixed(2)}`;
         const statusText = s.status === 'won' ? 'Профит' : s.status === 'lost' ? 'Убыток' : 'Отмена';
@@ -368,7 +440,7 @@
             pointBackgroundColor: pointColors,
             pointBorderColor: pointColors,
             pointRadius: pointSizes,
-            pointHoverRadius: 10,
+            pointHoverRadius: 5,
           }]
         },
         options: {
@@ -412,6 +484,13 @@
       if (currentView === 'chart') {
         renderChart();
       }
+    }
+    
+    function toggleStats() {
+      const statsSection = document.getElementById('stats-section');
+      statsSection.classList.toggle('hidden');
+      const icon = document.getElementById('stats-toggle-icon');
+      icon.textContent = statsSection.classList.contains('hidden') ? '▶' : '▼';
     }
     
     function filterByPeriod(series) {
