@@ -4,9 +4,42 @@ const TradingStats = require('../models/TradingStats');
 const SignalLog = require('../models/SignalLog');
 const User = require('../models/User');
 
-const BET_AMOUNTS = [2, 5, 11, 23]; // Мартингейл
-const ENTRY_FEE_RATE = 0.015; // 1.5% комиссия на покупку
-const EXIT_FEE_RATE = 0.015; // 1.5% комиссия на продажу
+
+// ===== НАСТРОЙКИ СТРАТЕГИИ =====
+const TRADING_CONFIG = {
+  firstBetPercent: 0.02,      // Первая ставка: 2% от депозита
+  signalType: '3candles',     // На каком сигнале начинается торговля: 3 свечи
+  maxSteps: 4,                // Количество шагов
+  baseDeposit: 100,           // Базовый депозит: $100
+  maxPrice: 0.55,             // Верхний предел цены (не входим если цена выше)
+  entryFee: 0.015,           // Комиссия на вход: 1.5%
+  exitFee: 0.015,            // Комиссия на выход: 1.5%
+};
+
+const ENTRY_FEE_RATE = TRADING_CONFIG.entryFee;
+const EXIT_FEE_RATE = TRADING_CONFIG.exitFee;
+
+/**
+ * Динамический расчёт ставки на основе цены
+ * Формула: profitMultiplier = (1 - fee) / price - 1
+ * betAmount = (previousLosses + targetProfit) / profitMultiplier
+ */
+function calculateDynamicBet(buyPrice, previousLosses, targetProfit) {
+  const profitMultiplier = (1 - ENTRY_FEE_RATE) / buyPrice - 1;
+  if (profitMultiplier <= 0) {
+    return null; // Невозможно получить профит при такой цене
+  }
+  const neededProfit = previousLosses + targetProfit;
+  return neededProfit / profitMultiplier;
+}
+
+/**
+ * Получить короткий хеш из tokenId (первые 5 символов)
+ */
+function getShortHash(tokenId) {
+  if (!tokenId) return '';
+  return tokenId.substring(0, 5);
+}
 
 class TradingEmulator {
   constructor(bot, dataProvider) {
@@ -82,7 +115,12 @@ class TradingEmulator {
 
   // ==================== СИГНАЛ ====================
   
-  async onSignal(type, signalColor, signalMarketSlug, nextMarketSlug) {
+  async onSignal(type, signalColor, signalMarketSlug, nextMarketSlug, signalType = '3candles') {
+    // Проверяем тип сигнала (торгуем только на 3 свечи)
+    if (TRADING_CONFIG.signalType === '3candles' && signalType !== '3candles') {
+      return; // Пропускаем сигналы 2 свечи
+    }
+    
     // Проверяем нет ли активной серии
     if (this.activeSeries.has(type)) {
       console.log(`[TRADE] ${type.toUpperCase()}: Already active series, skipping`);
@@ -92,6 +130,31 @@ class TradingEmulator {
     const betColor = signalColor === 'green' ? 'red' : 'green';
     const betEmoji = betColor === 'green' ? '🟢' : '🔴';
     const signalEmoji = signalColor === 'green' ? '🟢' : '🔴';
+    const betOutcome = betColor === 'green' ? 'up' : 'down';
+    
+    // Получаем цену для проверки максимального лимита
+    const polySlug = this.convertToPolymarketSlug(nextMarketSlug);
+    let buyPrice = null;
+    try {
+      const polymarket = require('./polymarket');
+      const priceData = await polymarket.getBuyPrice(polySlug, betOutcome);
+      if (priceData && priceData.price) {
+        buyPrice = priceData.price;
+      }
+    } catch (error) {
+      console.error(`[TRADE] Error getting price for check:`, error.message);
+    }
+    
+    if (!buyPrice) {
+      console.log(`[TRADE] ${type.toUpperCase()}: Cannot get price, skipping`);
+      return;
+    }
+    
+    // Проверяем верхний предел цены
+    if (buyPrice > TRADING_CONFIG.maxPrice) {
+      console.log(`[TRADE] ${type.toUpperCase()}: Price too high - $${buyPrice.toFixed(3)} > $${TRADING_CONFIG.maxPrice} (max limit), skipping`);
+      return;
+    }
     
     // Создаём серию
     const series = new TradeSeries({
@@ -141,23 +204,8 @@ class TradingEmulator {
   
   async buyStep(series, marketSlugOverride = null) {
     const stats = await TradingStats.getStats();
-    const amount = BET_AMOUNTS[series.currentStep - 1];
     const betEmoji = series.betColor === 'green' ? '🟢' : '🔴';
     const betOutcome = series.betColor === 'green' ? 'up' : 'down';
-    
-    // Проверяем баланс
-    if (stats.currentBalance < amount) {
-      series.addEvent('insufficient_balance', {
-        amount,
-        message: `Недостаточно средств: нужно $${amount.toFixed(2)}, есть $${stats.currentBalance.toFixed(2)}`,
-      });
-      series.status = 'lost';
-      series.endedAt = new Date();
-      series.addEvent('series_lost', {
-        message: 'Серия завершена: недостаточно средств',
-      });
-      return false;
-    }
     
     // Получаем цену с Polymarket (торгуем всегда на Polymarket, даже если сигналы с Binance)
     const targetSlug = marketSlugOverride || series.currentMarketSlug;
@@ -165,12 +213,14 @@ class TradingEmulator {
     const polySlug = this.convertToPolymarketSlug(targetSlug);
     
     let price = null;
+    let tokenId = null;
     try {
       const polymarket = require('./polymarket');
       const priceData = await polymarket.getBuyPrice(polySlug, betOutcome);
       if (priceData && priceData.price) {
         price = priceData.price;
-        console.log(`[TRADE] Got Polymarket price for ${polySlug}: $${price.toFixed(3)}`);
+        tokenId = priceData.tokenId;
+        console.log(`[TRADE] Got Polymarket price for ${polySlug}: $${price.toFixed(3)} (tokenId: ${tokenId})`);
       }
     } catch (error) {
       console.error(`[TRADE] Error getting Polymarket price for ${polySlug}:`, error.message);
@@ -186,6 +236,73 @@ class TradingEmulator {
       return false;
     }
     
+    // Проверяем верхний предел цены (на каждом шаге)
+    if (price > TRADING_CONFIG.maxPrice) {
+      console.log(`[TRADE] ${series.asset.toUpperCase()}: Price too high on Step ${series.currentStep} - $${price.toFixed(3)} > $${TRADING_CONFIG.maxPrice}, cancelling`);
+      
+      // Добавляем событие в таймлайн
+      series.addEvent('series_cancelled', {
+        message: `⛔ Не удалось купить: цена превысила лимит ($${price.toFixed(3)} > $${TRADING_CONFIG.maxPrice}) на Step ${series.currentStep}`,
+        marketColor: null,
+        pnl: -(series.totalInvested || 0),
+      });
+      
+      series.status = 'cancelled';
+      series.endedAt = new Date();
+      
+      const stats = await TradingStats.getStats();
+      stats.cancelledTrades++;
+      await stats.save();
+      
+      await series.save();
+      this.activeSeries.delete(series.asset);
+      
+      await this.log(series.asset, polySlug, `PRICE_TOO_HIGH: $${price.toFixed(3)} > $${TRADING_CONFIG.maxPrice}`, {
+        step: series.currentStep,
+        price,
+        maxPrice: TRADING_CONFIG.maxPrice,
+        totalInvested: series.totalInvested,
+      });
+      
+      await this.notifyUsers(series, '⛔ Серия отменена: цена превысила лимит');
+      return false;
+    }
+    
+    // Рассчитываем ставку динамически
+    // Используем текущий баланс для расчёта первой ставки (2% от баланса)
+    const deposit = stats.currentBalance || TRADING_CONFIG.baseDeposit;
+    const previousLosses = series.totalInvested || 0;
+    const profitMultiplier = (1 - ENTRY_FEE_RATE) / price - 1;
+    const firstBetAmount = deposit * TRADING_CONFIG.firstBetPercent;
+    const targetProfit = firstBetAmount * profitMultiplier;
+    const amount = calculateDynamicBet(price, previousLosses, targetProfit);
+    
+    if (!amount || amount <= 0) {
+      console.warn(`[TRADE] Cannot calculate bet amount at price $${price.toFixed(3)}`);
+      series.addEvent('price_error', {
+        message: `❌ Невозможно рассчитать ставку при цене $${price.toFixed(3)}`,
+      });
+      return false;
+    }
+    
+    // Проверяем баланс
+    if (stats.currentBalance < amount) {
+      series.addEvent('insufficient_balance', {
+        amount,
+        message: `Недостаточно средств: нужно $${amount.toFixed(2)}, есть $${stats.currentBalance.toFixed(2)}`,
+      });
+      series.status = 'cancelled';
+      series.endedAt = new Date();
+      
+      const stats = await TradingStats.getStats();
+      stats.cancelledTrades++;
+      await stats.save();
+      
+      await series.save();
+      this.activeSeries.delete(series.asset);
+      return false;
+    }
+    
     // Расчёты по формуле Polymarket
     const entryFee = amount * ENTRY_FEE_RATE;
     const netAmount = amount - entryFee;
@@ -198,6 +315,8 @@ class TradingEmulator {
     // Сохраняем позицию
     series.positions.push({
       step: series.currentStep,
+      marketSlug: series.currentMarketSlug,  // Рынок где была куплена позиция
+      tokenId,                                // ID токена для отслеживания
       amount,
       price,
       shares,
@@ -209,9 +328,10 @@ class TradingEmulator {
     series.totalCommission += entryFee;
     
     // Событие: купили
+    const priceHash = getShortHash(tokenId);
     series.addEvent('buy', {
       amount,
-      message: `Купил ${shares.toFixed(2)} shares по $${price.toFixed(2)} = $${amount} на ${betEmoji} (Step ${series.currentStep})`,
+      message: `Купил ${shares.toFixed(2)} shares по $${price.toFixed(2)} (${priceHash}) = $${amount} на ${betEmoji} (Step ${series.currentStep})`,
     });
     
     // Событие: ждём рынок
@@ -231,31 +351,22 @@ class TradingEmulator {
     const asset = series.asset.toUpperCase();
     const nextStep = series.currentStep + 1;
     const stats = await TradingStats.getStats();
-    const amount = BET_AMOUNTS[nextStep - 1];
     const betEmoji = series.betColor === 'green' ? '🟢' : '🔴';
     const betOutcome = series.betColor === 'green' ? 'up' : 'down';
     const signalEmoji = series.signalColor === 'green' ? '🟢' : '🔴';
-    
-    // Проверяем баланс
-    if (stats.currentBalance < amount) {
-      series.addEvent('insufficient_balance', {
-        amount,
-        message: `Не хватает средств на хедж Step ${nextStep}`,
-      });
-      await series.save();
-      return;
-    }
     
     // Получаем цену с Polymarket
     const polySlug = this.convertToPolymarketSlug(context.slugs.next);
     
     let price = null;
+    let tokenId = null;
     try {
       const polymarket = require('./polymarket');
       const priceData = await polymarket.getBuyPrice(polySlug, betOutcome);
       if (priceData && priceData.price) {
         price = priceData.price;
-        console.log(`[TRADE] Got Polymarket price for hedge ${polySlug}: $${price.toFixed(3)}`);
+        tokenId = priceData.tokenId;
+        console.log(`[TRADE] Got Polymarket price for hedge ${polySlug}: $${price.toFixed(3)} (tokenId: ${tokenId})`);
       }
     } catch (error) {
       console.error(`[TRADE] Error getting Polymarket price for hedge ${polySlug}:`, error.message);
@@ -267,6 +378,44 @@ class TradingEmulator {
       series.addEvent('price_error', {
         message: `❌ Не удалось получить цену хеджа для ${polySlug}`,
         slug: polySlug,
+      });
+      await series.save();
+      return;
+    }
+    
+    // Проверяем верхний предел цены
+    if (price > TRADING_CONFIG.maxPrice) {
+      console.log(`[TRADE] ${asset}: Hedge price too high - $${price.toFixed(3)} > $${TRADING_CONFIG.maxPrice}, skipping`);
+      series.addEvent('price_error', {
+        message: `⛔ Хедж отменён: цена превысила лимит ($${price.toFixed(3)} > $${TRADING_CONFIG.maxPrice})`,
+      });
+      await series.save();
+      return;
+    }
+    
+    // Рассчитываем ставку динамически
+    // Используем текущий баланс для расчёта первой ставки (2% от баланса)
+    const deposit = stats.currentBalance || TRADING_CONFIG.baseDeposit;
+    const previousLosses = series.totalInvested || 0;
+    const profitMultiplier = (1 - ENTRY_FEE_RATE) / price - 1;
+    const firstBetAmount = deposit * TRADING_CONFIG.firstBetPercent;
+    const targetProfit = firstBetAmount * profitMultiplier;
+    const amount = calculateDynamicBet(price, previousLosses, targetProfit);
+    
+    if (!amount || amount <= 0) {
+      console.warn(`[TRADE] Cannot calculate hedge bet amount at price $${price.toFixed(3)}`);
+      series.addEvent('price_error', {
+        message: `❌ Невозможно рассчитать хедж при цене $${price.toFixed(3)}`,
+      });
+      await series.save();
+      return;
+    }
+    
+    // Проверяем баланс
+    if (stats.currentBalance < amount) {
+      series.addEvent('insufficient_balance', {
+        amount,
+        message: `Не хватает средств на хедж Step ${nextStep}`,
       });
       await series.save();
       return;
@@ -284,6 +433,8 @@ class TradingEmulator {
     // Сохраняем позицию хеджа
     series.positions.push({
       step: nextStep,
+      marketSlug: context.slugs.next,  // Рынок где была куплена позиция
+      tokenId,                          // ID токена для отслеживания
       amount,
       price,
       shares,
@@ -297,10 +448,11 @@ class TradingEmulator {
     series.nextMarketSlug = context.slugs.next;
     
     // Событие: ранняя покупка
+    const priceHash = getShortHash(tokenId);
     series.addEvent('buy', {
       amount,
       step: nextStep,
-      message: `⚡ Хедж: ${shares.toFixed(2)} shares @ $${price.toFixed(2)} = $${amount} на ${betEmoji} (Step ${nextStep})`,
+      message: `⚡ Хедж: ${shares.toFixed(2)} shares @ $${price.toFixed(2)} (${priceHash}) = $${amount} на ${betEmoji} (Step ${nextStep})`,
     });
     
     await series.save();
@@ -325,24 +477,31 @@ class TradingEmulator {
     // Продаём все активные позиции по реальной цене
     for (const pos of series.positions) {
       if (pos.status === 'active') {
-        // Получаем реальную цену продажи с Polymarket
-        const polySlug = this.convertToPolymarketSlug(series.currentMarketSlug);
+        // Получаем реальную цену продажи с Polymarket для конкретного рынка позиции
+        const polySlug = this.convertToPolymarketSlug(pos.marketSlug || series.currentMarketSlug);
         let sellPrice = null;
+        let sellTokenId = null;
         
         try {
           const priceData = await polymarket.getSellPrice(polySlug, betOutcome);
           if (priceData && priceData.price) {
             sellPrice = priceData.price;
+            sellTokenId = priceData.tokenId;
             console.log(`[TRADE] Got sell price for ${polySlug}: $${sellPrice.toFixed(3)}`);
           }
         } catch (error) {
-          console.error(`[TRADE] Error getting sell price:`, error.message);
+          console.error(`[TRADE] Error getting sell price for ${polySlug}:`, error.message);
         }
         
-        // Если не получили цену - используем консервативную оценку (50% от shares)
+        // Если не получили цену - отменяем серию с ошибкой
         if (!sellPrice) {
-          sellPrice = 0.5;
-          console.log(`[TRADE] Using fallback sell price: $${sellPrice}`);
+          console.error(`[TRADE] Cannot get sell price for ${polySlug}, cancelling series`);
+          series.addEvent('price_error', {
+            message: `❌ Не удалось получить цену продажи для ${polySlug}`,
+            slug: polySlug,
+          });
+          // Продолжаем продавать остальные позиции, но эта позиция останется активной
+          continue;
         }
         
         // Расчёт: shares * sellPrice - exitFee
@@ -354,6 +513,14 @@ class TradingEmulator {
         totalLoss += (pos.amount - netReturn);
         pos.status = 'sold';
         series.totalCommission += exitFee;
+        
+        // Добавляем событие о продаже позиции с ценой и хешем
+        const sellHash = getShortHash(sellTokenId);
+        series.addEvent('sell', {
+          step: pos.step,
+          amount: netReturn,
+          message: `📤 Продал Step ${pos.step}: ${pos.shares.toFixed(2)} shares @ $${sellPrice.toFixed(3)} (${sellHash}) = $${netReturn.toFixed(2)}`,
+        });
         
         console.log(`[TRADE] Sold ${pos.shares.toFixed(2)} shares @ $${sellPrice.toFixed(3)} = $${grossReturn.toFixed(2)} - $${exitFee.toFixed(2)} fee = $${netReturn.toFixed(2)}`);
       }
@@ -396,9 +563,36 @@ class TradingEmulator {
     const hedgePosition = series.positions.find(p => p.step === hedgeStep && p.status === 'active');
     if (!hedgePosition) return;
     
-    // При продаже получаем обратно: shares * currentPrice - exitFee
-    // Упрощённо: возвращаем ~95% от вложенного (цена примерно та же)
-    const returnAmount = hedgePosition.amount * (1 - EXIT_FEE_RATE * 2); // -3% (вход + выход)
+    // Получаем реальную цену продажи с Polymarket
+    const polymarket = require('./polymarket');
+    const betOutcome = series.betColor === 'green' ? 'up' : 'down';
+    const polySlug = this.convertToPolymarketSlug(hedgePosition.marketSlug);
+    let sellPrice = null;
+    let sellTokenId = null;
+    
+    try {
+      const priceData = await polymarket.getSellPrice(polySlug, betOutcome);
+      if (priceData && priceData.price) {
+        sellPrice = priceData.price;
+        sellTokenId = priceData.tokenId;
+        console.log(`[TRADE] Got sell price for hedge ${polySlug}: $${sellPrice.toFixed(3)}`);
+      }
+    } catch (error) {
+      console.error(`[TRADE] Error getting sell price for hedge ${polySlug}:`, error.message);
+    }
+    
+    // Если не получили цену - используем упрощённую формулу
+    let returnAmount;
+    if (sellPrice) {
+      // Реальная цена продажи: shares * sellPrice - exitFee
+      const grossReturn = hedgePosition.shares * sellPrice;
+      const exitFee = grossReturn * EXIT_FEE_RATE;
+      returnAmount = grossReturn - exitFee;
+    } else {
+      // Fallback: упрощённая формула
+      returnAmount = hedgePosition.amount * (1 - EXIT_FEE_RATE * 2);
+      console.log(`[TRADE] Using fallback sell price for hedge`);
+    }
     
     const stats = await TradingStats.getStats();
     stats.currentBalance += returnAmount;
@@ -419,10 +613,12 @@ class TradingEmulator {
     series.hedgeLosses = (series.hedgeLosses || 0) + loss;
     
     // Событие: продали хедж
+    const sellHash = sellTokenId ? getShortHash(sellTokenId) : '';
+    const priceText = sellPrice ? `@ $${sellPrice.toFixed(3)} (${sellHash})` : '';
     series.addEvent('sell_hedge', {
       amount: returnAmount,
       step: hedgeStep,
-      message: `📤 Продал хедж Step ${hedgeStep}: вернул $${returnAmount.toFixed(2)} (-$${loss.toFixed(2)})`,
+      message: `📤 Продал хедж Step ${hedgeStep}${priceText ? ` ${priceText}` : ''}: вернул $${returnAmount.toFixed(2)} (-$${loss.toFixed(2)})`,
     });
     
     await series.save();

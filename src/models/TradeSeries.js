@@ -8,6 +8,7 @@ const eventSchema = new mongoose.Schema({
     enum: [
       'series_opened',    // Серия открыта по сигналу
       'buy',              // Купили ставку
+      'sell',             // Продали позицию
       'sell_hedge',       // Продали хедж (рынок вернулся в наш цвет)
       'signal_cancelled', // Сигнал отменился (рынок изменил цвет)
       'waiting_market',   // Ждём начало рынка
@@ -66,6 +67,8 @@ const tradeSeriesSchema = new mongoose.Schema({
   // Позиции по шагам
   positions: [{
     step: Number,
+    marketSlug: String,      // Рынок где была куплена позиция
+    tokenId: String,         // ID токена (для отслеживания позиции)
     amount: Number,
     price: Number,
     shares: Number,

@@ -460,7 +460,7 @@
 
     function getEventClass(type) {
       if (type === 'series_opened') return 'neutral';
-      if (type === 'buy') return 'buy';
+      if (type === 'buy' || type === 'sell') return 'buy';
       if (type === 'hedge_bought' || type === 'sell_hedge') return 'hedge';
       if (type.includes('won') || type === 'series_won') return 'win';
       if (type.includes('lost') || type === 'series_lost') return 'loss';

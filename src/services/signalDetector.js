@@ -216,9 +216,10 @@ class SignalDetector {
       if (candleCount === 3) {
         if (this.tradingEmulator) {
           const nextMarketSlug = context.slugs.next || context.slugs.current;
+          const signalType = candleCount === 3 ? '3candles' : '2candles';
           console.log(`[SIGNAL] Calling tradingEmulator.onSignal for ${type.toUpperCase()}...`);
           try {
-            await this.tradingEmulator.onSignal(type, color, context.slugs.current, nextMarketSlug);
+            await this.tradingEmulator.onSignal(type, color, context.slugs.current, nextMarketSlug, signalType);
           } catch (err) {
             console.error(`[SIGNAL] Error in tradingEmulator.onSignal:`, err.message);
           }
