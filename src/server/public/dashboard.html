@@ -197,7 +197,7 @@
       return series.map(s => {
         const betEmoji = s.betColor === 'green' ? '🟢' : '🔴';
         const statusText = s.status === 'active' ? `Step ${s.currentStep}/4` : 
-                          s.status === 'won' ? 'ПОБЕДА' : 'ПРОИГРЫШ';
+                          s.status === 'won' ? 'ПРОФИТ' : 'УБЫТОК';
         const pnlText = s.totalPnL ? (s.totalPnL >= 0 ? `+$${s.totalPnL.toFixed(2)}` : `-$${Math.abs(s.totalPnL).toFixed(2)}`) : '';
 
         const timeline = (s.events || []).map(e => {

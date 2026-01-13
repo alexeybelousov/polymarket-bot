@@ -507,7 +507,7 @@ class TradingEmulator {
     series.marketState = 'closed';
     
     if (won) {
-      // ПОБЕДА! Получаем shares (каждая = $1)
+      // ПРОФИТ! Получаем shares (каждая = $1)
       const currentPosition = series.positions.find(p => p.step === series.currentStep && p.status === 'active');
       const shares = currentPosition?.shares || 0;
       const winAmount = shares; // shares * $1
@@ -522,7 +522,7 @@ class TradingEmulator {
       series.addEvent('market_won', {
         marketColor: resolvedColor,
         pnl: winAmount - currentPosition?.amount,
-        message: `Рынок закрылся ${colorEmoji} — ПОБЕДА! Получил $${winAmount.toFixed(2)} (+$${(winAmount - currentPosition?.amount).toFixed(2)})`,
+        message: `Рынок закрылся ${colorEmoji} — ПРОФИТ! Получил $${winAmount.toFixed(2)} (+$${(winAmount - currentPosition?.amount).toFixed(2)})`,
       });
       
       series.totalPnL = pnl;
@@ -552,10 +552,10 @@ class TradingEmulator {
       
       console.log(`[TRADE] ${asset}: ✅ SERIES WON at Step ${series.currentStep}! PnL: $${pnl.toFixed(2)}`);
       await this.log(series.asset, series.currentMarketSlug, `✅ SERIES WON Step ${series.currentStep}: won $${winAmount.toFixed(2)}, P&L: $${pnl.toFixed(2)}`, { step: series.currentStep, winAmount, pnl });
-      await this.notifyUsers(series, `✅ ПОБЕДА! Step ${series.currentStep}, P&L: $${pnl.toFixed(2)}`);
+      await this.notifyUsers(series, `✅ ПРОФИТ! Step ${series.currentStep}, P&L: $${pnl.toFixed(2)}`);
       
     } else {
-      // ПРОИГРЫШ этого шага - shares обнуляются
+      // УБЫТОК этого шага - shares обнуляются
       const currentPosition = series.positions.find(p => p.step === series.currentStep && p.status === 'active');
       if (currentPosition) currentPosition.status = 'lost';
       
@@ -611,7 +611,7 @@ class TradingEmulator {
         
         console.log(`[TRADE] ${asset}: ❌ SERIES LOST after 4 steps! PnL: $${pnl.toFixed(2)}`);
         await this.log(series.asset, series.currentMarketSlug, `❌ SERIES LOST after 4 steps: P&L: $${pnl.toFixed(2)}`, { step: 4, pnl, totalInvested: series.totalInvested });
-        await this.notifyUsers(series, `❌ ПРОИГРЫШ! 4 шага, P&L: $${pnl.toFixed(2)}`);
+        await this.notifyUsers(series, `❌ УБЫТОК! 4 шага, P&L: $${pnl.toFixed(2)}`);
         
       } else {
         // Следующий шаг Мартингейла (покупаем сейчас)
