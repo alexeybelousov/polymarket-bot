@@ -46,7 +46,7 @@
 
     /* Stats */
     .stats-section { margin-bottom: 24px; }
-    .stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 12px; }
+    .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 12px; }
     .stats-row.filter-row { grid-template-columns: repeat(5, 1fr); }
     .stat-item { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 14px; text-align: center; }
     .stat-item.clickable { cursor: pointer; transition: all 0.2s; }
@@ -237,6 +237,10 @@
         <div class="stat-item">
           <div class="stat-value" id="stat-winrate">0%</div>
           <div class="stat-label">Win Rate</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value" id="stat-frozen" style="color: var(--blue)">$0</div>
+          <div class="stat-label">📈 Торгуется</div>
         </div>
       </div>
       <div class="stats-row filter-row">
@@ -574,6 +578,10 @@
       const winLossSeries = wonSeries.length + lostSeries.length;
       const winRate = winLossSeries > 0 ? ((wonSeries.length / winLossSeries) * 100).toFixed(0) : 0;
       document.getElementById('stat-winrate').textContent = `${winRate}%`;
+      
+      // Заморожено — сумма инвестиций в активных сериях
+      const frozen = activeSeries.reduce((sum, s) => sum + (s.totalInvested || 0), 0);
+      document.getElementById('stat-frozen').textContent = `$${frozen.toFixed(2)}`;
       
       // Stats - Row 2 (фильтры)
       document.getElementById('stat-total').textContent = periodSeries.length;
