@@ -54,6 +54,32 @@ class TradingEmulator {
     }
   }
 
+  // ==================== УТИЛИТЫ ====================
+  
+  /**
+   * Конвертирует slug из формата Binance в формат Polymarket
+   * Binance: binance-btcusdt-1768309200000 (миллисекунды)
+   * Polymarket: btc-updown-15m-1768309200 (секунды)
+   */
+  convertToPolymarketSlug(slug) {
+    if (!slug.startsWith('binance-')) {
+      return slug; // Уже в формате Polymarket
+    }
+    
+    // Извлекаем timestamp (в миллисекундах)
+    const match = slug.match(/^binance-(ethusdt|btcusdt)-(\d+)$/);
+    if (!match) {
+      console.warn(`[TRADE] Cannot parse Binance slug: ${slug}`);
+      return slug;
+    }
+    
+    const [, symbol, timestampMs] = match;
+    const timestampSec = Math.floor(parseInt(timestampMs) / 1000);
+    const asset = symbol === 'ethusdt' ? 'eth' : 'btc';
+    
+    return `${asset}-updown-15m-${timestampSec}`;
+  }
+
   // ==================== СИГНАЛ ====================
   
   async onSignal(type, signalColor, signalMarketSlug, nextMarketSlug) {
@@ -119,22 +145,28 @@ class TradingEmulator {
     // Получаем цену с Polymarket (торгуем всегда на Polymarket, даже если сигналы с Binance)
     const targetSlug = marketSlugOverride || series.currentMarketSlug;
     // Конвертируем slug из формата binance в polymarket
-    const polySlug = targetSlug
-      .replace('binance-ethusdt-', 'eth-updown-15m-')
-      .replace('binance-btcusdt-', 'btc-updown-15m-');
+    const polySlug = this.convertToPolymarketSlug(targetSlug);
     
-    let price = 0.5; // fallback
+    let price = null;
     try {
       const polymarket = require('./polymarket');
       const priceData = await polymarket.getBuyPrice(polySlug, betOutcome);
       if (priceData && priceData.price) {
         price = priceData.price;
         console.log(`[TRADE] Got Polymarket price for ${polySlug}: $${price.toFixed(3)}`);
-      } else {
-        console.warn(`[TRADE] No price from Polymarket for ${polySlug}, using fallback $0.50`);
       }
     } catch (error) {
       console.error(`[TRADE] Error getting Polymarket price for ${polySlug}:`, error.message);
+    }
+    
+    // Если цена не получена — отменяем покупку
+    if (!price) {
+      console.warn(`[TRADE] Cannot get price for ${polySlug}, skipping buy`);
+      series.addEvent('price_error', {
+        message: `❌ Не удалось получить цену для ${polySlug}`,
+        slug: polySlug,
+      });
+      return false;
     }
     
     // Расчёты по формуле Polymarket
@@ -198,22 +230,29 @@ class TradingEmulator {
     }
     
     // Получаем цену с Polymarket
-    const polySlug = context.slugs.next
-      .replace('binance-ethusdt-', 'eth-updown-15m-')
-      .replace('binance-btcusdt-', 'btc-updown-15m-');
+    const polySlug = this.convertToPolymarketSlug(context.slugs.next);
     
-    let price = 0.5; // fallback
+    let price = null;
     try {
       const polymarket = require('./polymarket');
       const priceData = await polymarket.getBuyPrice(polySlug, betOutcome);
       if (priceData && priceData.price) {
         price = priceData.price;
         console.log(`[TRADE] Got Polymarket price for hedge ${polySlug}: $${price.toFixed(3)}`);
-      } else {
-        console.warn(`[TRADE] No price from Polymarket for hedge ${polySlug}, using fallback $0.50`);
       }
     } catch (error) {
       console.error(`[TRADE] Error getting Polymarket price for hedge ${polySlug}:`, error.message);
+    }
+    
+    // Если цена не получена — отменяем хедж
+    if (!price) {
+      console.warn(`[TRADE] Cannot get price for hedge ${polySlug}, skipping`);
+      series.addEvent('price_error', {
+        message: `❌ Не удалось получить цену хеджа для ${polySlug}`,
+        slug: polySlug,
+      });
+      await series.save();
+      return;
     }
     
     // Расчёты
