@@ -1,7 +1,5 @@
 # Деплой Polymarket Bot на VPS (Ubuntu 22.04)
 
-**Репозиторий:** https://github.com/alexeybelousov/polymarket-bot
-
 ## Требования
 - VPS с Ubuntu 22.04+
 - Минимум: 1 CPU, 512MB RAM
@@ -9,7 +7,26 @@
 
 ---
 
-## Шаг 1: Подключение к серверу
+## Шаг 1: Подготовка GitHub
+
+### 1.1 Создай репозиторий
+1. Зайди на https://github.com/new
+2. Название: `polymarket-bot`
+3. Тип: Private (рекомендуется)
+4. НЕ добавляй README
+5. Нажми "Create repository"
+
+### 1.2 Запуш код (на локальном компьютере)
+```bash
+cd /путь/к/polymarket-bot
+git remote add origin https://github.com/ТВОЙ_USERNAME/polymarket-bot.git
+git branch -M main
+git push -u origin main
+```
+
+---
+
+## Шаг 2: Подключение к серверу
 
 ```bash
 ssh root@IP_ТВОЕГО_СЕРВЕРА
@@ -17,7 +34,7 @@ ssh root@IP_ТВОЕГО_СЕРВЕРА
 
 ---
 
-## Шаг 2: Установка зависимостей
+## Шаг 3: Установка зависимостей (на сервере)
 
 ```bash
 # Обновление системы
@@ -42,7 +59,7 @@ apt install -y git
 
 ---
 
-## Шаг 3: Клонирование проекта
+## Шаг 4: Клонирование проекта
 
 ```bash
 # Создаём директорию
@@ -50,7 +67,7 @@ mkdir -p /var/www
 cd /var/www
 
 # Клонируем репозиторий
-git clone https://github.com/alexeybelousov/polymarket-bot.git
+git clone https://github.com/ТВОЙ_USERNAME/polymarket-bot.git
 
 # Переходим в папку
 cd polymarket-bot
@@ -61,7 +78,7 @@ pnpm install --prod
 
 ---
 
-## Шаг 4: Настройка переменных окружения
+## Шаг 5: Настройка переменных окружения
 
 ```bash
 # Создаём .env из примера
@@ -84,7 +101,7 @@ DEBUG=false
 
 ---
 
-## Шаг 5: Запуск бота
+## Шаг 6: Запуск бота
 
 ```bash
 # Запуск через PM2
@@ -99,7 +116,7 @@ pm2 logs polymarket-bot
 
 ---
 
-## Шаг 6: Автозапуск при перезагрузке
+## Шаг 7: Автозапуск при перезагрузке
 
 ```bash
 # Сохраняем конфигурацию PM2

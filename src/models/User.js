@@ -20,7 +20,19 @@ const userSchema = new mongoose.Schema({
       type: Boolean,
       default: false,
     },
+    eth2candles: {
+      type: Boolean,
+      default: false,
+    },
     btc3candles: {
+      type: Boolean,
+      default: false,
+    },
+    btc2candles: {
+      type: Boolean,
+      default: false,
+    },
+    tradingNotifications: {
       type: Boolean,
       default: false,
     },
@@ -35,11 +47,8 @@ const userSchema = new mongoose.Schema({
   },
 });
 
-// Обновляем updatedAt при каждом сохранении
-userSchema.pre('save', function (next) {
+userSchema.pre('save', function () {
   this.updatedAt = new Date();
-  next();
 });
 
 module.exports = mongoose.model('User', userSchema);
-

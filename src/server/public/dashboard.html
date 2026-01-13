@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Polymarket Trading</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap');
+    :root {
+      --bg: #0a0a0f; --bg2: #14141c; --bg3: #1c1c28; --border: #2a2a3a;
+      --text: #e4e4e7; --text2: #71717a;
+      --green: #22c55e; --red: #ef4444; --blue: #3b82f6; --yellow: #eab308; --purple: #a855f7;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'JetBrains Mono', monospace; background: var(--bg); color: var(--text); min-height: 100vh; padding: 24px; }
+    .container { max-width: 800px; margin: 0 auto; }
+    header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+    .logo { font-weight: 600; font-size: 18px; }
+    .logo span { color: var(--blue); }
+    .meta { display: flex; align-items: center; gap: 16px; color: var(--text2); font-size: 14px; }
+    .live { display: flex; align-items: center; gap: 8px; }
+    .live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); animation: pulse 2s infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+    a { color: var(--text2); text-decoration: none; }
+    a:hover { color: var(--text); }
+
+    /* Candles */
+    .candles-section { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+    .candles-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+    .candles-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .candles-title { font-weight: 600; }
+    .candles-timer { color: var(--yellow); }
+    .candles-row { display: flex; align-items: center; justify-content: center; gap: 12px; }
+    .candle-circle { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 20px; }
+    .candle-circle.green { background: rgba(34, 197, 94, 0.2); }
+    .candle-circle.red { background: rgba(239, 68, 68, 0.2); }
+    .candle-circle.unknown { background: var(--bg3); }
+
+    /* Signals */
+    .signals-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px; }
+    .signal-box { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 12px; text-align: center; }
+    .signal-box.active { border-color: var(--green); background: rgba(34, 197, 94, 0.08); }
+    .signal-label { font-size: 11px; color: var(--text2); margin-bottom: 6px; }
+    .signal-status { font-size: 20px; }
+
+    /* Stats */
+    .stats-bar { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 24px; }
+    .stat-item { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 14px; text-align: center; }
+    .stat-value { font-size: 20px; font-weight: 600; }
+    .stat-value.positive { color: var(--green); }
+    .stat-value.negative { color: var(--red); }
+    .stat-label { font-size: 10px; color: var(--text2); margin-top: 4px; }
+
+    /* Series */
+    .series-section { margin-bottom: 24px; }
+    .series-title { font-size: 14px; color: var(--text2); margin-bottom: 12px; }
+    .series-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 12px; }
+    .series-card.active { border-color: var(--yellow); }
+    .series-card.won { border-color: var(--green); }
+    .series-card.lost { border-color: var(--red); }
+    .series-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .series-asset { font-weight: 600; font-size: 16px; }
+    .series-status { font-size: 12px; padding: 4px 8px; border-radius: 4px; }
+    .series-status.active { background: rgba(234, 179, 8, 0.2); color: var(--yellow); }
+    .series-status.won { background: rgba(34, 197, 94, 0.2); color: var(--green); }
+    .series-status.lost { background: rgba(239, 68, 68, 0.2); color: var(--red); }
+    .series-info { display: flex; gap: 16px; margin-bottom: 12px; font-size: 12px; color: var(--text2); }
+    .series-info span { display: flex; align-items: center; gap: 4px; }
+
+    /* Timeline */
+    .timeline { border-left: 2px solid var(--border); padding-left: 16px; margin-left: 8px; }
+    .timeline-event { position: relative; padding-bottom: 12px; font-size: 12px; }
+    .timeline-event:last-child { padding-bottom: 0; }
+    .timeline-event::before {
+      content: '';
+      position: absolute;
+      left: -21px;
+      top: 4px;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--bg3);
+      border: 2px solid var(--border);
+    }
+    .timeline-event.buy::before { background: var(--blue); border-color: var(--blue); }
+    .timeline-event.sell::before { background: var(--purple); border-color: var(--purple); }
+    .timeline-event.win::before { background: var(--green); border-color: var(--green); }
+    .timeline-event.loss::before { background: var(--red); border-color: var(--red); }
+    .timeline-event.waiting::before { background: var(--yellow); border-color: var(--yellow); }
+    .timeline-time { color: var(--text2); margin-right: 8px; }
+    .timeline-msg { color: var(--text); }
+
+    .no-series { text-align: center; color: var(--text2); padding: 40px; background: var(--bg2); border-radius: 12px; border: 1px solid var(--border); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="logo">📊 <span>Polymarket</span></div>
+      <div class="meta">
+        <div class="live"><div class="live-dot"></div><span id="time">—</span></div>
+        <a href="/logs">logs</a>
+      </div>
+    </header>
+
+    <!-- Candles -->
+    <div class="candles-section">
+      <div class="candles-card">
+        <div class="candles-header"><span class="candles-title">🔷 ETH</span><span class="candles-timer" id="timer-eth">—</span></div>
+        <div class="candles-row" id="candles-eth"></div>
+      </div>
+      <div class="candles-card">
+        <div class="candles-header"><span class="candles-title">🔶 BTC</span><span class="candles-timer" id="timer-btc">—</span></div>
+        <div class="candles-row" id="candles-btc"></div>
+      </div>
+    </div>
+
+    <!-- Signals -->
+    <div class="signals-grid">
+      <div class="signal-box" id="sig-eth-3"><div class="signal-label">ETH 3с</div><div class="signal-status">—</div></div>
+      <div class="signal-box" id="sig-eth-2"><div class="signal-label">ETH 2с</div><div class="signal-status">—</div></div>
+      <div class="signal-box" id="sig-btc-3"><div class="signal-label">BTC 3с</div><div class="signal-status">—</div></div>
+      <div class="signal-box" id="sig-btc-2"><div class="signal-label">BTC 2с</div><div class="signal-status">—</div></div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-bar">
+      <div class="stat-item">
+        <div class="stat-value" id="stat-balance">$100</div>
+        <div class="stat-label">Баланс</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value" id="stat-pnl">$0</div>
+        <div class="stat-label">P&L</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value" id="stat-trades">0</div>
+        <div class="stat-label">Серий</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value" id="stat-wins">0</div>
+        <div class="stat-label">Побед</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value" id="stat-winrate">0%</div>
+        <div class="stat-label">Win Rate</div>
+      </div>
+    </div>
+
+    <!-- Series -->
+    <div class="series-section">
+      <div class="series-title">📈 Серии торговли</div>
+      <div id="series-list">
+        <div class="no-series">Нет серий торговли</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const emoji = c => c === 'green' ? '🟢' : c === 'red' ? '🔴' : '⚪';
+    const fmt = s => `${Math.floor(s/60)}:${(s%60).toString().padStart(2,'0')}`;
+    const fmtTime = ts => new Date(ts).toLocaleTimeString('ru', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+
+    function renderCandles(id, data) {
+      const el = document.getElementById(id);
+      const candles = [data.prev2, data.prev1, data.current];
+      el.innerHTML = candles.map(c => 
+        `<div class="candle-circle ${c.color}">${emoji(c.color)}</div>`
+      ).join('');
+    }
+
+    function updateSignal(id, data, count) {
+      const box = document.getElementById(id);
+      const statusEl = box.querySelector('.signal-status');
+      const prev = count === 3 ? [data.prev2, data.prev1] : [data.prev1];
+      const cur = data.current;
+      const colors = [...prev.map(p => p.color), cur.color];
+      const allSame = colors.every(c => c === colors[0] && c !== 'unknown');
+      box.classList.toggle('active', allSame);
+      statusEl.textContent = allSame ? emoji(colors[0]) : '—';
+    }
+
+    function getEventClass(type) {
+      if (type === 'buy') return 'buy';
+      if (type === 'sell_hedge' || type === 'signal_cancelled') return 'sell';
+      if (type.includes('won') || type === 'series_won') return 'win';
+      if (type.includes('lost') || type === 'series_lost') return 'loss';
+      if (type.includes('waiting')) return 'waiting';
+      return '';
+    }
+
+    function renderSeries(series) {
+      if (!series || series.length === 0) {
+        return '<div class="no-series">Нет серий торговли</div>';
+      }
+
+      return series.map(s => {
+        const betEmoji = s.betColor === 'green' ? '🟢' : '🔴';
+        const statusText = s.status === 'active' ? `Step ${s.currentStep}/4` : 
+                          s.status === 'won' ? 'ПОБЕДА' : 'ПРОИГРЫШ';
+        const pnlText = s.totalPnL ? (s.totalPnL >= 0 ? `+$${s.totalPnL.toFixed(2)}` : `-$${Math.abs(s.totalPnL).toFixed(2)}`) : '';
+
+        const timeline = (s.events || []).slice(-6).map(e => {
+          const cls = getEventClass(e.type);
+          return `<div class="timeline-event ${cls}">
+            <span class="timeline-time">${fmtTime(e.timestamp)}</span>
+            <span class="timeline-msg">${e.message || e.type}</span>
+          </div>`;
+        }).join('');
+
+        return `<div class="series-card ${s.status}">
+          <div class="series-header">
+            <span class="series-asset">${s.asset.toUpperCase()} ${betEmoji}</span>
+            <span class="series-status ${s.status}">${statusText}</span>
+          </div>
+          <div class="series-info">
+            <span>💰 $${s.totalInvested?.toFixed(2) || '0'}</span>
+            ${pnlText ? `<span style="color: ${s.totalPnL >= 0 ? 'var(--green)' : 'var(--red)'}">${pnlText}</span>` : ''}
+            <span>🕐 ${fmtTime(s.startedAt)}</span>
+          </div>
+          <div class="timeline">${timeline}</div>
+        </div>`;
+      }).join('');
+    }
+
+    async function loadMarkets() {
+      try {
+        const res = await fetch('/api/markets/live');
+        const d = await res.json();
+        document.getElementById('timer-eth').textContent = fmt(d.eth.timeToEnd);
+        document.getElementById('timer-btc').textContent = fmt(d.btc.timeToEnd);
+        renderCandles('candles-eth', d.eth);
+        renderCandles('candles-btc', d.btc);
+        updateSignal('sig-eth-3', d.eth, 3);
+        updateSignal('sig-eth-2', d.eth, 2);
+        updateSignal('sig-btc-3', d.btc, 3);
+        updateSignal('sig-btc-2', d.btc, 2);
+        document.getElementById('time').textContent = fmtTime(new Date());
+      } catch(e) { console.error(e); }
+    }
+
+    async function loadTrading() {
+      try {
+        const [statsRes, seriesRes] = await Promise.all([
+          fetch('/api/trading/stats'),
+          fetch('/api/trading/series?limit=5'),
+        ]);
+        const stats = await statsRes.json();
+        const series = await seriesRes.json();
+
+        // Stats
+        document.getElementById('stat-balance').textContent = `$${stats.currentBalance?.toFixed(2) || '100'}`;
+        const pnl = stats.totalPnL || 0;
+        const pnlEl = document.getElementById('stat-pnl');
+        pnlEl.textContent = `${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}`;
+        pnlEl.className = 'stat-value ' + (pnl >= 0 ? 'positive' : 'negative');
+        document.getElementById('stat-trades').textContent = stats.totalTrades || 0;
+        document.getElementById('stat-wins').textContent = stats.wonTrades || 0;
+        const winRate = stats.totalTrades > 0 ? ((stats.wonTrades / stats.totalTrades) * 100).toFixed(0) : 0;
+        document.getElementById('stat-winrate').textContent = `${winRate}%`;
+
+        // Series
+        document.getElementById('series-list').innerHTML = renderSeries(series);
+      } catch(e) { console.error(e); }
+    }
+
+    loadMarkets();
+    loadTrading();
+    setInterval(loadMarkets, 3000);
+    setInterval(loadTrading, 3000);
+  </script>
+</body>
+</html>

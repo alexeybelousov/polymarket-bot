@@ -1,49 +1,65 @@
-// TODO: Раскомментировать когда MongoDB будет готова
-// const mongoose = require('mongoose');
+const mongoose = require('mongoose');
 
 const config = require('./config');
 const { createBot } = require('./bot');
-const SignalTracker = require('./services/signalTracker');
+const SignalDetector = require('./services/signalDetector');
+const SignalNotifier = require('./services/signalNotifier');
+const TradingEmulator = require('./services/tradingEmulator');
+const { createServer } = require('./server');
+const polymarket = require('./services/polymarket');
+const binance = require('./services/binance');
+
+// Выбираем источник данных
+const dataProvider = config.dataSource === 'binance' ? binance : polymarket;
 
 async function main() {
   console.log('🤖 Starting Polymarket Bot...');
 
-  // Проверяем наличие токена
   if (!config.telegram.token) {
     console.error('❌ TELEGRAM_BOT_TOKEN is not set!');
     process.exit(1);
   }
 
-  // TODO: Раскомментировать когда MongoDB будет готова
-  // // Подключаемся к MongoDB
-  // try {
-  //   await mongoose.connect(config.mongodb.uri);
-  //   console.log('✅ Connected to MongoDB');
-  // } catch (error) {
-  //   console.error('❌ MongoDB connection error:', error.message);
-  //   process.exit(1);
-  // }
+  // Подключаемся к MongoDB
+  try {
+    await mongoose.connect(config.mongodb.uri);
+    console.log('✅ Connected to MongoDB');
+  } catch (error) {
+    console.error('❌ MongoDB connection error:', error.message);
+    process.exit(1);
+  }
 
-  console.log('✅ Using JSON file storage (data/users.json)');
-
-  // Создаём и запускаем бота
+  // Создаём бота
   const bot = createBot();
   
-  // Создаём и запускаем трекер сигналов
-  const signalTracker = new SignalTracker(bot);
-  signalTracker.start();
+  // Эмулятор торговли
+  const tradingEmulator = new TradingEmulator(bot, dataProvider);
+  await tradingEmulator.start();
 
-  // Запускаем бота (dropPendingUpdates игнорирует старые сообщения)
+  // Детектор сигналов (определяет и сохраняет в БД)
+  const signalDetector = new SignalDetector(tradingEmulator);
+  signalDetector.start();
+
+  // Нотификатор (читает из БД и отправляет в TG)
+  const signalNotifier = new SignalNotifier(bot);
+  signalNotifier.start();
+
+  // HTTP сервер с дашбордом
+  const server = createServer(config.server?.port || 3000, tradingEmulator);
+
+  // Запускаем бота
   bot.launch({ dropPendingUpdates: true });
   console.log('✅ Bot is running!');
 
   // Graceful shutdown
   const shutdown = async (signal) => {
     console.log(`\n${signal} received. Shutting down...`);
-    signalTracker.stop();
+    signalDetector.stop();
+    signalNotifier.stop();
+    tradingEmulator.stop();
     bot.stop(signal);
-    // TODO: Раскомментировать когда MongoDB будет готова
-    // await mongoose.connection.close();
+    server.close();
+    await mongoose.connection.close();
     console.log('👋 Bye!');
     process.exit(0);
   };

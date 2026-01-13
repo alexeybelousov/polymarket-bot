@@ -1,27 +1,36 @@
 const { Markup } = require('telegraf');
 
-/**
- * Главное меню
- */
 function mainMenu() {
   return Markup.inlineKeyboard([
     [Markup.button.callback('📊 Сигналы', 'signals')],
+    [Markup.button.callback('💰 Торговля', 'trading')],
   ]);
 }
 
-/**
- * Меню сигналов
- */
 function signalsMenu(userSettings) {
-  const ethEnabled = userSettings?.signals?.eth3candles || false;
-  const btcEnabled = userSettings?.signals?.btc3candles || false;
-
-  const ethText = ethEnabled ? '🔔 3 свечи ETH (вкл)' : '🔕 3 свечи ETH (выкл)';
-  const btcText = btcEnabled ? '🔔 3 свечи BTC (вкл)' : '🔕 3 свечи BTC (выкл)';
+  const s = userSettings?.signals || {};
+  const btn = (enabled, text) => enabled ? `🔔 ${text}` : `🔕 ${text}`;
 
   return Markup.inlineKeyboard([
-    [Markup.button.callback(ethText, 'toggle_eth')],
-    [Markup.button.callback(btcText, 'toggle_btc')],
+    [
+      Markup.button.callback(btn(s.eth3candles, 'ETH 3с'), 'toggle_eth_3'),
+      Markup.button.callback(btn(s.eth2candles, 'ETH 2с'), 'toggle_eth_2'),
+    ],
+    [
+      Markup.button.callback(btn(s.btc3candles, 'BTC 3с'), 'toggle_btc_3'),
+      Markup.button.callback(btn(s.btc2candles, 'BTC 2с'), 'toggle_btc_2'),
+    ],
+    [Markup.button.callback('◀️ Назад', 'back_to_main')],
+  ]);
+}
+
+function tradingMenu(userSettings, stats) {
+  const s = userSettings?.signals || {};
+  const tradingEnabled = s.tradingNotifications;
+  const btnText = tradingEnabled ? '🔔 Уведомления (вкл)' : '🔕 Уведомления (выкл)';
+
+  return Markup.inlineKeyboard([
+    [Markup.button.callback(btnText, 'toggle_trading')],
     [Markup.button.callback('◀️ Назад', 'back_to_main')],
   ]);
 }
@@ -29,5 +38,5 @@ function signalsMenu(userSettings) {
 module.exports = {
   mainMenu,
   signalsMenu,
+  tradingMenu,
 };
-

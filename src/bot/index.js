@@ -5,16 +5,17 @@ const handlers = require('./handlers');
 function createBot() {
   const bot = new Telegraf(config.telegram.token);
 
-  // Команды
   bot.start(handlers.handleStart);
 
-  // Callback queries (кнопки)
   bot.action('signals', handlers.handleSignals);
-  bot.action('toggle_eth', handlers.handleToggleEth);
-  bot.action('toggle_btc', handlers.handleToggleBtc);
+  bot.action('toggle_eth_3', handlers.handleToggleEth3);
+  bot.action('toggle_eth_2', handlers.handleToggleEth2);
+  bot.action('toggle_btc_3', handlers.handleToggleBtc3);
+  bot.action('toggle_btc_2', handlers.handleToggleBtc2);
+  bot.action('trading', handlers.handleTrading);
+  bot.action('toggle_trading', handlers.handleToggleTrading);
   bot.action('back_to_main', handlers.handleBackToMain);
 
-  // Обработка ошибок
   bot.catch((err, ctx) => {
     console.error(`Error for ${ctx.updateType}:`, err);
   });
@@ -23,4 +24,3 @@ function createBot() {
 }
 
 module.exports = { createBot };
-

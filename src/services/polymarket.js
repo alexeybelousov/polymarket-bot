@@ -199,15 +199,9 @@ async function getMarketColor(slug) {
   }
 
   const prices = { start: startPrice, current: currentPrice };
-  const isClosed = marketData?.closed === true;
-
-  // Если рынок ЗАКРЫТ но НЕ резолвнут и цена между 0.4 и 0.6 - неопределённый результат
-  // (для активных рынков это нормально, проблема только для закрытых)
-  if (isClosed && currentPrice >= 0.4 && currentPrice <= 0.6) {
-    return { color: 'unknown', source: 'price_uncertain', resolved: false, prices };
-  }
 
   // Основная логика: сравниваем текущую цену с начальной
+  // resolved: false - рынок ещё не зарезолвлен официально
   if (currentPrice >= startPrice) {
     return { color: 'green', source: 'price_vs_start', resolved: false, prices };
   } else {
@@ -308,6 +302,37 @@ function getTimestampFromSlug(slug) {
   return match ? parseInt(match[1], 10) : null;
 }
 
+/**
+ * Получить цену покупки для указанного исхода (up/down) на рынке
+ * @param {string} slug - slug рынка (например eth-updown-15m-1234567890)
+ * @param {string} outcome - 'up' или 'down'
+ * @returns {Promise<{price: number, tokenId: string} | null>}
+ */
+async function getBuyPrice(slug, outcome = 'down') {
+  try {
+    const marketInfo = await fetchMarketInfo(slug);
+    if (!marketInfo) return null;
+    
+    const tokenId = outcome === 'up' ? marketInfo.upTokenId : marketInfo.downTokenId;
+    if (!tokenId) return null;
+    
+    const { data } = await clob.get('/price', {
+      params: {
+        token_id: tokenId,
+        side: 'buy',
+      },
+    });
+    
+    return {
+      price: parseFloat(data.price),
+      tokenId,
+    };
+  } catch (error) {
+    console.error(`Error getting buy price for ${slug}:`, error.message);
+    return null;
+  }
+}
+
 module.exports = {
   get15mContext,
   getMarketUrl,
@@ -315,4 +340,5 @@ module.exports = {
   formatTimeET,
   getTimestampFromSlug,
   getCurrentIntervalStart,
+  getBuyPrice,
 };

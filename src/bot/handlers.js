@@ -1,168 +1,203 @@
-// TODO: Раскомментировать когда MongoDB будет готова
-// const User = require('../models/User');
-
-const storage = require('../services/storage');
+const User = require('../models/User');
+const TradingStats = require('../models/TradingStats');
 const keyboards = require('./keyboards');
 
-// Debounce для /start - не отвечаем чаще чем раз в 2 секунды на пользователя
 const lastStartTime = new Map();
 const START_DEBOUNCE_MS = 2000;
 
-/**
- * Безопасное редактирование сообщения (игнорирует ошибку "message is not modified")
- */
 async function safeEditMessage(ctx, text, extra = {}) {
   try {
     await ctx.editMessageText(text, extra);
   } catch (error) {
-    // Игнорируем ошибку если сообщение не изменилось
     if (!error.message?.includes('message is not modified')) {
       throw error;
     }
   }
 }
 
-/**
- * Команда /start
- */
+async function getOrCreateUser(ctx) {
+  let user = await User.findOne({ telegramId: ctx.from.id });
+  if (!user) {
+    user = new User({
+      telegramId: ctx.from.id,
+      username: ctx.from.username,
+      firstName: ctx.from.first_name,
+    });
+    await user.save();
+  }
+  return user;
+}
+
+const SIGNALS_MESSAGE = 
+  `📊 *Настройки сигналов*\n\n` +
+  `• *3с* — сигнал когда 3 свечи одного цвета\n` +
+  `• *2с* — сигнал когда 2 свечи одного цвета\n\n` +
+  `Нажми на кнопку чтобы вкл/выкл:`;
+
 async function handleStart(ctx) {
   const userId = ctx.from.id;
   const now = Date.now();
   
-  // Debounce - игнорируем если прошло меньше 2 секунд
   const lastTime = lastStartTime.get(userId) || 0;
-  if (now - lastTime < START_DEBOUNCE_MS) {
-    console.log(`[START] Debounce: ignoring /start from ${userId} (too fast)`);
-    return;
-  }
+  if (now - lastTime < START_DEBOUNCE_MS) return;
   lastStartTime.set(userId, now);
   
-  console.log(`[START] User ${userId} sent /start, update_id: ${ctx.update.update_id}`);
+  const user = await getOrCreateUser(ctx);
   
-  const user = storage.getOrCreateUser(userId, {
-    username: ctx.from.username,
-    firstName: ctx.from.first_name,
-  });
-  
-  const welcomeMessage = 
+  const msg = 
     `👋 Привет, ${user.firstName || 'трейдер'}!\n\n` +
-    `Это бот для отслеживания сигналов на Polymarket.\n\n` +
+    `Бот для сигналов Polymarket.\n\n` +
     `Выбери действие:`;
 
-  await ctx.reply(welcomeMessage, keyboards.mainMenu());
+  await ctx.reply(msg, keyboards.mainMenu());
 }
 
-/**
- * Показать меню сигналов
- */
 async function handleSignals(ctx) {
-  const user = storage.getOrCreateUser(ctx.from.id, {
-    username: ctx.from.username,
-    firstName: ctx.from.first_name,
-  });
+  const user = await getOrCreateUser(ctx);
   
-  const message = 
-    `📊 *Настройки сигналов*\n\n` +
-    `Сигнал "3 свечи" отправляется когда:\n` +
-    `• 2 предыдущие 15-мин свечи одного цвета\n` +
-    `• Текущая свеча того же цвета >10 сек\n` +
-    `• До конца рынка минимум 1 минута\n\n` +
-    `Нажми на кнопку чтобы включить/выключить:`;
-
   if (ctx.callbackQuery) {
-    await safeEditMessage(ctx, message, {
+    await safeEditMessage(ctx, SIGNALS_MESSAGE, {
       parse_mode: 'Markdown',
       ...keyboards.signalsMenu(user),
     });
     await ctx.answerCbQuery();
   } else {
-    await ctx.reply(message, {
+    await ctx.reply(SIGNALS_MESSAGE, {
       parse_mode: 'Markdown',
       ...keyboards.signalsMenu(user),
     });
   }
 }
 
-/**
- * Переключить сигнал ETH
- */
-async function handleToggleEth(ctx) {
-  const user = storage.toggleSignal(ctx.from.id, 'eth');
-  
+async function toggleSignal(ctx, field, label) {
+  const user = await User.findOne({ telegramId: ctx.from.id });
   if (!user) {
-    await ctx.answerCbQuery('Ошибка: пользователь не найден');
+    await ctx.answerCbQuery('Ошибка');
     return;
   }
 
-  const status = user.signals.eth3candles ? '✅ Сигнал ETH включён' : '❌ Сигнал ETH выключен';
+  user.signals[field] = !user.signals[field];
+  await user.save();
+
+  const status = user.signals[field] ? `✅ ${label} вкл` : `❌ ${label} выкл`;
   await ctx.answerCbQuery(status);
 
-  // Обновляем клавиатуру
-  const message = 
-    `📊 *Настройки сигналов*\n\n` +
-    `Сигнал "3 свечи" отправляется когда:\n` +
-    `• 2 предыдущие 15-мин свечи одного цвета\n` +
-    `• Текущая свеча того же цвета >10 сек\n` +
-    `• До конца рынка минимум 1 минута\n\n` +
-    `Нажми на кнопку чтобы включить/выключить:`;
-
-  await safeEditMessage(ctx, message, {
+  await safeEditMessage(ctx, SIGNALS_MESSAGE, {
     parse_mode: 'Markdown',
     ...keyboards.signalsMenu(user),
   });
 }
 
-/**
- * Переключить сигнал BTC
- */
-async function handleToggleBtc(ctx) {
-  const user = storage.toggleSignal(ctx.from.id, 'btc');
+const handleToggleEth3 = (ctx) => toggleSignal(ctx, 'eth3candles', 'ETH 3с');
+const handleToggleEth2 = (ctx) => toggleSignal(ctx, 'eth2candles', 'ETH 2с');
+const handleToggleBtc3 = (ctx) => toggleSignal(ctx, 'btc3candles', 'BTC 3с');
+const handleToggleBtc2 = (ctx) => toggleSignal(ctx, 'btc2candles', 'BTC 2с');
+
+async function handleTrading(ctx) {
+  const user = await getOrCreateUser(ctx);
+  const stats = await TradingStats.getStats();
   
+  const winRate = stats.totalTrades > 0 
+    ? ((stats.wonTrades / stats.totalTrades) * 100).toFixed(1) 
+    : '0';
+  
+  const pnlEmoji = stats.totalPnL >= 0 ? '📈' : '📉';
+  const pnlSign = stats.totalPnL >= 0 ? '+' : '';
+  
+  const message = 
+    `💰 *Торговля (эмуляция)*\n\n` +
+    `💵 Баланс: *$${stats.currentBalance.toFixed(2)}*\n` +
+    `${pnlEmoji} P&L: ${pnlSign}$${stats.totalPnL.toFixed(2)}\n\n` +
+    `📊 Статистика:\n` +
+    `• Всего сделок: ${stats.totalTrades}\n` +
+    `• Побед: ${stats.wonTrades} (${winRate}%)\n` +
+    `• Поражений: ${stats.lostTrades}\n` +
+    `• Комиссии: $${stats.totalCommissions.toFixed(2)}\n\n` +
+    `🎯 Победы по шагам:\n` +
+    `• Step 1: ${stats.winsByStep[1] || 0}\n` +
+    `• Step 2: ${stats.winsByStep[2] || 0}\n` +
+    `• Step 3: ${stats.winsByStep[3] || 0}\n` +
+    `• Step 4: ${stats.winsByStep[4] || 0}`;
+
+  if (ctx.callbackQuery) {
+    await safeEditMessage(ctx, message, {
+      parse_mode: 'Markdown',
+      ...keyboards.tradingMenu(user, stats),
+    });
+    await ctx.answerCbQuery();
+  } else {
+    await ctx.reply(message, {
+      parse_mode: 'Markdown',
+      ...keyboards.tradingMenu(user, stats),
+    });
+  }
+}
+
+async function handleToggleTrading(ctx) {
+  const user = await User.findOne({ telegramId: ctx.from.id });
   if (!user) {
-    await ctx.answerCbQuery('Ошибка: пользователь не найден');
+    await ctx.answerCbQuery('Ошибка');
     return;
   }
 
-  const status = user.signals.btc3candles ? '✅ Сигнал BTC включён' : '❌ Сигнал BTC выключен';
+  user.signals.tradingNotifications = !user.signals.tradingNotifications;
+  await user.save();
+
+  const status = user.signals.tradingNotifications 
+    ? '✅ Уведомления о торговле вкл' 
+    : '❌ Уведомления о торговле выкл';
   await ctx.answerCbQuery(status);
 
-  // Обновляем клавиатуру
+  const stats = await TradingStats.getStats();
+  
+  const winRate = stats.totalTrades > 0 
+    ? ((stats.wonTrades / stats.totalTrades) * 100).toFixed(1) 
+    : '0';
+  
+  const pnlEmoji = stats.totalPnL >= 0 ? '📈' : '📉';
+  const pnlSign = stats.totalPnL >= 0 ? '+' : '';
+  
   const message = 
-    `📊 *Настройки сигналов*\n\n` +
-    `Сигнал "3 свечи" отправляется когда:\n` +
-    `• 2 предыдущие 15-мин свечи одного цвета\n` +
-    `• Текущая свеча того же цвета >10 сек\n` +
-    `• До конца рынка минимум 1 минута\n\n` +
-    `Нажми на кнопку чтобы включить/выключить:`;
+    `💰 *Торговля (эмуляция)*\n\n` +
+    `💵 Баланс: *$${stats.currentBalance.toFixed(2)}*\n` +
+    `${pnlEmoji} P&L: ${pnlSign}$${stats.totalPnL.toFixed(2)}\n\n` +
+    `📊 Статистика:\n` +
+    `• Всего сделок: ${stats.totalTrades}\n` +
+    `• Побед: ${stats.wonTrades} (${winRate}%)\n` +
+    `• Поражений: ${stats.lostTrades}\n` +
+    `• Комиссии: $${stats.totalCommissions.toFixed(2)}\n\n` +
+    `🎯 Победы по шагам:\n` +
+    `• Step 1: ${stats.winsByStep[1] || 0}\n` +
+    `• Step 2: ${stats.winsByStep[2] || 0}\n` +
+    `• Step 3: ${stats.winsByStep[3] || 0}\n` +
+    `• Step 4: ${stats.winsByStep[4] || 0}`;
 
   await safeEditMessage(ctx, message, {
     parse_mode: 'Markdown',
-    ...keyboards.signalsMenu(user),
+    ...keyboards.tradingMenu(user, stats),
   });
 }
 
-/**
- * Вернуться в главное меню
- */
 async function handleBackToMain(ctx) {
-  const user = storage.getOrCreateUser(ctx.from.id, {
-    username: ctx.from.username,
-    firstName: ctx.from.first_name,
-  });
+  const user = await getOrCreateUser(ctx);
   
-  const welcomeMessage = 
+  const msg = 
     `👋 Привет, ${user.firstName || 'трейдер'}!\n\n` +
-    `Это бот для отслеживания сигналов на Polymarket.\n\n` +
+    `Бот для сигналов Polymarket.\n\n` +
     `Выбери действие:`;
 
-  await safeEditMessage(ctx, welcomeMessage, keyboards.mainMenu());
+  await safeEditMessage(ctx, msg, keyboards.mainMenu());
   await ctx.answerCbQuery();
 }
 
 module.exports = {
   handleStart,
   handleSignals,
-  handleToggleEth,
-  handleToggleBtc,
+  handleToggleEth3,
+  handleToggleEth2,
+  handleToggleBtc3,
+  handleToggleBtc2,
+  handleTrading,
+  handleToggleTrading,
   handleBackToMain,
 };

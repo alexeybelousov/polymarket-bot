@@ -17,21 +17,15 @@ class SignalTracker {
     this.bot = bot;
     this.interval = null;
     
-    // Состояние для отслеживания цвета и времени удержания
+    // Состояние для отслеживания сигналов
+    // Храним время когда цвет стал текущим
     this.colorState = {
-      eth: { color: null, since: null },
-      btc: { color: null, since: null },
+      eth: { color: null, since: null, signalSent: false },
+      btc: { color: null, since: null, signalSent: false },
     };
     
     // Отслеживаем последний интервал чтобы сбрасывать состояние при смене
     this.lastInterval = {
-      eth: null,
-      btc: null,
-    };
-    
-    // Отдельно храним для какого интервала уже отправлен сигнал
-    // Не сбрасывается при изменении цвета!
-    this.signalSentFor = {
       eth: null,
       btc: null,
     };
@@ -77,16 +71,8 @@ class SignalTracker {
       // Проверяем смену интервала - сбрасываем состояние
       if (this.lastInterval[type] !== context.slugs.current) {
         this.lastInterval[type] = context.slugs.current;
-        this.colorState[type] = { color: null, since: null };
-        // signalSentFor сбрасывается только при смене интервала
-        this.signalSentFor[type] = null;
+        this.colorState[type] = { color: null, since: null, signalSent: false };
         console.log(`📊 New interval for ${asset}: ${context.slugs.current}`);
-      }
-      
-      // Проверяем, был ли уже отправлен сигнал для этого интервала
-      if (this.signalSentFor[type] === context.slugs.current) {
-        debug(`  ⏸ Signal already sent for ${context.slugs.current}`);
-        return;
       }
 
       // Проверяем условия для сигнала
@@ -96,10 +82,12 @@ class SignalTracker {
       
       // Форматирование информации о цвете для логов
       const formatColorInfo = (data) => {
-        let info = `${data?.color || 'unknown'} [${data?.source || '?'}]`;
+        let info = `${data?.color || 'unknown'}`;
+        if (data?.resolved) info += '✓';
+        info += ` [${data?.source || '?'}]`;
         try {
           if (data?.prices?.start != null && data?.prices?.current != null) {
-            info += ` (Start:${Number(data.prices.start).toFixed(3)} Current:${Number(data.prices.current).toFixed(3)})`;
+            info += ` (${Number(data.prices.start).toFixed(2)}→${Number(data.prices.current).toFixed(2)})`;
           }
         } catch { /* ignore */ }
         return info;
@@ -144,8 +132,8 @@ class SignalTracker {
       // 4. Текущая свеча того же цвета
       if (current.color !== targetColor) {
         debug(`  ❌ Current candle is ${current.color}, need ${targetColor}`);
-        // Цвет изменился - сбрасываем таймер (но НЕ signalSentFor!)
-        this.colorState[type] = { color: null, since: null };
+        // Цвет изменился - сбрасываем таймер
+        this.colorState[type] = { color: null, since: null, signalSent: false };
         return;
       }
 
@@ -161,6 +149,7 @@ class SignalTracker {
         this.colorState[type] = {
           color: targetColor,
           since: now,
+          signalSent: false,
         };
         return;
       }
@@ -169,12 +158,16 @@ class SignalTracker {
       const holdTime = (now - state.since) / 1000;
       debug(`  Hold time: ${holdTime.toFixed(1)}s / ${config.polymarket.colorHoldTime}s`);
       
+      if (state.signalSent) {
+        debug(`  ⏸ Signal already sent for this interval`);
+        return;
+      }
+      
       if (holdTime >= config.polymarket.colorHoldTime) {
         debug(`  🎯 SIGNAL TRIGGERED!`);
-        // Сигнал! Отправляем с контекстом
-        await this.sendSignal(type, targetColor, context);
-        // Запоминаем что для этого интервала сигнал уже отправлен
-        this.signalSentFor[type] = context.slugs.current;
+        // Сигнал! Отправляем
+        await this.sendSignal(type, targetColor, current, context.slugs.current);
+        this.colorState[type].signalSent = true;
       } else {
         debug(`  ⏳ Waiting... ${(config.polymarket.colorHoldTime - holdTime).toFixed(1)}s left`);
       }
@@ -184,37 +177,16 @@ class SignalTracker {
     }
   }
 
-  async sendSignal(type, color, context) {
+  async sendSignal(type, color, current, slug) {
     const colorEmoji = color === 'green' ? '🟢' : '🔴';
     const colorText = color === 'green' ? 'зелёных' : 'красных';
     const asset = type.toUpperCase();
-    const timeText = polymarket.formatTimeToEnd(context.current.timeToEnd);
+    const timeText = polymarket.formatTimeToEnd(current.timeToEnd);
+    const url = polymarket.getMarketUrl(slug);
 
-    // Получаем времена ОКОНЧАНИЯ для каждой свечи (+15 мин к началу)
-    const step = 900; // 15 минут
-    const prev2Ts = polymarket.getTimestampFromSlug(context.slugs.prev2);
-    const prev1Ts = polymarket.getTimestampFromSlug(context.slugs.prev1);
-    const currentTs = polymarket.getTimestampFromSlug(context.slugs.current);
-
-    // Показываем время окончания (как на сайте Polymarket)
-    const prev2Time = polymarket.formatTimeET(prev2Ts + step);
-    const prev1Time = polymarket.formatTimeET(prev1Ts + step);
-    const currentTime = polymarket.formatTimeET(currentTs + step);
-
-    // Следующий рынок (для торговли)
-    const nextTs = currentTs + step;
-    const nextTime = polymarket.formatTimeET(nextTs + step); // время окончания следующего
-    const baseSlug = context.slugs.current.replace(/-\d+$/, ''); // eth-updown-15m
-    const nextSlug = `${baseSlug}-${nextTs}`;
-    const nextUrl = polymarket.getMarketUrl(nextSlug);
-
-    const message = `*Сигнал ${asset}*\n\n` +
-      `📊 Свечи:\n` +
-      `  ${prev2Time} ${colorEmoji}\n` +
-      `  ${prev1Time} ${colorEmoji}\n` +
-      `  ${currentTime} ${colorEmoji} ← текущая\n\n` +
+    const message = `${colorEmoji} *3 ${colorText} свечи ${asset}!*\n\n` +
       `До конца рынка: ${timeText}\n\n` +
-      `[Открыть ${nextTime}](${nextUrl})`;
+      `[Открыть на Polymarket](${url})`;
 
     // Получаем пользователей с включёнными сигналами для этого типа
     // TODO: Раскомментировать когда MongoDB будет готова
