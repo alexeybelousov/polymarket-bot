@@ -3,7 +3,7 @@ const { Markup } = require('telegraf');
 function mainMenu() {
   return Markup.inlineKeyboard([
     [Markup.button.callback('📊 Сигналы', 'signals')],
-    [Markup.button.callback('💰 Торговля', 'trading')],
+    // [Markup.button.callback('💰 Торговля', 'trading')], // Временно скрыто
   ]);
 }
 
