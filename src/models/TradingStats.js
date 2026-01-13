@@ -1,8 +1,8 @@
 const mongoose = require('mongoose');
 
 const tradingStatsSchema = new mongoose.Schema({
-  // Singleton - один документ
-  _id: { type: String, default: 'global' },
+  // ID бота (для поддержки нескольких ботов)
+  _id: { type: String, required: true }, // botId, например 'bot1', 'bot2'
   
   // Баланс
   initialDeposit: { type: Number, default: 100 },
@@ -34,10 +34,10 @@ const tradingStatsSchema = new mongoose.Schema({
 });
 
 // Статический метод для получения или создания статистики
-tradingStatsSchema.statics.getStats = async function() {
-  let stats = await this.findById('global');
+tradingStatsSchema.statics.getStats = async function(botId = 'bot1') {
+  let stats = await this.findById(botId);
   if (!stats) {
-    stats = await this.create({ _id: 'global' });
+    stats = await this.create({ _id: botId });
   }
   return stats;
 };

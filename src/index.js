@@ -5,6 +5,7 @@ const { createBot } = require('./bot');
 const SignalDetector = require('./services/signalDetector');
 const SignalNotifier = require('./services/signalNotifier');
 const TradingEmulator = require('./services/tradingEmulator');
+const { TRADING_CONFIGS } = require('./services/tradingEmulator');
 const { createServer } = require('./server');
 const polymarket = require('./services/polymarket');
 const binance = require('./services/binance');
@@ -32,12 +33,17 @@ async function main() {
   // Создаём бота
   const bot = createBot();
   
-  // Эмулятор торговли
-  const tradingEmulator = new TradingEmulator(bot, dataProvider);
-  await tradingEmulator.start();
+  // Создаём несколько экземпляров эмулятора торговли (по одному на каждый конфиг)
+  const tradingEmulators = [];
+  for (const [botId, config] of Object.entries(TRADING_CONFIGS)) {
+    const emulator = new TradingEmulator(bot, dataProvider, botId, config);
+    await emulator.start();
+    tradingEmulators.push(emulator);
+    console.log(`✅ Created trading emulator: ${botId}`);
+  }
 
-  // Детектор сигналов (определяет и сохраняет в БД)
-  const signalDetector = new SignalDetector(tradingEmulator);
+  // Детектор сигналов (определяет и сохраняет в БД, передает сигналы всем ботам)
+  const signalDetector = new SignalDetector(tradingEmulators);
   signalDetector.start();
 
   // Нотификатор (читает из БД и отправляет в TG)
@@ -45,7 +51,7 @@ async function main() {
   signalNotifier.start();
 
   // HTTP сервер с дашбордом
-  const server = createServer(config.server?.port || 3000, tradingEmulator);
+  const server = createServer(config.server?.port || 3000, tradingEmulators);
 
   // Запускаем бота
   bot.launch({ dropPendingUpdates: true });
@@ -56,7 +62,9 @@ async function main() {
     console.log(`\n${signal} received. Shutting down...`);
     signalDetector.stop();
     signalNotifier.stop();
-    tradingEmulator.stop();
+    for (const emulator of tradingEmulators) {
+      emulator.stop();
+    }
     bot.stop(signal);
     server.close();
     await mongoose.connection.close();

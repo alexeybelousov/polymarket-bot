@@ -6,26 +6,37 @@ const User = require('../models/User');
 
 
 // ===== НАСТРОЙКИ СТРАТЕГИИ =====
-const TRADING_CONFIG = {
-  firstBetPercent: 0.02,      // Первая ставка: 2% от депозита
-  signalType: '3candles',     // На каком сигнале начинается торговля: 3 свечи
-  maxSteps: 4,                // Количество шагов
-  baseDeposit: 100,           // Базовый депозит: $100
-  maxPrice: 0.55,             // Верхний предел цены (не входим если цена выше)
-  entryFee: 0.015,           // Комиссия на вход: 1.5%
-  exitFee: 0.015,            // Комиссия на выход: 1.5%
+// Конфигурации для нескольких ботов
+const TRADING_CONFIGS = {
+  bot1: {
+    name: '3 свечи, Мартингейл, 2%, 4 шага, цена <= $0.55',              // Имя бота для отображения
+    firstBetPercent: 0.02,      // Первая ставка: 2% от депозита
+    signalType: '3candles',     // На каком сигнале начинается торговля: 3 свечи
+    maxSteps: 4,                // Количество шагов
+    baseDeposit: 100,           // Базовый депозит: $100
+    maxPrice: 0.55,             // Верхний предел цены (не входим если цена выше)
+    entryFee: 0.015,            // Комиссия на вход: 1.5%
+    exitFee: 0.015,             // Комиссия на выход: 1.5%
+  },
+  bot2: {
+    name: '2 свечи, Мартингейл, 2%, 3 шага, цена <= $0.55',              // Имя бота для отображения
+    firstBetPercent: 0.015,     // Первая ставка: 1,5% от депозита
+    signalType: '2candles',     // На каком сигнале начинается торговля: 2 свечи
+    maxSteps: 3,                // Количество шагов
+    baseDeposit: 100,           // Базовый депозит: $100
+    maxPrice: 0.55,             // Верхний предел цены (не входим если цена выше)
+    entryFee: 0.015,            // Комиссия на вход: 1.5%
+    exitFee: 0.015,             // Комиссия на выход: 1.5%
+  },
 };
-
-const ENTRY_FEE_RATE = TRADING_CONFIG.entryFee;
-const EXIT_FEE_RATE = TRADING_CONFIG.exitFee;
 
 /**
  * Динамический расчёт ставки на основе цены
  * Формула: profitMultiplier = (1 - fee) / price - 1
  * betAmount = (previousLosses + targetProfit) / profitMultiplier
  */
-function calculateDynamicBet(buyPrice, previousLosses, targetProfit) {
-  const profitMultiplier = (1 - ENTRY_FEE_RATE) / buyPrice - 1;
+function calculateDynamicBet(buyPrice, previousLosses, targetProfit, entryFeeRate) {
+  const profitMultiplier = (1 - entryFeeRate) / buyPrice - 1;
   if (profitMultiplier <= 0) {
     return null; // Невозможно получить профит при такой цене
   }
@@ -43,25 +54,31 @@ function getShortHash(tokenId) {
 }
 
 class TradingEmulator {
-  constructor(bot, dataProvider) {
+  constructor(bot, dataProvider, botId = 'bot1', config = TRADING_CONFIGS.bot1) {
     this.bot = bot;
     this.dataProvider = dataProvider;
+    this.botId = botId;
+    this.config = config;
     this.activeSeries = new Map(); // asset -> TradeSeries
     this.interval = null;
+    
+    // Локальные константы из конфига
+    this.this.ENTRY_FEE_RATE = config.entryFee;
+    this.this.EXIT_FEE_RATE = config.exitFee;
   }
 
   async start() {
-    // Загружаем активные серии из БД
-    console.log('💰 Loading active series from DB...');
-    const series = await TradeSeries.find({ status: 'active' });
-    console.log(`💰 Found ${series.length} active series`);
+    // Загружаем активные серии из БД для этого бота
+    console.log(`💰 [${this.botId}] Loading active series from DB...`);
+    const series = await TradeSeries.find({ botId: this.botId, status: 'active' });
+    console.log(`💰 [${this.botId}] Found ${series.length} active series`);
     
     for (const s of series) {
       this.activeSeries.set(s.asset, s);
-      console.log(`💰 Resumed ${s.asset.toUpperCase()} series at Step ${s.currentStep}`);
+      console.log(`💰 [${this.botId}] Resumed ${s.asset.toUpperCase()} series at Step ${s.currentStep}`);
     }
     
-    console.log('💰 Trading emulator started');
+    console.log(`💰 [${this.botId}] Trading emulator started`);
     this.interval = setInterval(() => this.tick(), 5000);
   }
 
@@ -118,7 +135,7 @@ class TradingEmulator {
   
   async onSignal(type, signalColor, signalMarketSlug, nextMarketSlug, signalType = '3candles') {
     // Проверяем тип сигнала (торгуем только на 3 свечи)
-    if (TRADING_CONFIG.signalType === '3candles' && signalType !== '3candles') {
+    if (this.config.signalType === '3candles' && signalType !== '3candles') {
       return; // Пропускаем сигналы 2 свечи
     }
     
@@ -152,13 +169,14 @@ class TradingEmulator {
     }
     
     // Проверяем верхний предел цены
-    if (buyPrice > TRADING_CONFIG.maxPrice) {
-      console.log(`[TRADE] ${type.toUpperCase()}: Price too high - $${buyPrice.toFixed(3)} > $${TRADING_CONFIG.maxPrice} (max limit), skipping`);
+    if (buyPrice > this.config.maxPrice) {
+      console.log(`[TRADE] ${type.toUpperCase()}: Price too high - $${buyPrice.toFixed(3)} > $${this.config.maxPrice} (max limit), skipping`);
       return;
     }
     
     // Создаём серию
     const series = new TradeSeries({
+      botId: this.botId,
       asset: type,
       signalMarketSlug: signalMarketSlug, // Рынок где сигнал (для отслеживания отмены)
       signalColor,
@@ -184,7 +202,7 @@ class TradingEmulator {
       });
       
       // Обновляем статистику
-      const stats = await TradingStats.getStats();
+      const stats = await TradingStats.getStats(this.botId);
       stats.cancelledTrades++;
       await stats.save();
       
@@ -204,7 +222,7 @@ class TradingEmulator {
   // ==================== ПОКУПКА СТАВКИ ====================
   
   async buyStep(series, marketSlugOverride = null) {
-    const stats = await TradingStats.getStats();
+    const stats = await TradingStats.getStats(this.botId);
     const betEmoji = series.betColor === 'green' ? '🟢' : '🔴';
     const betOutcome = series.betColor === 'green' ? 'up' : 'down';
     
@@ -238,12 +256,12 @@ class TradingEmulator {
     }
     
     // Проверяем верхний предел цены (на каждом шаге)
-    if (price > TRADING_CONFIG.maxPrice) {
-      console.log(`[TRADE] ${series.asset.toUpperCase()}: Price too high on Step ${series.currentStep} - $${price.toFixed(3)} > $${TRADING_CONFIG.maxPrice}, cancelling`);
+    if (price > this.config.maxPrice) {
+      console.log(`[TRADE] ${series.asset.toUpperCase()}: Price too high on Step ${series.currentStep} - $${price.toFixed(3)} > $${this.config.maxPrice}, cancelling`);
       
       // Добавляем событие в таймлайн
       series.addEvent('series_cancelled', {
-        message: `⛔ Не удалось купить: цена превысила лимит ($${price.toFixed(3)} > $${TRADING_CONFIG.maxPrice}) на Step ${series.currentStep}`,
+        message: `⛔ Не удалось купить: цена превысила лимит ($${price.toFixed(3)} > $${this.config.maxPrice}) на Step ${series.currentStep}`,
         marketColor: null,
         pnl: -(series.totalInvested || 0),
       });
@@ -251,17 +269,17 @@ class TradingEmulator {
       series.status = 'cancelled';
       series.endedAt = new Date();
       
-      const stats = await TradingStats.getStats();
+      const stats = await TradingStats.getStats(this.botId);
       stats.cancelledTrades++;
       await stats.save();
       
       await series.save();
       this.activeSeries.delete(series.asset);
       
-      await this.log(series.asset, polySlug, `PRICE_TOO_HIGH: $${price.toFixed(3)} > $${TRADING_CONFIG.maxPrice}`, {
+      await this.log(series.asset, polySlug, `PRICE_TOO_HIGH: $${price.toFixed(3)} > $${this.config.maxPrice}`, {
         step: series.currentStep,
         price,
-        maxPrice: TRADING_CONFIG.maxPrice,
+        maxPrice: this.config.maxPrice,
         totalInvested: series.totalInvested,
       });
       
@@ -271,12 +289,12 @@ class TradingEmulator {
     
     // Рассчитываем ставку динамически
     // Используем текущий баланс для расчёта первой ставки (2% от баланса)
-    const deposit = stats.currentBalance || TRADING_CONFIG.baseDeposit;
+    const deposit = stats.currentBalance || this.config.baseDeposit;
     const previousLosses = series.totalInvested || 0;
-    const profitMultiplier = (1 - ENTRY_FEE_RATE) / price - 1;
-    const firstBetAmount = deposit * TRADING_CONFIG.firstBetPercent;
+    const profitMultiplier = (1 - this.this.ENTRY_FEE_RATE) / price - 1;
+    const firstBetAmount = deposit * this.config.firstBetPercent;
     const targetProfit = firstBetAmount * profitMultiplier;
-    const amount = calculateDynamicBet(price, previousLosses, targetProfit);
+    const amount = calculateDynamicBet(price, previousLosses, targetProfit, this.this.ENTRY_FEE_RATE);
     
     if (!amount || amount <= 0) {
       console.warn(`[TRADE] Cannot calculate bet amount at price $${price.toFixed(3)}`);
@@ -295,7 +313,7 @@ class TradingEmulator {
       series.status = 'cancelled';
       series.endedAt = new Date();
       
-      const stats = await TradingStats.getStats();
+      const stats = await TradingStats.getStats(this.botId);
       stats.cancelledTrades++;
       await stats.save();
       
@@ -305,7 +323,7 @@ class TradingEmulator {
     }
     
     // Расчёты по формуле Polymarket
-    const entryFee = amount * ENTRY_FEE_RATE;
+    const entryFee = amount * this.ENTRY_FEE_RATE;
     const netAmount = amount - entryFee;
     const shares = netAmount / price;
     
@@ -351,7 +369,7 @@ class TradingEmulator {
   async buyNextStepEarly(series, context) {
     const asset = series.asset.toUpperCase();
     const nextStep = series.currentStep + 1;
-    const stats = await TradingStats.getStats();
+    const stats = await TradingStats.getStats(this.botId);
     const betEmoji = series.betColor === 'green' ? '🟢' : '🔴';
     const betOutcome = series.betColor === 'green' ? 'up' : 'down';
     const signalEmoji = series.signalColor === 'green' ? '🟢' : '🔴';
@@ -385,10 +403,10 @@ class TradingEmulator {
     }
     
     // Проверяем верхний предел цены
-    if (price > TRADING_CONFIG.maxPrice) {
-      console.log(`[TRADE] ${asset}: Hedge price too high - $${price.toFixed(3)} > $${TRADING_CONFIG.maxPrice}, skipping`);
+    if (price > this.config.maxPrice) {
+      console.log(`[TRADE] ${asset}: Hedge price too high - $${price.toFixed(3)} > $${this.config.maxPrice}, skipping`);
       series.addEvent('price_error', {
-        message: `⛔ Хедж отменён: цена превысила лимит ($${price.toFixed(3)} > $${TRADING_CONFIG.maxPrice})`,
+        message: `⛔ Хедж отменён: цена превысила лимит ($${price.toFixed(3)} > $${this.config.maxPrice})`,
       });
       await series.save();
       return;
@@ -396,12 +414,12 @@ class TradingEmulator {
     
     // Рассчитываем ставку динамически
     // Используем текущий баланс для расчёта первой ставки (2% от баланса)
-    const deposit = stats.currentBalance || TRADING_CONFIG.baseDeposit;
+    const deposit = stats.currentBalance || this.config.baseDeposit;
     const previousLosses = series.totalInvested || 0;
-    const profitMultiplier = (1 - ENTRY_FEE_RATE) / price - 1;
-    const firstBetAmount = deposit * TRADING_CONFIG.firstBetPercent;
+    const profitMultiplier = (1 - this.ENTRY_FEE_RATE) / price - 1;
+    const firstBetAmount = deposit * this.config.firstBetPercent;
     const targetProfit = firstBetAmount * profitMultiplier;
-    const amount = calculateDynamicBet(price, previousLosses, targetProfit);
+    const amount = calculateDynamicBet(price, previousLosses, targetProfit, this.ENTRY_FEE_RATE);
     
     if (!amount || amount <= 0) {
       console.warn(`[TRADE] Cannot calculate hedge bet amount at price $${price.toFixed(3)}`);
@@ -423,7 +441,7 @@ class TradingEmulator {
     }
     
     // Расчёты
-    const entryFee = amount * ENTRY_FEE_RATE;
+    const entryFee = amount * this.ENTRY_FEE_RATE;
     const netAmount = amount - entryFee;
     const shares = netAmount / price;
     
@@ -471,7 +489,7 @@ class TradingEmulator {
     const signalEmoji = series.signalColor === 'green' ? '🟢' : '🔴';
     const betOutcome = series.betColor === 'green' ? 'up' : 'down';
     
-    const stats = await TradingStats.getStats();
+    const stats = await TradingStats.getStats(this.botId);
     let totalReturn = 0;
     let totalLoss = 0;
     
@@ -507,7 +525,7 @@ class TradingEmulator {
         
         // Расчёт: shares * sellPrice - exitFee
         const grossReturn = pos.shares * sellPrice;
-        const exitFee = grossReturn * EXIT_FEE_RATE;
+        const exitFee = grossReturn * this.EXIT_FEE_RATE;
         const netReturn = grossReturn - exitFee;
         
         totalReturn += netReturn;
@@ -587,15 +605,15 @@ class TradingEmulator {
     if (sellPrice) {
       // Реальная цена продажи: shares * sellPrice - exitFee
       const grossReturn = hedgePosition.shares * sellPrice;
-      const exitFee = grossReturn * EXIT_FEE_RATE;
+      const exitFee = grossReturn * this.EXIT_FEE_RATE;
       returnAmount = grossReturn - exitFee;
     } else {
       // Fallback: упрощённая формула
-      returnAmount = hedgePosition.amount * (1 - EXIT_FEE_RATE * 2);
+      returnAmount = hedgePosition.amount * (1 - this.EXIT_FEE_RATE * 2);
       console.log(`[TRADE] Using fallback sell price for hedge`);
     }
     
-    const stats = await TradingStats.getStats();
+    const stats = await TradingStats.getStats(this.botId);
     stats.currentBalance += returnAmount;
     await stats.save();
     
@@ -604,7 +622,7 @@ class TradingEmulator {
     
     // Корректируем учёт
     series.totalInvested -= hedgePosition.amount;
-    series.totalCommission += hedgePosition.amount * EXIT_FEE_RATE;
+    series.totalCommission += hedgePosition.amount * this.EXIT_FEE_RATE;
     series.nextStepBought = false;
     series.nextMarketSlug = null;
     
@@ -770,7 +788,7 @@ class TradingEmulator {
       });
       
       // Обновляем статистику
-      const stats = await TradingStats.getStats();
+      const stats = await TradingStats.getStats(this.botId);
       stats.currentBalance += winAmount;
       stats.totalTrades++;
       stats.wonTrades++;
@@ -831,7 +849,7 @@ class TradingEmulator {
         });
         
         // Обновляем статистику
-        const stats = await TradingStats.getStats();
+        const stats = await TradingStats.getStats(this.botId);
         stats.totalTrades++;
         stats.lostTrades++;
         stats.totalPnL += pnl;
@@ -863,7 +881,7 @@ class TradingEmulator {
           });
           
           // Обновляем статистику
-          const cancelStats = await TradingStats.getStats();
+          const cancelStats = await TradingStats.getStats(this.botId);
           cancelStats.cancelledTrades++;
           await cancelStats.save();
           
@@ -894,7 +912,7 @@ class TradingEmulator {
     
     // Формируем заголовок с информацией о шаге и сумме
     const stepInfo = series.status === 'active' 
-      ? `Step ${series.currentStep}/${TRADING_CONFIG.maxSteps}`
+      ? `Step ${series.currentStep}/${this.config.maxSteps}`
       : '';
     const amountInfo = series.totalInvested > 0 
       ? `💰 $${series.totalInvested.toFixed(2)}`
@@ -943,7 +961,7 @@ class TradingEmulator {
   }
 
   async getAllSeries(limit = 10) {
-    return TradeSeries.find()
+    return TradeSeries.find({ botId: this.botId })
       .sort({ startedAt: -1 })
       .limit(limit)
       .lean();
@@ -951,3 +969,4 @@ class TradingEmulator {
 }
 
 module.exports = TradingEmulator;
+module.exports.TRADING_CONFIGS = TRADING_CONFIGS;

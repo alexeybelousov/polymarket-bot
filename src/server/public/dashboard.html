@@ -259,9 +259,17 @@
       <div class="signal-box" id="sig-btc-2"><div class="signal-label">BTC 2с</div><div class="signal-status">—</div></div>
     </div>
 
+    <!-- Bot Selector -->
+    <div class="bot-selector" id="bot-selector" style="display: none; margin-bottom: 10px;">
+      <label for="bot-select">Бот: </label>
+      <select id="bot-select" onchange="selectBot(this.value)" style="padding: 5px; border-radius: 4px; border: 1px solid #ccc;">
+        <option value="">Загрузка...</option>
+      </select>
+    </div>
+
     <!-- Bot Info -->
-    <div class="bot-info">
-      <strong>💰 Бот</strong> — 3 свечи → контр-ставка, Мартингейл (2% от баланса, 4 шага, макс. цена $0.55), хедж
+    <div class="bot-info" id="bot-info">
+      <strong>💰 Бот</strong> — Загрузка...
     </div>
 
     <!-- Stats -->
@@ -624,6 +632,8 @@
     }
 
     let globalStats = { initialDeposit: 100, currentBalance: 100 };
+    let currentBotId = 'bot1'; // Текущий выбранный бот
+    let allBots = []; // Список всех ботов
     
     function updateStats() {
       const periodSeries = filterByPeriod(allSeries);
@@ -686,11 +696,55 @@
       }
     }
     
+    async function loadBots() {
+      try {
+        const res = await fetch('/api/trading/bots');
+        allBots = await res.json();
+        
+        // Заполняем селектор
+        const selectEl = document.getElementById('bot-select');
+        if (selectEl) {
+          selectEl.innerHTML = '';
+          allBots.forEach(bot => {
+            const option = document.createElement('option');
+            option.value = bot.botId;
+            option.textContent = bot.name;
+            option.selected = bot.botId === currentBotId;
+            selectEl.appendChild(option);
+          });
+        }
+        
+        // Показываем селектор, если ботов больше одного
+        const selectorEl = document.getElementById('bot-selector');
+        if (selectorEl) {
+          selectorEl.style.display = allBots.length > 1 ? 'block' : 'none';
+        }
+        
+        // Обновляем отображение текущего бота
+        updateBotInfo();
+      } catch(e) { console.error(e); }
+    }
+    
+    function selectBot(botId) {
+      if (!botId) return;
+      currentBotId = botId;
+      updateBotInfo();
+      loadTrading(); // Перезагружаем данные для выбранного бота
+    }
+    
+    function updateBotInfo() {
+      const bot = allBots.find(b => b.botId === currentBotId);
+      const botInfoEl = document.getElementById('bot-info');
+      if (botInfoEl && bot) {
+        botInfoEl.innerHTML = `<strong>💰 ${bot.name}</strong>`;
+      }
+    }
+
     async function loadTrading() {
       try {
         const [statsRes, seriesRes] = await Promise.all([
-          fetch('/api/trading/stats'),
-          fetch('/api/trading/series?limit=100'),
+          fetch(`/api/trading/stats?botId=${currentBotId}`),
+          fetch(`/api/trading/series?limit=1000&botId=${currentBotId}`),
         ]);
         globalStats = await statsRes.json();
         allSeries = await seriesRes.json();
@@ -698,6 +752,7 @@
       } catch(e) { console.error(e); }
     }
 
+    loadBots();
     loadMarkets();
     loadTrading();
     setInterval(loadMarkets, 3000);

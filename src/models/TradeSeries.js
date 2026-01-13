@@ -35,6 +35,7 @@ const eventSchema = new mongoose.Schema({
 
 // Серия торговли
 const tradeSeriesSchema = new mongoose.Schema({
+  botId: { type: String, default: 'bot1', required: true }, // ID бота (для поддержки нескольких ботов)
   asset: { type: String, enum: ['eth', 'btc'], required: true },
   signalMarketSlug: { type: String }, // Рынок где был сигнал (для отслеживания отмены)
   signalColor: { type: String, enum: ['green', 'red'], required: true },
@@ -83,8 +84,8 @@ const tradeSeriesSchema = new mongoose.Schema({
   endedAt: { type: Date },
 });
 
-tradeSeriesSchema.index({ status: 1 });
-tradeSeriesSchema.index({ asset: 1, startedAt: -1 });
+tradeSeriesSchema.index({ botId: 1, status: 1 });
+tradeSeriesSchema.index({ botId: 1, asset: 1, startedAt: -1 });
 
 // Добавить событие
 tradeSeriesSchema.methods.addEvent = function(type, data = {}) {

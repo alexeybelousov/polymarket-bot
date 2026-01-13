@@ -9,8 +9,11 @@ const isBinance = config.dataSource === 'binance';
 const dataProvider = isBinance ? binance : polymarket;
 
 class SignalDetector {
-  constructor(tradingEmulator = null) {
-    this.tradingEmulator = tradingEmulator;
+  constructor(tradingEmulators = null) {
+    // Поддерживаем как один бот (для обратной совместимости), так и массив ботов
+    this.tradingEmulators = Array.isArray(tradingEmulators) 
+      ? tradingEmulators 
+      : tradingEmulators ? [tradingEmulators] : [];
     this.interval = null;
     this.colorState = {
       eth3: { color: null, since: null },
@@ -214,17 +217,20 @@ class SignalDetector {
 
       // Запускаем торговлю только для 3-свечных сигналов
       if (candleCount === 3) {
-        if (this.tradingEmulator) {
+        if (this.tradingEmulators.length > 0) {
           const nextMarketSlug = context.slugs.next || context.slugs.current;
           const signalType = candleCount === 3 ? '3candles' : '2candles';
-          console.log(`[SIGNAL] Calling tradingEmulator.onSignal for ${type.toUpperCase()}...`);
-          try {
-            await this.tradingEmulator.onSignal(type, color, context.slugs.current, nextMarketSlug, signalType);
-          } catch (err) {
-            console.error(`[SIGNAL] Error in tradingEmulator.onSignal:`, err.message);
+          console.log(`[SIGNAL] Calling tradingEmulator.onSignal for ${type.toUpperCase()} (${this.tradingEmulators.length} bot(s))...`);
+          // Передаем сигнал всем ботам
+          for (const emulator of this.tradingEmulators) {
+            try {
+              await emulator.onSignal(type, color, context.slugs.current, nextMarketSlug, signalType);
+            } catch (err) {
+              console.error(`[SIGNAL] Error in tradingEmulator.onSignal for ${emulator.botId}:`, err.message);
+            }
           }
         } else {
-          console.log(`[SIGNAL] tradingEmulator is NULL!`);
+          console.log(`[SIGNAL] No trading emulators configured!`);
         }
       }
 

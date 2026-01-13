@@ -8,11 +8,16 @@ const TradingStats = require('../models/TradingStats');
 const polymarket = require('../services/polymarket');
 const binance = require('../services/binance');
 const config = require('../config');
+const { TRADING_CONFIGS } = require('../services/tradingEmulator');
 
 const isBinance = config.dataSource === 'binance';
 const dataProvider = isBinance ? binance : polymarket;
 
-function createServer(port = 3000, tradingEmulator = null) {
+function createServer(port = 3000, tradingEmulators = null) {
+  // Поддерживаем как один бот (для обратной совместимости), так и массив ботов
+  const emulators = Array.isArray(tradingEmulators) 
+    ? tradingEmulators 
+    : tradingEmulators ? [tradingEmulators] : [];
   const app = express();
 
   app.use('/static', express.static(path.join(__dirname, 'public')));
@@ -71,8 +76,29 @@ function createServer(port = 3000, tradingEmulator = null) {
   // API для торговли
   app.get('/api/trading/stats', async (req, res) => {
     try {
-      const stats = await TradingStats.getStats();
+      const botId = req.query.botId || 'bot1'; // По умолчанию bot1 для обратной совместимости
+      const stats = await TradingStats.getStats(botId);
       res.json(stats);
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // API для получения конфигов ботов
+  app.get('/api/trading/bots', async (req, res) => {
+    try {
+      const bots = Object.entries(TRADING_CONFIGS).map(([botId, config]) => ({
+        botId,
+        name: config.name || `Бот ${botId}`,
+        config: {
+          firstBetPercent: config.firstBetPercent,
+          signalType: config.signalType,
+          maxSteps: config.maxSteps,
+          baseDeposit: config.baseDeposit,
+          maxPrice: config.maxPrice,
+        },
+      }));
+      res.json(bots);
     } catch (error) {
       res.status(500).json({ error: error.message });
     }
@@ -81,7 +107,10 @@ function createServer(port = 3000, tradingEmulator = null) {
   // Активные серии торговли
   app.get('/api/trading/series/active', async (req, res) => {
     try {
-      const series = await TradeSeries.find({ status: 'active' }).lean();
+      const botId = req.query.botId; // Опционально - если не указан, возвращаем все
+      const query = { status: 'active' };
+      if (botId) query.botId = botId;
+      const series = await TradeSeries.find(query).lean();
       res.json(series);
     } catch (error) {
       res.status(500).json({ error: error.message });
@@ -92,7 +121,10 @@ function createServer(port = 3000, tradingEmulator = null) {
   app.get('/api/trading/series/history', async (req, res) => {
     try {
       const limit = parseInt(req.query.limit) || 10;
-      const series = await TradeSeries.find({ status: { $ne: 'active' } })
+      const botId = req.query.botId; // Опционально
+      const query = { status: { $ne: 'active' } };
+      if (botId) query.botId = botId;
+      const series = await TradeSeries.find(query)
         .sort({ endedAt: -1 })
         .limit(limit)
         .lean();
@@ -106,7 +138,10 @@ function createServer(port = 3000, tradingEmulator = null) {
   app.get('/api/trading/series', async (req, res) => {
     try {
       const limit = parseInt(req.query.limit) || 10;
-      const series = await TradeSeries.find()
+      const botId = req.query.botId; // Опционально - если не указан, возвращаем все боты
+      const query = {};
+      if (botId) query.botId = botId;
+      const series = await TradeSeries.find(query)
         .sort({ startedAt: -1 })
         .limit(limit)
         .lean();
