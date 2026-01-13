@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Polymarket Trading</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap');
     :root {
@@ -64,14 +65,14 @@
     .series-card.active { border-color: var(--yellow); }
     .series-card.won { border-color: var(--green); }
     .series-card.lost { border-color: var(--red); }
-    .series-card.cancelled { border-color: var(--purple); }
+    .series-card.cancelled { border-color: var(--yellow); }
     .series-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
     .series-asset { font-weight: 600; font-size: 16px; }
     .series-status { font-size: 12px; padding: 4px 8px; border-radius: 4px; }
     .series-status.active { background: rgba(234, 179, 8, 0.2); color: var(--yellow); }
     .series-status.won { background: rgba(34, 197, 94, 0.2); color: var(--green); }
     .series-status.lost { background: rgba(239, 68, 68, 0.2); color: var(--red); }
-    .series-status.cancelled { background: rgba(168, 85, 247, 0.2); color: var(--purple); }
+    .series-status.cancelled { background: rgba(234, 179, 8, 0.2); color: var(--yellow); }
     .series-info { display: flex; gap: 16px; margin-bottom: 12px; font-size: 12px; color: var(--text2); }
     .series-info span { display: flex; align-items: center; gap: 4px; }
 
@@ -147,6 +148,40 @@
     }
     .period-btn:hover { border-color: var(--blue); color: var(--text); }
     .period-btn.active { border-color: var(--blue); background: rgba(59, 130, 246, 0.1); color: var(--text); }
+    
+    /* View toggle */
+    .series-header-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .view-toggle {
+      display: flex;
+      gap: 4px;
+    }
+    .view-btn {
+      padding: 4px 10px;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text2);
+      font-family: inherit;
+      font-size: 11px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .view-btn:hover { border-color: var(--blue); color: var(--text); }
+    .view-btn.active { border-color: var(--blue); background: rgba(59, 130, 246, 0.15); color: var(--text); }
+    
+    /* Chart */
+    .chart-container {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+      height: 300px;
+    }
   </style>
 </head>
 <body>
@@ -226,9 +261,18 @@
 
     <!-- Series -->
     <div class="series-section">
-      <div class="series-title">📈 Серии торговли</div>
+      <div class="series-header-row">
+        <div class="series-title">📈 Серии торговли</div>
+        <div class="view-toggle">
+          <button class="view-btn active" data-view="list" onclick="setView('list')">Список</button>
+          <button class="view-btn" data-view="chart" onclick="setView('chart')">График</button>
+        </div>
+      </div>
       <div id="series-list">
         <div class="no-series">Нет серий торговли</div>
+      </div>
+      <div id="series-chart" class="chart-container" style="display: none;">
+        <canvas id="balanceChart"></canvas>
       </div>
     </div>
   </div>
@@ -240,9 +284,114 @@
     
     let currentFilter = 'all';
     let currentPeriod = 'all';
+    let currentView = 'list';
     let allSeries = [];
     let showAll = false;
+    let balanceChart = null;
     const DEFAULT_LIMIT = 5;
+    
+    function setView(view) {
+      currentView = view;
+      document.querySelectorAll('.view-btn').forEach(el => {
+        el.classList.toggle('active', el.dataset.view === view);
+      });
+      document.getElementById('series-list').style.display = view === 'list' ? 'block' : 'none';
+      document.getElementById('series-chart').style.display = view === 'chart' ? 'block' : 'none';
+      if (view === 'chart') {
+        renderChart();
+      }
+    }
+    
+    function renderChart() {
+      const periodSeries = filterByPeriod(allSeries);
+      const completedSeries = periodSeries.filter(s => s.status !== 'active').sort((a, b) => new Date(a.startedAt) - new Date(b.startedAt));
+      
+      if (completedSeries.length === 0) {
+        if (balanceChart) {
+          balanceChart.destroy();
+          balanceChart = null;
+        }
+        return;
+      }
+      
+      // Строим данные графика
+      const initialDeposit = globalStats.initialDeposit || 100;
+      let runningBalance = initialDeposit;
+      
+      const labels = ['Старт'];
+      const balanceData = [initialDeposit];
+      const pointColors = ['#3b82f6'];
+      const pointSizes = [6];
+      const tooltips = ['Начальный депозит: $' + initialDeposit];
+      
+      completedSeries.forEach(s => {
+        runningBalance += (s.totalPnL || 0);
+        const time = new Date(s.endedAt || s.startedAt).toLocaleTimeString('ru', {hour:'2-digit', minute:'2-digit'});
+        labels.push(time);
+        balanceData.push(runningBalance);
+        
+        const color = s.status === 'won' ? '#22c55e' : s.status === 'lost' ? '#ef4444' : '#eab308';
+        pointColors.push(color);
+        pointSizes.push(s.status === 'cancelled' ? 6 : 8);
+        
+        const pnl = s.totalPnL >= 0 ? `+$${s.totalPnL.toFixed(2)}` : `-$${Math.abs(s.totalPnL).toFixed(2)}`;
+        const statusText = s.status === 'won' ? 'Профит' : s.status === 'lost' ? 'Убыток' : 'Отмена';
+        tooltips.push(`${s.asset.toUpperCase()} ${statusText}: ${pnl}`);
+      });
+      
+      const ctx = document.getElementById('balanceChart').getContext('2d');
+      
+      if (balanceChart) {
+        balanceChart.destroy();
+      }
+      
+      balanceChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Баланс',
+            data: balanceData,
+            borderColor: '#3b82f6',
+            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+            borderWidth: 2,
+            fill: true,
+            tension: 0.3,
+            pointBackgroundColor: pointColors,
+            pointBorderColor: pointColors,
+            pointRadius: pointSizes,
+            pointHoverRadius: 10,
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: (ctx) => tooltips[ctx.dataIndex],
+                afterLabel: (ctx) => `Баланс: $${ctx.raw.toFixed(2)}`
+              }
+            }
+          },
+          scales: {
+            x: {
+              grid: { color: 'rgba(255,255,255,0.05)' },
+              ticks: { color: '#71717a', font: { size: 10 } }
+            },
+            y: {
+              grid: { color: 'rgba(255,255,255,0.05)' },
+              ticks: { 
+                color: '#71717a', 
+                font: { size: 10 },
+                callback: v => '$' + v
+              }
+            }
+          }
+        }
+      });
+    }
     
     function setPeriod(period) {
       currentPeriod = period;
@@ -251,6 +400,9 @@
         el.classList.toggle('active', el.dataset.period === period);
       });
       updateStats();
+      if (currentView === 'chart') {
+        renderChart();
+      }
     }
     
     function filterByPeriod(series) {
@@ -269,6 +421,7 @@
       // Перерисовываем серии
       const periodSeries = filterByPeriod(allSeries);
       document.getElementById('series-list').innerHTML = renderSeries(periodSeries);
+      // График не фильтруем по типу — показываем все
     }
     
     function toggleShowAll() {
@@ -424,6 +577,11 @@
       
       // Перерисовываем серии
       document.getElementById('series-list').innerHTML = renderSeries(periodSeries);
+      
+      // Обновляем график если активен
+      if (currentView === 'chart') {
+        renderChart();
+      }
     }
     
     async function loadTrading() {
