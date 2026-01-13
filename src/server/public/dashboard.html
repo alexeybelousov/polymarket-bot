@@ -115,6 +115,38 @@
       margin-top: 12px;
     }
     .show-more-btn:hover { background: var(--bg3); color: var(--text); border-color: var(--blue); }
+    
+    /* Bot description */
+    .bot-info { 
+      background: var(--bg2); 
+      border: 1px solid var(--border); 
+      border-radius: 10px; 
+      padding: 12px 16px; 
+      margin-bottom: 20px; 
+      font-size: 12px; 
+      color: var(--text2);
+    }
+    .bot-info strong { color: var(--text); }
+    
+    /* Period toggle */
+    .period-toggle {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .period-btn {
+      padding: 6px 12px;
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text2);
+      font-family: inherit;
+      font-size: 11px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .period-btn:hover { border-color: var(--blue); color: var(--text); }
+    .period-btn.active { border-color: var(--blue); background: rgba(59, 130, 246, 0.1); color: var(--text); }
   </style>
 </head>
 <body>
@@ -147,7 +179,16 @@
       <div class="signal-box" id="sig-btc-2"><div class="signal-label">BTC 2с</div><div class="signal-status">—</div></div>
     </div>
 
+    <!-- Bot Info -->
+    <div class="bot-info">
+      <strong>💰 Бот</strong> — 3 свечи → контр-ставка, Мартингейл: $2 → $5 → $11 → $23, хедж
+    </div>
+
     <!-- Stats -->
+    <div class="period-toggle">
+      <button class="period-btn active" data-period="all" onclick="setPeriod('all')">Всего</button>
+      <button class="period-btn" data-period="day" onclick="setPeriod('day')">За сутки</button>
+    </div>
     <div class="stats-section">
       <div class="stats-row">
         <div class="stat-item">
@@ -198,9 +239,25 @@
     const fmtTime = ts => new Date(ts).toLocaleTimeString('ru', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
     
     let currentFilter = 'all';
+    let currentPeriod = 'all';
     let allSeries = [];
     let showAll = false;
     const DEFAULT_LIMIT = 5;
+    
+    function setPeriod(period) {
+      currentPeriod = period;
+      showAll = false;
+      document.querySelectorAll('.period-btn').forEach(el => {
+        el.classList.toggle('active', el.dataset.period === period);
+      });
+      updateStats();
+    }
+    
+    function filterByPeriod(series) {
+      if (currentPeriod === 'all') return series;
+      const dayAgo = Date.now() - 24 * 60 * 60 * 1000;
+      return series.filter(s => new Date(s.startedAt).getTime() > dayAgo);
+    }
     
     function setFilter(filter) {
       currentFilter = filter;
@@ -210,12 +267,14 @@
         el.classList.toggle('active', el.dataset.filter === filter);
       });
       // Перерисовываем серии
-      document.getElementById('series-list').innerHTML = renderSeries(allSeries);
+      const periodSeries = filterByPeriod(allSeries);
+      document.getElementById('series-list').innerHTML = renderSeries(periodSeries);
     }
     
     function toggleShowAll() {
       showAll = !showAll;
-      document.getElementById('series-list').innerHTML = renderSeries(allSeries);
+      const periodSeries = filterByPeriod(allSeries);
+      document.getElementById('series-list').innerHTML = renderSeries(periodSeries);
     }
 
     function renderCandles(id, data) {
@@ -322,47 +381,60 @@
       } catch(e) { console.error(e); }
     }
 
+    let globalStats = { initialDeposit: 100, currentBalance: 100 };
+    
+    function updateStats() {
+      const periodSeries = filterByPeriod(allSeries);
+      
+      // Stats - Row 1: Баланс и P&L (всегда общие)
+      const initialDeposit = globalStats.initialDeposit || 100;
+      const currentBalance = globalStats.currentBalance || 100;
+      const balanceEl = document.getElementById('stat-balance');
+      balanceEl.textContent = `$${currentBalance.toFixed(2)}`;
+      balanceEl.className = 'stat-value ' + (currentBalance >= initialDeposit ? 'positive' : 'negative');
+      
+      // P&L зависит от периода
+      if (currentPeriod === 'all') {
+        const pnl = currentBalance - initialDeposit;
+        const pnlEl = document.getElementById('stat-pnl');
+        pnlEl.textContent = `${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}`;
+        pnlEl.className = 'stat-value ' + (pnl >= 0 ? 'positive' : 'negative');
+      } else {
+        // P&L за период — сумма из серий
+        const pnl = periodSeries.reduce((sum, s) => sum + (s.totalPnL || 0), 0);
+        const pnlEl = document.getElementById('stat-pnl');
+        pnlEl.textContent = `${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}`;
+        pnlEl.className = 'stat-value ' + (pnl >= 0 ? 'positive' : 'negative');
+      }
+      
+      // Считаем статистику из серий за период
+      const wonSeries = periodSeries.filter(s => s.status === 'won');
+      const lostSeries = periodSeries.filter(s => s.status === 'lost');
+      const cancelledSeries = periodSeries.filter(s => s.status === 'cancelled');
+      
+      const winLossSeries = wonSeries.length + lostSeries.length;
+      const winRate = winLossSeries > 0 ? ((wonSeries.length / winLossSeries) * 100).toFixed(0) : 0;
+      document.getElementById('stat-winrate').textContent = `${winRate}%`;
+      
+      // Stats - Row 2 (фильтры)
+      document.getElementById('stat-total').textContent = periodSeries.length;
+      document.getElementById('stat-wins').textContent = wonSeries.length;
+      document.getElementById('stat-losses').textContent = lostSeries.length;
+      document.getElementById('stat-cancelled').textContent = cancelledSeries.length;
+      
+      // Перерисовываем серии
+      document.getElementById('series-list').innerHTML = renderSeries(periodSeries);
+    }
+    
     async function loadTrading() {
       try {
         const [statsRes, seriesRes] = await Promise.all([
           fetch('/api/trading/stats'),
           fetch('/api/trading/series?limit=100'),
         ]);
-        const stats = await statsRes.json();
-        const series = await seriesRes.json();
-
-        // Stats - Row 1: Баланс и P&L
-        const initialDeposit = stats.initialDeposit || 100;
-        const currentBalance = stats.currentBalance || 100;
-        const balanceEl = document.getElementById('stat-balance');
-        balanceEl.textContent = `$${currentBalance.toFixed(2)}`;
-        balanceEl.className = 'stat-value ' + (currentBalance >= initialDeposit ? 'positive' : 'negative');
-        
-        // P&L вычисляем из баланса (более надёжно)
-        const pnl = currentBalance - initialDeposit;
-        const pnlEl = document.getElementById('stat-pnl');
-        pnlEl.textContent = `${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}`;
-        pnlEl.className = 'stat-value ' + (pnl >= 0 ? 'positive' : 'negative');
-        
-        // Считаем статистику из реальных серий (более надёжно)
-        const completedSeries = series.filter(s => s.status !== 'active');
-        const wonSeries = series.filter(s => s.status === 'won');
-        const lostSeries = series.filter(s => s.status === 'lost');
-        const cancelledSeries = series.filter(s => s.status === 'cancelled');
-        
-        const winLossSeries = wonSeries.length + lostSeries.length;
-        const winRate = winLossSeries > 0 ? ((wonSeries.length / winLossSeries) * 100).toFixed(0) : 0;
-        document.getElementById('stat-winrate').textContent = `${winRate}%`;
-        
-        // Stats - Row 2 (фильтры) — из реальных серий
-        document.getElementById('stat-total').textContent = series.length;
-        document.getElementById('stat-wins').textContent = wonSeries.length;
-        document.getElementById('stat-losses').textContent = lostSeries.length;
-        document.getElementById('stat-cancelled').textContent = cancelledSeries.length;
-
-        // Series
-        allSeries = series;
-        document.getElementById('series-list').innerHTML = renderSeries(series);
+        globalStats = await statsRes.json();
+        allSeries = await seriesRes.json();
+        updateStats();
       } catch(e) { console.error(e); }
     }
 
