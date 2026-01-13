@@ -111,7 +111,18 @@ class TradingEmulator {
     
     // Покупаем первую ставку
     const bought = await this.buyStep(series);
-    if (!bought) return;
+    if (!bought) {
+      // Не удалось купить — отменяем серию
+      series.status = 'cancelled';
+      series.endedAt = new Date();
+      series.addEvent('series_cancelled', {
+        message: '⛔ Серия отменена: не удалось купить (нет цены или баланса)',
+      });
+      await series.save();
+      console.log(`[TRADE] ${type.toUpperCase()}: Series cancelled - could not buy`);
+      await this.notifyUsers(series, '⛔ Серия отменена');
+      return;
+    }
     
     await series.save();
     this.activeSeries.set(type, series);
@@ -610,8 +621,16 @@ class TradingEmulator {
         
         const bought = await this.buyStep(series);
         if (!bought) {
+          // Не удалось купить следующий шаг — отменяем серию
+          series.status = 'cancelled';
+          series.endedAt = new Date();
+          series.addEvent('series_cancelled', {
+            message: `⛔ Серия отменена на Step ${series.currentStep}: не удалось купить`,
+          });
           await series.save();
           this.activeSeries.delete(series.asset);
+          console.log(`[TRADE] ${asset}: Series cancelled at Step ${series.currentStep} - could not buy`);
+          await this.notifyUsers(series, `⛔ Серия отменена на Step ${series.currentStep}`);
           return;
         }
         
