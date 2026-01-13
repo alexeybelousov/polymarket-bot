@@ -312,26 +312,55 @@ class TradingEmulator {
   // ==================== ОТМЕНА СИГНАЛА ====================
   
   async cancelSignal(series, currentColor) {
+    const polymarket = require('./polymarket');
     const asset = series.asset.toUpperCase();
     const colorEmoji = currentColor === 'green' ? '🟢' : '🔴';
     const signalEmoji = series.signalColor === 'green' ? '🟢' : '🔴';
+    const betOutcome = series.betColor === 'green' ? 'up' : 'down';
     
     const stats = await TradingStats.getStats();
     let totalReturn = 0;
+    let totalLoss = 0;
     
-    // Продаём все активные позиции
+    // Продаём все активные позиции по реальной цене
     for (const pos of series.positions) {
       if (pos.status === 'active') {
-        const returnAmount = pos.amount * (1 - EXIT_FEE_RATE * 2); // -3%
-        totalReturn += returnAmount;
+        // Получаем реальную цену продажи с Polymarket
+        const polySlug = this.convertToPolymarketSlug(series.currentMarketSlug);
+        let sellPrice = null;
+        
+        try {
+          const priceData = await polymarket.getSellPrice(polySlug, betOutcome);
+          if (priceData && priceData.price) {
+            sellPrice = priceData.price;
+            console.log(`[TRADE] Got sell price for ${polySlug}: $${sellPrice.toFixed(3)}`);
+          }
+        } catch (error) {
+          console.error(`[TRADE] Error getting sell price:`, error.message);
+        }
+        
+        // Если не получили цену - используем консервативную оценку (50% от shares)
+        if (!sellPrice) {
+          sellPrice = 0.5;
+          console.log(`[TRADE] Using fallback sell price: $${sellPrice}`);
+        }
+        
+        // Расчёт: shares * sellPrice - exitFee
+        const grossReturn = pos.shares * sellPrice;
+        const exitFee = grossReturn * EXIT_FEE_RATE;
+        const netReturn = grossReturn - exitFee;
+        
+        totalReturn += netReturn;
+        totalLoss += (pos.amount - netReturn);
         pos.status = 'sold';
-        series.totalCommission += pos.amount * EXIT_FEE_RATE;
+        series.totalCommission += exitFee;
+        
+        console.log(`[TRADE] Sold ${pos.shares.toFixed(2)} shares @ $${sellPrice.toFixed(3)} = $${grossReturn.toFixed(2)} - $${exitFee.toFixed(2)} fee = $${netReturn.toFixed(2)}`);
       }
     }
     
     stats.currentBalance += totalReturn;
     stats.cancelledTrades++;
-    stats.totalPnL += (totalReturn - series.totalInvested);
     await stats.save();
     
     // Рассчитываем P&L
@@ -345,14 +374,14 @@ class TradingEmulator {
     series.addEvent('signal_cancelled', {
       marketColor: currentColor,
       pnl,
-      message: `⚠️ Сигнал отменён: рынок ${colorEmoji} (был ${signalEmoji}) → вернул $${totalReturn.toFixed(2)}`,
+      message: `⚠️ Сигнал отменён: рынок ${colorEmoji} (был ${signalEmoji}) → вернул $${totalReturn.toFixed(2)} (P&L: $${pnl.toFixed(2)})`,
     });
     
     await series.save();
     this.activeSeries.delete(series.asset);
     
-    console.log(`[TRADE] ${asset}: ⚠️ SIGNAL CANCELLED - returned $${totalReturn.toFixed(2)}`);
-    await this.log(series.asset, series.signalMarketSlug, `SIGNAL CANCELLED: returned $${totalReturn.toFixed(2)}, P&L: $${pnl.toFixed(2)}`, { totalReturn, pnl });
+    console.log(`[TRADE] ${asset}: ⚠️ SIGNAL CANCELLED - returned $${totalReturn.toFixed(2)}, P&L: $${pnl.toFixed(2)}`);
+    await this.log(series.asset, series.signalMarketSlug, 'signal_cancelled', `SIGNAL CANCELLED: returned $${totalReturn.toFixed(2)}, P&L: $${pnl.toFixed(2)}`, { totalReturn, pnl });
     await this.notifyUsers(series, `⚠️ Сигнал отменён`);
   }
 

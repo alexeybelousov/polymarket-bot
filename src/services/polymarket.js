@@ -333,6 +333,37 @@ async function getBuyPrice(slug, outcome = 'down') {
   }
 }
 
+/**
+ * Получить цену продажи с CLOB API
+ * @param {string} slug - slug рынка
+ * @param {string} outcome - 'up' или 'down'
+ * @returns {Promise<{price: number, tokenId: string} | null>}
+ */
+async function getSellPrice(slug, outcome = 'down') {
+  try {
+    const marketInfo = await fetchMarketInfo(slug);
+    if (!marketInfo) return null;
+    
+    const tokenId = outcome === 'up' ? marketInfo.upTokenId : marketInfo.downTokenId;
+    if (!tokenId) return null;
+    
+    const { data } = await clob.get('/price', {
+      params: {
+        token_id: tokenId,
+        side: 'sell',
+      },
+    });
+    
+    return {
+      price: parseFloat(data.price),
+      tokenId,
+    };
+  } catch (error) {
+    console.error(`Error getting sell price for ${slug}:`, error.message);
+    return null;
+  }
+}
+
 module.exports = {
   get15mContext,
   getMarketUrl,
@@ -341,4 +372,5 @@ module.exports = {
   getTimestampFromSlug,
   getCurrentIntervalStart,
   getBuyPrice,
+  getSellPrice,
 };
