@@ -99,6 +99,22 @@
     .timeline-msg { color: var(--text); }
 
     .no-series { text-align: center; color: var(--text2); padding: 40px; background: var(--bg2); border-radius: 12px; border: 1px solid var(--border); }
+    
+    /* Show more button */
+    .show-more-btn { 
+      width: 100%; 
+      padding: 12px; 
+      background: var(--bg2); 
+      border: 1px solid var(--border); 
+      border-radius: 10px; 
+      color: var(--text2); 
+      font-family: inherit;
+      font-size: 12px;
+      cursor: pointer; 
+      transition: all 0.2s;
+      margin-top: 12px;
+    }
+    .show-more-btn:hover { background: var(--bg3); color: var(--text); border-color: var(--blue); }
   </style>
 </head>
 <body>
@@ -183,14 +199,22 @@
     
     let currentFilter = 'all';
     let allSeries = [];
+    let showAll = false;
+    const DEFAULT_LIMIT = 5;
     
     function setFilter(filter) {
       currentFilter = filter;
+      showAll = false; // Сбрасываем при смене фильтра
       // Обновляем активный класс
       document.querySelectorAll('.filter-row .stat-item').forEach(el => {
         el.classList.toggle('active', el.dataset.filter === filter);
       });
       // Перерисовываем серии
+      document.getElementById('series-list').innerHTML = renderSeries(allSeries);
+    }
+    
+    function toggleShowAll() {
+      showAll = !showAll;
       document.getElementById('series-list').innerHTML = renderSeries(allSeries);
     }
 
@@ -236,8 +260,13 @@
         const filterNames = { all: 'серий', won: 'профитных', lost: 'убыточных', cancelled: 'отменённых' };
         return `<div class="no-series">Нет ${filterNames[currentFilter]} серий</div>`;
       }
+      
+      // Ограничиваем количество если не showAll
+      const totalCount = filtered.length;
+      const displaySeries = showAll ? filtered : filtered.slice(0, DEFAULT_LIMIT);
+      const hasMore = totalCount > DEFAULT_LIMIT;
 
-      return filtered.map(s => {
+      const seriesHtml = displaySeries.map(s => {
         const betEmoji = s.betColor === 'green' ? '🟢' : '🔴';
         const statusText = s.status === 'active' ? `Step ${s.currentStep}/4` : 
                           s.status === 'won' ? 'ПРОФИТ' : 
@@ -265,6 +294,16 @@
           <div class="timeline">${timeline}</div>
         </div>`;
       }).join('');
+      
+      // Добавляем кнопку если есть больше серий
+      if (hasMore) {
+        const btnText = showAll 
+          ? '▲ Скрыть' 
+          : `▼ Показать все (${totalCount})`;
+        return seriesHtml + `<button class="show-more-btn" onclick="toggleShowAll()">${btnText}</button>`;
+      }
+      
+      return seriesHtml;
     }
 
     async function loadMarkets() {
@@ -287,7 +326,7 @@
       try {
         const [statsRes, seriesRes] = await Promise.all([
           fetch('/api/trading/stats'),
-          fetch('/api/trading/series?limit=20'),
+          fetch('/api/trading/series?limit=100'),
         ]);
         const stats = await statsRes.json();
         const series = await seriesRes.json();
