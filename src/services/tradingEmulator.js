@@ -35,9 +35,10 @@ function calculateDynamicBet(buyPrice, previousLosses, targetProfit) {
 
 /**
  * Получить короткий хеш из tokenId (первые 5 символов)
+ * Безопасно обрабатывает отсутствие tokenId для старых данных
  */
 function getShortHash(tokenId) {
-  if (!tokenId) return '';
+  if (!tokenId || typeof tokenId !== 'string') return '';
   return tokenId.substring(0, 5);
 }
 
