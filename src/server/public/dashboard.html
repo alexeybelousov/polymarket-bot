@@ -200,7 +200,7 @@
                           s.status === 'won' ? 'ПОБЕДА' : 'ПРОИГРЫШ';
         const pnlText = s.totalPnL ? (s.totalPnL >= 0 ? `+$${s.totalPnL.toFixed(2)}` : `-$${Math.abs(s.totalPnL).toFixed(2)}`) : '';
 
-        const timeline = (s.events || []).slice(-6).map(e => {
+        const timeline = (s.events || []).map(e => {
           const cls = getEventClass(e.type);
           return `<div class="timeline-event ${cls}">
             <span class="timeline-time">${fmtTime(e.timestamp)}</span>

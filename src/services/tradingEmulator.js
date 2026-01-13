@@ -583,8 +583,8 @@ class TradingEmulator {
     const asset = series.asset.toUpperCase();
     const betEmoji = series.betColor === 'green' ? '🟢' : '🔴';
     
-    // Формируем таймлайн
-    const timeline = series.events.slice(-5).map(e => {
+    // Формируем полный таймлайн
+    const timeline = series.events.map(e => {
       const time = e.timestamp.toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
       return `${time} ${e.message}`;
     }).join('\n');
