@@ -642,9 +642,15 @@
         pnlEl.textContent = `${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}`;
         pnlEl.className = 'stat-value ' + (pnl >= 0 ? 'positive' : 'negative');
       } else {
-        // P&L за период — сумма из завершенных серий (исключаем активные)
-        const completedPeriodSeries = periodSeries.filter(s => s.status !== 'active');
-        const pnl = completedPeriodSeries.reduce((sum, s) => sum + (s.totalPnL || 0), 0);
+        // P&L за период — сумма из серий, которые ЗАКОНЧИЛИСЬ за последние 24 часа
+        // (используем endedAt, а не startedAt, потому что P&L фиксируется при завершении)
+        const dayAgo = Date.now() - 24 * 60 * 60 * 1000;
+        const dayCompletedSeries = allSeries.filter(s => {
+          if (s.status === 'active') return false; // Исключаем активные
+          const endTime = s.endedAt ? new Date(s.endedAt).getTime() : null;
+          return endTime && endTime > dayAgo; // Закончились за последние 24 часа
+        });
+        const pnl = dayCompletedSeries.reduce((sum, s) => sum + (s.totalPnL || 0), 0);
         const pnlEl = document.getElementById('stat-pnl');
         pnlEl.textContent = `${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}`;
         pnlEl.className = 'stat-value ' + (pnl >= 0 ? 'positive' : 'negative');
