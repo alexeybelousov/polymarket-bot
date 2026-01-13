@@ -91,11 +91,11 @@
       background: var(--bg3);
       border: 2px solid var(--border);
     }
-    .timeline-event.buy::before { background: var(--blue); border-color: var(--blue); }
-    .timeline-event.sell::before { background: var(--purple); border-color: var(--purple); }
+    .timeline-event.buy::before { background: #f97316; border-color: #f97316; }
+    .timeline-event.hedge::before { background: #f97316; border-color: #f97316; }
     .timeline-event.win::before { background: var(--green); border-color: var(--green); }
     .timeline-event.loss::before { background: var(--red); border-color: var(--red); }
-    .timeline-event.waiting::before { background: var(--yellow); border-color: var(--yellow); }
+    .timeline-event.neutral::before { background: var(--text2); border-color: var(--text2); }
     .timeline-time { color: var(--text2); margin-right: 8px; }
     .timeline-msg { color: var(--text); }
 
@@ -460,10 +460,10 @@
 
     function getEventClass(type) {
       if (type === 'buy') return 'buy';
-      if (type === 'sell_hedge' || type === 'signal_cancelled') return 'sell';
+      if (type === 'hedge_bought' || type === 'sell_hedge') return 'hedge';
       if (type.includes('won') || type === 'series_won') return 'win';
       if (type.includes('lost') || type === 'series_lost') return 'loss';
-      if (type.includes('waiting')) return 'waiting';
+      if (type === 'waiting_market' || type === 'market_active' || type === 'signal_cancelled' || type === 'series_cancelled') return 'neutral';
       return '';
     }
 
