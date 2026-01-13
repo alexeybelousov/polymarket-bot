@@ -157,10 +157,12 @@ function createServer(port = 3000, tradingEmulators = null) {
       const limit = parseInt(req.query.limit) || 50;
       const type = req.query.type;
       const action = req.query.action;
+      const botId = req.query.botId; // Опционально
 
       const query = {};
       if (type) query.type = type;
       if (action) query.action = action;
+      if (botId) query.botId = botId;
 
       const [logs, total] = await Promise.all([
         SignalLog.find(query).sort({ timestamp: -1 }).skip((page - 1) * limit).limit(limit).lean(),

@@ -86,6 +86,7 @@ class TradingEmulator {
   async log(type, marketSlug, reason, data = {}) {
     try {
       await SignalLog.create({
+        botId: this.botId,
         type: type || 'unknown',
         marketSlug: marketSlug || 'unknown',
         action: 'trade',
@@ -93,7 +94,7 @@ class TradingEmulator {
         data,
       });
     } catch (e) {
-      console.error('Error saving trade log:', e.message);
+      console.error(`[${this.botId}] Error saving trade log:`, e.message);
     }
   }
 
@@ -101,7 +102,7 @@ class TradingEmulator {
     if (this.interval) {
       clearInterval(this.interval);
       this.interval = null;
-      console.log('🛑 Trading emulator stopped');
+      console.log(`🛑 [${this.botId}] Trading emulator stopped`);
     }
   }
 
@@ -141,7 +142,7 @@ class TradingEmulator {
     
     // Проверяем нет ли активной серии
     if (this.activeSeries.has(type)) {
-      console.log(`[TRADE] ${type.toUpperCase()}: Already active series, skipping`);
+      console.log(`[TRADE] [${this.botId}] ${type.toUpperCase()}: Already active series, skipping`);
       return;
     }
 
@@ -164,13 +165,13 @@ class TradingEmulator {
     }
     
     if (!buyPrice) {
-      console.log(`[TRADE] ${type.toUpperCase()}: Cannot get price, skipping`);
+      console.log(`[TRADE] [${this.botId}] ${type.toUpperCase()}: Cannot get price, skipping`);
       return;
     }
     
     // Проверяем верхний предел цены
     if (buyPrice > this.config.maxPrice) {
-      console.log(`[TRADE] ${type.toUpperCase()}: Price too high - $${buyPrice.toFixed(3)} > $${this.config.maxPrice} (max limit), skipping`);
+      console.log(`[TRADE] [${this.botId}] ${type.toUpperCase()}: Price too high - $${buyPrice.toFixed(3)} > $${this.config.maxPrice} (max limit), skipping`);
       return;
     }
     
@@ -207,7 +208,7 @@ class TradingEmulator {
       await stats.save();
       
       await series.save();
-      console.log(`[TRADE] ${type.toUpperCase()}: Series cancelled - could not buy`);
+      console.log(`[TRADE] [${this.botId}] ${type.toUpperCase()}: Series cancelled - could not buy`);
       await this.notifyUsers(series, '⛔ Серия отменена');
       return;
     }
@@ -215,7 +216,7 @@ class TradingEmulator {
     await series.save();
     this.activeSeries.set(type, series);
     
-    console.log(`[TRADE] ${type.toUpperCase()}: Series opened, betting ${betEmoji} ${betColor.toUpperCase()}`);
+    console.log(`[TRADE] [${this.botId}] ${type.toUpperCase()}: Series opened, betting ${betEmoji} ${betColor.toUpperCase()}`);
     await this.notifyUsers(series, 'Серия открыта');
   }
 
@@ -239,7 +240,7 @@ class TradingEmulator {
       if (priceData && priceData.price) {
         price = priceData.price;
         tokenId = priceData.tokenId;
-        console.log(`[TRADE] Got Polymarket price for ${polySlug}: $${price.toFixed(3)} (tokenId: ${tokenId})`);
+        console.log(`[TRADE] [${this.botId}] Got Polymarket price for ${polySlug}: $${price.toFixed(3)} (tokenId: ${tokenId})`);
       }
     } catch (error) {
       console.error(`[TRADE] Error getting Polymarket price for ${polySlug}:`, error.message);
@@ -257,7 +258,7 @@ class TradingEmulator {
     
     // Проверяем верхний предел цены (на каждом шаге)
     if (price > this.config.maxPrice) {
-      console.log(`[TRADE] ${series.asset.toUpperCase()}: Price too high on Step ${series.currentStep} - $${price.toFixed(3)} > $${this.config.maxPrice}, cancelling`);
+      console.log(`[TRADE] [${this.botId}] ${series.asset.toUpperCase()}: Price too high on Step ${series.currentStep} - $${price.toFixed(3)} > $${this.config.maxPrice}, cancelling`);
       
       // Добавляем событие в таймлайн
       series.addEvent('series_cancelled', {
@@ -359,7 +360,7 @@ class TradingEmulator {
       message: `Жду начало рынка...`,
     });
     
-    console.log(`[TRADE] ${series.asset.toUpperCase()}: Buy ${shares.toFixed(2)} shares- по $${price.toFixed(2)} = $${amount} (Step ${series.currentStep})`);
+    console.log(`[TRADE] [${this.botId}] ${series.asset.toUpperCase()}: Buy ${shares.toFixed(2)} shares- по $${price.toFixed(2)} = $${amount} (Step ${series.currentStep})`);
     await this.log(series.asset, series.currentMarketSlug, `BUY Step ${series.currentStep}: ${shares.toFixed(2)} shares- по $${price.toFixed(2)} = $${amount}`, { step: series.currentStep, amount, price, shares });
     return true;
   }
@@ -385,7 +386,7 @@ class TradingEmulator {
       if (priceData && priceData.price) {
         price = priceData.price;
         tokenId = priceData.tokenId;
-        console.log(`[TRADE] Got Polymarket price for hedge ${polySlug}: $${price.toFixed(3)} (tokenId: ${tokenId})`);
+        console.log(`[TRADE] [${this.botId}] Got Polymarket price for hedge ${polySlug}: $${price.toFixed(3)} (tokenId: ${tokenId})`);
       }
     } catch (error) {
       console.error(`[TRADE] Error getting Polymarket price for hedge ${polySlug}:`, error.message);
@@ -404,7 +405,7 @@ class TradingEmulator {
     
     // Проверяем верхний предел цены
     if (price > this.config.maxPrice) {
-      console.log(`[TRADE] ${asset}: Hedge price too high - $${price.toFixed(3)} > $${this.config.maxPrice}, skipping`);
+      console.log(`[TRADE] [${this.botId}] ${asset}: Hedge price too high - $${price.toFixed(3)} > $${this.config.maxPrice}, skipping`);
       series.addEvent('price_error', {
         message: `⛔ Хедж отменён: цена превысила лимит ($${price.toFixed(3)} > $${this.config.maxPrice})`,
       });
@@ -475,7 +476,7 @@ class TradingEmulator {
     });
     
     await series.save();
-    console.log(`[TRADE] ${asset}: ⚡ HEDGE - ${shares.toFixed(2)} shares- по $${price.toFixed(2)} = $${amount} (Step ${nextStep})`);
+    console.log(`[TRADE] [${this.botId}] ${asset}: ⚡ HEDGE - ${shares.toFixed(2)} shares- по $${price.toFixed(2)} = $${amount} (Step ${nextStep})`);
     await this.log(series.asset, series.nextMarketSlug, `HEDGE Step ${nextStep}: ${shares.toFixed(2)} shares- по $${price.toFixed(2)} = $${amount}`, { step: nextStep, amount, price, shares });
     await this.notifyUsers(series, `⚡ Хедж Step ${nextStep}`);
   }
@@ -506,7 +507,7 @@ class TradingEmulator {
           if (priceData && priceData.price) {
             sellPrice = priceData.price;
             sellTokenId = priceData.tokenId;
-            console.log(`[TRADE] Got sell price for ${polySlug}: $${sellPrice.toFixed(3)}`);
+            console.log(`[TRADE] [${this.botId}] Got sell price for ${polySlug}: $${sellPrice.toFixed(3)}`);
           }
         } catch (error) {
           console.error(`[TRADE] Error getting sell price for ${polySlug}:`, error.message);
@@ -541,7 +542,7 @@ class TradingEmulator {
           message: `📤 Продал Step ${pos.step}: ${pos.shares.toFixed(2)} shares- по $${sellPrice.toFixed(2)} (${sellHash}) = $${netReturn.toFixed(2)}`,
         });
         
-        console.log(`[TRADE] Sold ${pos.shares.toFixed(2)} shares- по $${sellPrice.toFixed(3)} = $${grossReturn.toFixed(2)} - $${exitFee.toFixed(2)} fee = $${netReturn.toFixed(2)}`);
+        console.log(`[TRADE] [${this.botId}] Sold ${pos.shares.toFixed(2)} shares- по $${sellPrice.toFixed(3)} = $${grossReturn.toFixed(2)} - $${exitFee.toFixed(2)} fee = $${netReturn.toFixed(2)}`);
       }
     }
     
@@ -566,7 +567,7 @@ class TradingEmulator {
     await series.save();
     this.activeSeries.delete(series.asset);
     
-    console.log(`[TRADE] ${asset}: ⚠️ SIGNAL CANCELLED - returned $${totalReturn.toFixed(2)}, P&L: $${pnl.toFixed(2)}`);
+    console.log(`[TRADE] [${this.botId}] ${asset}: ⚠️ SIGNAL CANCELLED - returned $${totalReturn.toFixed(2)}, P&L: $${pnl.toFixed(2)}`);
     await this.log(series.asset, series.signalMarketSlug, 'signal_cancelled', `SIGNAL CANCELLED: returned $${totalReturn.toFixed(2)}, P&L: $${pnl.toFixed(2)}`, { totalReturn, pnl });
     await this.notifyUsers(series, `⚠️ Сигнал отменён`);
   }
@@ -594,7 +595,7 @@ class TradingEmulator {
       if (priceData && priceData.price) {
         sellPrice = priceData.price;
         sellTokenId = priceData.tokenId;
-        console.log(`[TRADE] Got sell price for hedge ${polySlug}: $${sellPrice.toFixed(3)}`);
+        console.log(`[TRADE] [${this.botId}] Got sell price for hedge ${polySlug}: $${sellPrice.toFixed(3)}`);
       }
     } catch (error) {
       console.error(`[TRADE] Error getting sell price for hedge ${polySlug}:`, error.message);
@@ -610,7 +611,7 @@ class TradingEmulator {
     } else {
       // Fallback: упрощённая формула
       returnAmount = hedgePosition.amount * (1 - this.EXIT_FEE_RATE * 2);
-      console.log(`[TRADE] Using fallback sell price for hedge`);
+      console.log(`[TRADE] [${this.botId}] Using fallback sell price for hedge`);
     }
     
     const stats = await TradingStats.getStats(this.botId);
@@ -641,7 +642,7 @@ class TradingEmulator {
     });
     
     await series.save();
-    console.log(`[TRADE] ${asset}: 📤 SELL HEDGE - Returned $${returnAmount.toFixed(2)} (Step ${hedgeStep})`);
+    console.log(`[TRADE] [${this.botId}] ${asset}: 📤 SELL HEDGE - Returned $${returnAmount.toFixed(2)} (Step ${hedgeStep})`);
     await this.log(series.asset, series.currentMarketSlug, `SELL HEDGE Step ${hedgeStep}: returned $${returnAmount.toFixed(2)} (-$${loss.toFixed(2)})`, { step: hedgeStep, returnAmount, loss });
     await this.notifyUsers(series, `📤 Продал хедж`);
   }
@@ -697,7 +698,7 @@ class TradingEmulator {
         await series.save();
       }
       if (config.debug) {
-        console.log(`[TRADE] ${asset} Step ${series.currentStep}: ⏳ Waiting for market...`);
+        console.log(`[TRADE] [${this.botId}] ${asset} Step ${series.currentStep}: ⏳ Waiting for market...`);
       }
       return;
     }
@@ -711,7 +712,7 @@ class TradingEmulator {
           message: `Рынок активен`,
         });
         await series.save();
-        console.log(`[TRADE] ${asset} Step ${series.currentStep}: 📊 Market is now active`);
+        console.log(`[TRADE] [${this.botId}] ${asset} Step ${series.currentStep}: 📊 Market is now active`);
       }
       
       // РАННЯЯ ПОКУПКА: если рынок идёт против нас (цвет = signalColor), покупаем следующий шаг заранее
@@ -727,7 +728,7 @@ class TradingEmulator {
       
       if (config.debug) {
         const hedgeInfo = series.nextStepBought ? ' [HEDGED]' : '';
-        console.log(`[TRADE] ${asset} Step ${series.currentStep}: ${colorEmoji} ${currentColor} | ${timeToEnd}s left${hedgeInfo}`);
+        console.log(`[TRADE] [${this.botId}] ${asset} Step ${series.currentStep}: ${colorEmoji} ${currentColor} | ${timeToEnd}s left${hedgeInfo}`);
       }
       return;
     }
@@ -737,7 +738,7 @@ class TradingEmulator {
       const resolvedColor = context.previous[1].color;
       
       if (resolvedColor === 'unknown') {
-        console.log(`[TRADE] ${asset}: Market closed but color unknown, waiting...`);
+        console.log(`[TRADE] [${this.botId}] ${asset}: Market closed but color unknown, waiting...`);
         return;
       }
       
@@ -746,7 +747,7 @@ class TradingEmulator {
     }
 
     // 4. Потеряли рынок
-    console.log(`[TRADE] ${asset}: WARNING - Lost track of market`);
+    console.log(`[TRADE] [${this.botId}] ${asset}: WARNING - Lost track of market`);
   }
 
   // ==================== РЕЗОЛВ РЫНКА ====================
@@ -802,7 +803,7 @@ class TradingEmulator {
       await series.save();
       this.activeSeries.delete(series.asset);
       
-      console.log(`[TRADE] ${asset}: ✅ SERIES WON at Step ${series.currentStep}! PnL: $${pnl.toFixed(2)}`);
+      console.log(`[TRADE] [${this.botId}] ${asset}: ✅ SERIES WON at Step ${series.currentStep}! PnL: $${pnl.toFixed(2)}`);
       await this.log(series.asset, series.currentMarketSlug, `✅ SERIES WON Step ${series.currentStep}: won $${winAmount.toFixed(2)}, P&L: $${pnl.toFixed(2)}`, { step: series.currentStep, winAmount, pnl });
       await this.notifyUsers(series, `✅ ПРОФИТ! Step ${series.currentStep}, P&L: $${pnl.toFixed(2)}`);
       
@@ -816,7 +817,7 @@ class TradingEmulator {
         message: `Рынок закрылся ${colorEmoji} — проигрыш шага (потеряно $${currentPosition?.amount?.toFixed(2) || '?'})`,
       });
       
-      console.log(`[TRADE] ${asset}: ❌ Step ${series.currentStep} lost (market: ${resolvedColor})`);
+      console.log(`[TRADE] [${this.botId}] ${asset}: ❌ Step ${series.currentStep} lost (market: ${resolvedColor})`);
       
       // Проверяем: если следующий шаг уже куплен заранее (хедж)
       if (series.nextStepBought) {
@@ -832,7 +833,7 @@ class TradingEmulator {
         });
         
         await series.save();
-        console.log(`[TRADE] ${asset}: Moving to pre-bought Step ${series.currentStep}`);
+        console.log(`[TRADE] [${this.botId}] ${asset}: Moving to pre-bought Step ${series.currentStep}`);
         return;
       }
       
@@ -861,7 +862,7 @@ class TradingEmulator {
         await series.save();
         this.activeSeries.delete(series.asset);
         
-        console.log(`[TRADE] ${asset}: ❌ SERIES LOST after 4 steps! PnL: $${pnl.toFixed(2)}`);
+        console.log(`[TRADE] [${this.botId}] ${asset}: ❌ SERIES LOST after 4 steps! PnL: $${pnl.toFixed(2)}`);
         await this.log(series.asset, series.currentMarketSlug, `❌ SERIES LOST after 4 steps: P&L: $${pnl.toFixed(2)}`, { step: 4, pnl, totalInvested: series.totalInvested });
         await this.notifyUsers(series, `❌ УБЫТОК! 4 шага, P&L: $${pnl.toFixed(2)}`);
         
@@ -887,13 +888,13 @@ class TradingEmulator {
           
           await series.save();
           this.activeSeries.delete(series.asset);
-          console.log(`[TRADE] ${asset}: Series cancelled at Step ${series.currentStep} - could not buy`);
+          console.log(`[TRADE] [${this.botId}] ${asset}: Series cancelled at Step ${series.currentStep} - could not buy`);
           await this.notifyUsers(series, `⛔ Серия отменена на Step ${series.currentStep}`);
           return;
         }
         
         await series.save();
-        console.log(`[TRADE] ${asset}: Moving to Step ${series.currentStep}`);
+        console.log(`[TRADE] [${this.botId}] ${asset}: Moving to Step ${series.currentStep}`);
         await this.notifyUsers(series, `Step ${series.currentStep}`);
       }
     }

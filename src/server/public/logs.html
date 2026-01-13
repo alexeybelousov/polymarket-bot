@@ -44,11 +44,14 @@
       <button class="filter-btn" data-filter="trade">💰 Trade</button>
       <button class="filter-btn" data-filter="send">📤 Send</button>
       <button class="filter-btn" data-filter="error">❌ Error</button>
-      <span style="margin-left: auto; font-size: 11px; color: var(--text2)">Обновление: <span id="updateTime">—</span></span>
+      <select id="botFilter" style="margin-left: auto; padding: 6px 12px; background: var(--bg2); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 11px; font-family: inherit; cursor: pointer;">
+        <option value="">Все боты</option>
+      </select>
+      <span style="font-size: 11px; color: var(--text2)">Обновление: <span id="updateTime">—</span></span>
     </div>
     <table class="logs-table">
-      <thead><tr><th>Время</th><th>Тип</th><th>Рынок</th><th>Действие</th><th>Причина</th></tr></thead>
-      <tbody id="logsBody"><tr><td colspan="5" class="empty">Загрузка...</td></tr></tbody>
+      <thead><tr><th>Время</th><th>Бот</th><th>Тип</th><th>Рынок</th><th>Действие</th><th>Причина</th></tr></thead>
+      <tbody id="logsBody"><tr><td colspan="6" class="empty">Загрузка...</td></tr></tbody>
     </table>
     <div class="pagination">
       <button class="page-btn" id="prevPage" disabled>← Назад</button>
@@ -57,17 +60,51 @@
     </div>
   </div>
   <script>
-    let page = 1, filter = 'all', pages = 1;
+    let page = 1, filter = 'all', botFilter = '', pages = 1;
+    let allBots = [];
+    
     function formatTime(d) { return new Date(d).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }); }
+    
+    async function loadBots() {
+      try {
+        const res = await fetch('/api/trading/bots');
+        allBots = await res.json();
+        const selectEl = document.getElementById('botFilter');
+        if (selectEl) {
+          allBots.forEach(bot => {
+            const option = document.createElement('option');
+            option.value = bot.botId;
+            option.textContent = bot.name;
+            selectEl.appendChild(option);
+          });
+          selectEl.onchange = () => { botFilter = selectEl.value; page = 1; load(); };
+        }
+      } catch(e) { console.error(e); }
+    }
+    
     async function load() {
       const params = new URLSearchParams({ page, limit: 50 });
       if (filter !== 'all') params.set('action', filter);
+      if (botFilter) params.set('botId', botFilter);
       const res = await fetch(`/api/logs?${params}`);
       const data = await res.json();
       pages = data.pagination.pages || 1;
       const tbody = document.getElementById('logsBody');
-      if (!data.logs.length) { tbody.innerHTML = '<tr><td colspan="5" class="empty">Нет логов</td></tr>'; }
-      else { tbody.innerHTML = data.logs.map(l => `<tr><td>${formatTime(l.timestamp)}</td><td>${l.type.toUpperCase()}</td><td title="${l.marketSlug}">${l.marketSlug.split('-').pop()}</td><td><span class="badge ${l.action}">${l.action}</span></td><td>${l.reason || '—'}</td></tr>`).join(''); }
+      if (!data.logs.length) { tbody.innerHTML = '<tr><td colspan="6" class="empty">Нет логов</td></tr>'; }
+      else {
+        tbody.innerHTML = data.logs.map(l => {
+          const bot = allBots.find(b => b.botId === l.botId);
+          const botName = bot ? bot.name : (l.botId || 'bot1');
+          return `<tr>
+            <td>${formatTime(l.timestamp)}</td>
+            <td style="font-size: 10px; color: var(--text2);">${botName}</td>
+            <td>${l.type.toUpperCase()}</td>
+            <td title="${l.marketSlug}">${l.marketSlug.split('-').pop()}</td>
+            <td><span class="badge ${l.action}">${l.action}</span></td>
+            <td>${l.reason || '—'}</td>
+          </tr>`;
+        }).join('');
+      }
       document.getElementById('pageInfo').textContent = `${page} / ${pages}`;
       document.getElementById('prevPage').disabled = page <= 1;
       document.getElementById('nextPage').disabled = page >= pages;
@@ -76,6 +113,7 @@
     document.querySelectorAll('.filter-btn').forEach(btn => { btn.onclick = () => { document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active')); btn.classList.add('active'); filter = btn.dataset.filter; page = 1; load(); }; });
     document.getElementById('prevPage').onclick = () => { if (page > 1) { page--; load(); } };
     document.getElementById('nextPage').onclick = () => { if (page < pages) { page++; load(); } };
+    loadBots();
     load(); setInterval(load, 10000);
   </script>
 </body>

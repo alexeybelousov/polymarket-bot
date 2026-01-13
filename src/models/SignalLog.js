@@ -5,6 +5,10 @@ const signalLogSchema = new mongoose.Schema({
     type: Date,
     default: Date.now,
   },
+  botId: {
+    type: String,
+    default: 'bot1', // Для обратной совместимости
+  },
   type: {
     type: String,
     enum: ['eth', 'btc', 'unknown'],
@@ -24,6 +28,7 @@ const signalLogSchema = new mongoose.Schema({
 });
 
 signalLogSchema.index({ timestamp: 1 }, { expireAfterSeconds: 7 * 24 * 60 * 60 });
+signalLogSchema.index({ botId: 1, timestamp: -1 });
 
 module.exports = mongoose.model('SignalLog', signalLogSchema);
 
