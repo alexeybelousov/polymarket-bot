@@ -330,12 +330,14 @@ class TradingEmulator {
     }
     
     stats.currentBalance += totalReturn;
+    stats.cancelledTrades++;
+    stats.totalPnL += (totalReturn - series.totalInvested);
     await stats.save();
     
     // Рассчитываем P&L
     const pnl = totalReturn - series.totalInvested;
     series.totalPnL = pnl;
-    series.status = 'lost';
+    series.status = 'cancelled';
     series.endedAt = new Date();
     series.nextStepBought = false;
     series.nextMarketSlug = null;
