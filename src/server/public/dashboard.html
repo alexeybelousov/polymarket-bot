@@ -44,11 +44,13 @@
     .signal-status { font-size: 20px; }
 
     /* Stats */
-    .stats-bar { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 24px; }
+    .stats-section { margin-bottom: 24px; }
+    .stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 12px; }
     .stat-item { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 14px; text-align: center; }
     .stat-value { font-size: 20px; font-weight: 600; }
     .stat-value.positive { color: var(--green); }
     .stat-value.negative { color: var(--red); }
+    .stat-value.neutral { color: var(--yellow); }
     .stat-label { font-size: 10px; color: var(--text2); margin-top: 4px; }
 
     /* Series */
@@ -58,12 +60,14 @@
     .series-card.active { border-color: var(--yellow); }
     .series-card.won { border-color: var(--green); }
     .series-card.lost { border-color: var(--red); }
+    .series-card.cancelled { border-color: var(--purple); }
     .series-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
     .series-asset { font-weight: 600; font-size: 16px; }
     .series-status { font-size: 12px; padding: 4px 8px; border-radius: 4px; }
     .series-status.active { background: rgba(234, 179, 8, 0.2); color: var(--yellow); }
     .series-status.won { background: rgba(34, 197, 94, 0.2); color: var(--green); }
     .series-status.lost { background: rgba(239, 68, 68, 0.2); color: var(--red); }
+    .series-status.cancelled { background: rgba(168, 85, 247, 0.2); color: var(--purple); }
     .series-info { display: flex; gap: 16px; margin-bottom: 12px; font-size: 12px; color: var(--text2); }
     .series-info span { display: flex; align-items: center; gap: 4px; }
 
@@ -124,26 +128,34 @@
     </div>
 
     <!-- Stats -->
-    <div class="stats-bar">
-      <div class="stat-item">
-        <div class="stat-value" id="stat-balance">$100</div>
-        <div class="stat-label">Баланс</div>
+    <div class="stats-section">
+      <div class="stats-row">
+        <div class="stat-item">
+          <div class="stat-value" id="stat-balance">$100</div>
+          <div class="stat-label">Баланс</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value" id="stat-pnl">$0</div>
+          <div class="stat-label">P&L</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value" id="stat-winrate">0%</div>
+          <div class="stat-label">Win Rate</div>
+        </div>
       </div>
-      <div class="stat-item">
-        <div class="stat-value" id="stat-pnl">$0</div>
-        <div class="stat-label">P&L</div>
-      </div>
-      <div class="stat-item">
-        <div class="stat-value" id="stat-trades">0</div>
-        <div class="stat-label">Серий</div>
-      </div>
-      <div class="stat-item">
-        <div class="stat-value" id="stat-wins">0</div>
-        <div class="stat-label">Побед</div>
-      </div>
-      <div class="stat-item">
-        <div class="stat-value" id="stat-winrate">0%</div>
-        <div class="stat-label">Win Rate</div>
+      <div class="stats-row">
+        <div class="stat-item">
+          <div class="stat-value positive" id="stat-wins">0</div>
+          <div class="stat-label">✅ Профит</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value negative" id="stat-losses">0</div>
+          <div class="stat-label">❌ Убыток</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value neutral" id="stat-cancelled">0</div>
+          <div class="stat-label">⛔ Отмена</div>
+        </div>
       </div>
     </div>
 
@@ -197,7 +209,8 @@
       return series.map(s => {
         const betEmoji = s.betColor === 'green' ? '🟢' : '🔴';
         const statusText = s.status === 'active' ? `Step ${s.currentStep}/4` : 
-                          s.status === 'won' ? 'ПРОФИТ' : 'УБЫТОК';
+                          s.status === 'won' ? 'ПРОФИТ' : 
+                          s.status === 'cancelled' ? 'ОТМЕНА' : 'УБЫТОК';
         const pnlText = s.totalPnL ? (s.totalPnL >= 0 ? `+$${s.totalPnL.toFixed(2)}` : `-$${Math.abs(s.totalPnL).toFixed(2)}`) : '';
 
         const timeline = (s.events || []).map(e => {
@@ -248,16 +261,20 @@
         const stats = await statsRes.json();
         const series = await seriesRes.json();
 
-        // Stats
+        // Stats - Row 1
         document.getElementById('stat-balance').textContent = `$${stats.currentBalance?.toFixed(2) || '100'}`;
         const pnl = stats.totalPnL || 0;
         const pnlEl = document.getElementById('stat-pnl');
         pnlEl.textContent = `${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}`;
         pnlEl.className = 'stat-value ' + (pnl >= 0 ? 'positive' : 'negative');
-        document.getElementById('stat-trades').textContent = stats.totalTrades || 0;
-        document.getElementById('stat-wins').textContent = stats.wonTrades || 0;
-        const winRate = stats.totalTrades > 0 ? ((stats.wonTrades / stats.totalTrades) * 100).toFixed(0) : 0;
+        const completedTrades = (stats.wonTrades || 0) + (stats.lostTrades || 0);
+        const winRate = completedTrades > 0 ? ((stats.wonTrades / completedTrades) * 100).toFixed(0) : 0;
         document.getElementById('stat-winrate').textContent = `${winRate}%`;
+        
+        // Stats - Row 2
+        document.getElementById('stat-wins').textContent = stats.wonTrades || 0;
+        document.getElementById('stat-losses').textContent = stats.lostTrades || 0;
+        document.getElementById('stat-cancelled').textContent = stats.cancelledTrades || 0;
 
         // Series
         document.getElementById('series-list').innerHTML = renderSeries(series);

@@ -12,6 +12,7 @@ const tradingStatsSchema = new mongoose.Schema({
   totalTrades: { type: Number, default: 0 },
   wonTrades: { type: Number, default: 0 },
   lostTrades: { type: Number, default: 0 },
+  cancelledTrades: { type: Number, default: 0 },
   
   totalPnL: { type: Number, default: 0 },
   totalCommissions: { type: Number, default: 0 },
