@@ -4,11 +4,18 @@ const axios = require('axios');
 const BINANCE_ENDPOINTS = [
   'https://data-api.binance.vision/api/v3',  // Public data API (без геоблокировки)
   'https://api.binance.com/api/v3',           // Global
-  'https://api1.binance.com/api/v3',          // Alternative
-  'https://api2.binance.com/api/v3',          // Alternative
 ];
 
-let currentEndpointIndex = 0;
+let workingEndpoint = null; // Запоминаем рабочий endpoint
+let lastEndpointCheck = 0;
+const ENDPOINT_RECHECK_INTERVAL = 60000; // Перепроверять endpoints раз в минуту
+
+// Кеш для данных
+const cache = {
+  eth: { data: null, timestamp: 0 },
+  btc: { data: null, timestamp: 0 },
+};
+const CACHE_TTL = 2000; // 2 секунды
 
 const SYMBOLS = {
   eth: 'ETHUSDT',
@@ -19,40 +26,55 @@ const SYMBOLS = {
  * Получить 15-минутные свечи с Binance
  */
 async function getKlines(symbol, limit = 4) {
-  let lastError;
+  const now = Date.now();
   
-  // Пробуем все endpoints по очереди
-  for (let i = 0; i < BINANCE_ENDPOINTS.length; i++) {
-    const endpointIndex = (currentEndpointIndex + i) % BINANCE_ENDPOINTS.length;
-    const endpoint = BINANCE_ENDPOINTS[endpointIndex];
-    const url = `${endpoint}/klines?symbol=${symbol}&interval=15m&limit=${limit}`;
-    
+  // Если есть рабочий endpoint и он недавно проверялся - используем его
+  if (workingEndpoint && (now - lastEndpointCheck) < ENDPOINT_RECHECK_INTERVAL) {
+    const url = `${workingEndpoint}/klines?symbol=${symbol}&interval=15m&limit=${limit}`;
     try {
-      const { data } = await axios.get(url, { timeout: 5000 });
-      
-      // Если успешно, запоминаем этот endpoint
-      if (endpointIndex !== currentEndpointIndex) {
-        console.log(`[Binance] Switched to endpoint: ${endpoint}`);
-        currentEndpointIndex = endpointIndex;
-      }
-      
-      return data.map(k => ({
-        openTime: k[0],
-        closeTime: k[6],
-        open: parseFloat(k[1]),
-        high: parseFloat(k[2]),
-        low: parseFloat(k[3]),
-        close: parseFloat(k[4]),
-        color: parseFloat(k[4]) >= parseFloat(k[1]) ? 'green' : 'red',
-      }));
+      const { data } = await axios.get(url, { timeout: 3000 });
+      return parseKlines(data);
     } catch (error) {
-      lastError = error;
-      // Пробуем следующий endpoint
+      // Endpoint перестал работать, сбрасываем
+      console.log(`[Binance] Endpoint ${workingEndpoint} failed, will retry others`);
+      workingEndpoint = null;
     }
   }
   
-  // Если все endpoints не сработали
+  // Пробуем все endpoints
+  let lastError;
+  for (const endpoint of BINANCE_ENDPOINTS) {
+    const url = `${endpoint}/klines?symbol=${symbol}&interval=15m&limit=${limit}`;
+    
+    try {
+      const { data } = await axios.get(url, { timeout: 2000 }); // Быстрый таймаут
+      
+      // Запоминаем рабочий endpoint
+      if (workingEndpoint !== endpoint) {
+        console.log(`[Binance] Using endpoint: ${endpoint}`);
+        workingEndpoint = endpoint;
+        lastEndpointCheck = now;
+      }
+      
+      return parseKlines(data);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  
   throw lastError || new Error('All Binance endpoints failed');
+}
+
+function parseKlines(data) {
+  return data.map(k => ({
+    openTime: k[0],
+    closeTime: k[6],
+    open: parseFloat(k[1]),
+    high: parseFloat(k[2]),
+    low: parseFloat(k[3]),
+    close: parseFloat(k[4]),
+    color: parseFloat(k[4]) >= parseFloat(k[1]) ? 'green' : 'red',
+  }));
 }
 
 /**
@@ -62,6 +84,16 @@ async function get15mContext(type) {
   const symbol = SYMBOLS[type];
   if (!symbol) throw new Error(`Unknown type: ${type}`);
   
+  // Проверяем кеш
+  const now = Date.now();
+  const cached = cache[type];
+  if (cached.data && (now - cached.timestamp) < CACHE_TTL) {
+    // Обновляем только timeToEnd
+    const candleEndTime = cached.data.current.marketInfo.endDate;
+    cached.data.current.timeToEnd = Math.max(0, Math.floor((new Date(candleEndTime).getTime() - now) / 1000));
+    return cached.data;
+  }
+  
   const candles = await getKlines(symbol, 4);
   
   // candles[0] = oldest, candles[3] = current (still forming)
@@ -70,7 +102,6 @@ async function get15mContext(type) {
   const prev0 = candles[2]; // Last closed candle
   const current = candles[3]; // Current forming candle
   
-  const now = Date.now();
   const candleEndTime = current.closeTime;
   const timeToEnd = Math.max(0, Math.floor((candleEndTime - now) / 1000));
   
@@ -98,7 +129,7 @@ async function get15mContext(type) {
     },
   });
   
-  return {
+  const result = {
     slugs: {
       prev2: `binance-${symbol.toLowerCase()}-${prev1.openTime}`,
       prev1: `binance-${symbol.toLowerCase()}-${prev0.openTime}`,
@@ -115,6 +146,11 @@ async function get15mContext(type) {
       timeToEnd,
     },
   };
+  
+  // Сохраняем в кеш
+  cache[type] = { data: result, timestamp: Date.now() };
+  
+  return result;
 }
 
 /**
