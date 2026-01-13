@@ -4,7 +4,6 @@ const signalLogSchema = new mongoose.Schema({
   timestamp: {
     type: Date,
     default: Date.now,
-    index: true,
   },
   type: {
     type: String,

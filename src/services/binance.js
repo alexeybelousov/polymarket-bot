@@ -1,6 +1,14 @@
 const axios = require('axios');
 
-const BINANCE_API = 'https://api.binance.com/api/v3';
+// Binance endpoints (попробуем несколько если один блокирует)
+const BINANCE_ENDPOINTS = [
+  'https://data-api.binance.vision/api/v3',  // Public data API (без геоблокировки)
+  'https://api.binance.com/api/v3',           // Global
+  'https://api1.binance.com/api/v3',          // Alternative
+  'https://api2.binance.com/api/v3',          // Alternative
+];
+
+let currentEndpointIndex = 0;
 
 const SYMBOLS = {
   eth: 'ETHUSDT',
@@ -11,18 +19,40 @@ const SYMBOLS = {
  * Получить 15-минутные свечи с Binance
  */
 async function getKlines(symbol, limit = 4) {
-  const url = `${BINANCE_API}/klines?symbol=${symbol}&interval=15m&limit=${limit}`;
-  const { data } = await axios.get(url);
+  let lastError;
   
-  return data.map(k => ({
-    openTime: k[0],
-    closeTime: k[6],
-    open: parseFloat(k[1]),
-    high: parseFloat(k[2]),
-    low: parseFloat(k[3]),
-    close: parseFloat(k[4]),
-    color: parseFloat(k[4]) >= parseFloat(k[1]) ? 'green' : 'red',
-  }));
+  // Пробуем все endpoints по очереди
+  for (let i = 0; i < BINANCE_ENDPOINTS.length; i++) {
+    const endpointIndex = (currentEndpointIndex + i) % BINANCE_ENDPOINTS.length;
+    const endpoint = BINANCE_ENDPOINTS[endpointIndex];
+    const url = `${endpoint}/klines?symbol=${symbol}&interval=15m&limit=${limit}`;
+    
+    try {
+      const { data } = await axios.get(url, { timeout: 5000 });
+      
+      // Если успешно, запоминаем этот endpoint
+      if (endpointIndex !== currentEndpointIndex) {
+        console.log(`[Binance] Switched to endpoint: ${endpoint}`);
+        currentEndpointIndex = endpointIndex;
+      }
+      
+      return data.map(k => ({
+        openTime: k[0],
+        closeTime: k[6],
+        open: parseFloat(k[1]),
+        high: parseFloat(k[2]),
+        low: parseFloat(k[3]),
+        close: parseFloat(k[4]),
+        color: parseFloat(k[4]) >= parseFloat(k[1]) ? 'green' : 'red',
+      }));
+    } catch (error) {
+      lastError = error;
+      // Пробуем следующий endpoint
+    }
+  }
+  
+  // Если все endpoints не сработали
+  throw lastError || new Error('All Binance endpoints failed');
 }
 
 /**
