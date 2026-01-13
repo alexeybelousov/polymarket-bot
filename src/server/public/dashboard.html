@@ -642,8 +642,9 @@
         pnlEl.textContent = `${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}`;
         pnlEl.className = 'stat-value ' + (pnl >= 0 ? 'positive' : 'negative');
       } else {
-        // P&L за период — сумма из серий
-        const pnl = periodSeries.reduce((sum, s) => sum + (s.totalPnL || 0), 0);
+        // P&L за период — сумма из завершенных серий (исключаем активные)
+        const completedPeriodSeries = periodSeries.filter(s => s.status !== 'active');
+        const pnl = completedPeriodSeries.reduce((sum, s) => sum + (s.totalPnL || 0), 0);
         const pnlEl = document.getElementById('stat-pnl');
         pnlEl.textContent = `${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}`;
         pnlEl.className = 'stat-value ' + (pnl >= 0 ? 'positive' : 'negative');
