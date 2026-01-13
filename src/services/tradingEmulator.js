@@ -39,7 +39,7 @@ function calculateDynamicBet(buyPrice, previousLosses, targetProfit) {
  */
 function getShortHash(tokenId) {
   if (!tokenId || typeof tokenId !== 'string') return '';
-  return tokenId.substring(0, 5);
+  return tokenId.substring(0, 7);
 }
 
 class TradingEmulator {
@@ -332,7 +332,7 @@ class TradingEmulator {
     const priceHash = getShortHash(tokenId);
     series.addEvent('buy', {
       amount,
-      message: `Купил ${shares.toFixed(2)} shares по $${price.toFixed(2)} (${priceHash}) = $${amount} на ${betEmoji} (Step ${series.currentStep})`,
+      message: `Купил ${shares.toFixed(2)} shares по $${price.toFixed(2)} (${priceHash}) = $${amount.toFixed(2)} на ${betEmoji} (Step ${series.currentStep})`,
     });
     
     // Событие: ждём рынок
@@ -341,8 +341,8 @@ class TradingEmulator {
       message: `Жду начало рынка...`,
     });
     
-    console.log(`[TRADE] ${series.asset.toUpperCase()}: Buy ${shares.toFixed(2)} shares @ $${price.toFixed(2)} = $${amount} (Step ${series.currentStep})`);
-    await this.log(series.asset, series.currentMarketSlug, `BUY Step ${series.currentStep}: ${shares.toFixed(2)} shares @ $${price.toFixed(2)} = $${amount}`, { step: series.currentStep, amount, price, shares });
+    console.log(`[TRADE] ${series.asset.toUpperCase()}: Buy ${shares.toFixed(2)} shares- по $${price.toFixed(2)} = $${amount} (Step ${series.currentStep})`);
+    await this.log(series.asset, series.currentMarketSlug, `BUY Step ${series.currentStep}: ${shares.toFixed(2)} shares- по $${price.toFixed(2)} = $${amount}`, { step: series.currentStep, amount, price, shares });
     return true;
   }
 
@@ -453,12 +453,12 @@ class TradingEmulator {
     series.addEvent('buy', {
       amount,
       step: nextStep,
-      message: `⚡ Хедж: ${shares.toFixed(2)} shares @ $${price.toFixed(2)} (${priceHash}) = $${amount} на ${betEmoji} (Step ${nextStep})`,
+      message: `⚡ Хедж: ${shares.toFixed(2)} shares- по $${price.toFixed(2)} (${priceHash}) = $${amount.toFixed(2)} на ${betEmoji} (Step ${nextStep})`,
     });
     
     await series.save();
-    console.log(`[TRADE] ${asset}: ⚡ HEDGE - ${shares.toFixed(2)} shares @ $${price.toFixed(2)} = $${amount} (Step ${nextStep})`);
-    await this.log(series.asset, series.nextMarketSlug, `HEDGE Step ${nextStep}: ${shares.toFixed(2)} shares @ $${price.toFixed(2)} = $${amount}`, { step: nextStep, amount, price, shares });
+    console.log(`[TRADE] ${asset}: ⚡ HEDGE - ${shares.toFixed(2)} shares- по $${price.toFixed(2)} = $${amount} (Step ${nextStep})`);
+    await this.log(series.asset, series.nextMarketSlug, `HEDGE Step ${nextStep}: ${shares.toFixed(2)} shares- по $${price.toFixed(2)} = $${amount}`, { step: nextStep, amount, price, shares });
     await this.notifyUsers(series, `⚡ Хедж Step ${nextStep}`);
   }
 
@@ -520,10 +520,10 @@ class TradingEmulator {
         series.addEvent('sell', {
           step: pos.step,
           amount: netReturn,
-          message: `📤 Продал Step ${pos.step}: ${pos.shares.toFixed(2)} shares @ $${sellPrice.toFixed(3)} (${sellHash}) = $${netReturn.toFixed(2)}`,
+          message: `📤 Продал Step ${pos.step}: ${pos.shares.toFixed(2)} shares- по $${sellPrice.toFixed(2)} (${sellHash}) = $${netReturn.toFixed(2)}`,
         });
         
-        console.log(`[TRADE] Sold ${pos.shares.toFixed(2)} shares @ $${sellPrice.toFixed(3)} = $${grossReturn.toFixed(2)} - $${exitFee.toFixed(2)} fee = $${netReturn.toFixed(2)}`);
+        console.log(`[TRADE] Sold ${pos.shares.toFixed(2)} shares- по $${sellPrice.toFixed(3)} = $${grossReturn.toFixed(2)} - $${exitFee.toFixed(2)} fee = $${netReturn.toFixed(2)}`);
       }
     }
     
@@ -615,7 +615,7 @@ class TradingEmulator {
     
     // Событие: продали хедж
     const sellHash = sellTokenId ? getShortHash(sellTokenId) : '';
-    const priceText = sellPrice ? `@ $${sellPrice.toFixed(3)} (${sellHash})` : '';
+    const priceText = sellPrice ? `@ $${sellPrice.toFixed(2)} (${sellHash})` : '';
     series.addEvent('sell_hedge', {
       amount: returnAmount,
       step: hedgeStep,
@@ -892,13 +892,29 @@ class TradingEmulator {
     const asset = series.asset.toUpperCase();
     const betEmoji = series.betColor === 'green' ? '🟢' : '🔴';
     
-    // Формируем полный таймлайн
-    const timeline = series.events.map(e => {
-      const time = e.timestamp.toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-      return `${time} ${e.message}`;
-    }).join('\n');
+    // Формируем заголовок с информацией о шаге и сумме
+    const stepInfo = series.status === 'active' 
+      ? `Step ${series.currentStep}/${TRADING_CONFIG.maxSteps}`
+      : '';
+    const amountInfo = series.totalInvested > 0 
+      ? `💰 $${series.totalInvested.toFixed(2)}`
+      : '';
     
-    const message = `💰 *${asset} ${betEmoji}* — ${shortMessage}\n\n${timeline}`;
+    // Формируем таймлайн, фильтруя пустые сообщения
+    const timeline = series.events
+      .filter(e => e.message && e.message.trim())
+      .map(e => {
+        const time = e.timestamp.toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        return `${time} ${e.message}`;
+      })
+      .join('\n');
+    
+    // Формируем сообщение
+    let message = `*${asset} ${betEmoji}*\n`;
+    if (stepInfo) message += `${stepInfo}\n`;
+    if (amountInfo) message += `${amountInfo}\n`;
+    message += `\n${shortMessage}`;
+    if (timeline) message += `\n\n${timeline}`;
 
     for (const user of users) {
       try {
