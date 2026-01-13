@@ -331,22 +331,34 @@
         const stats = await statsRes.json();
         const series = await seriesRes.json();
 
-        // Stats - Row 1
-        document.getElementById('stat-balance').textContent = `$${stats.currentBalance?.toFixed(2) || '100'}`;
-        const pnl = stats.totalPnL || 0;
+        // Stats - Row 1: Баланс и P&L
+        const initialDeposit = stats.initialDeposit || 100;
+        const currentBalance = stats.currentBalance || 100;
+        const balanceEl = document.getElementById('stat-balance');
+        balanceEl.textContent = `$${currentBalance.toFixed(2)}`;
+        balanceEl.className = 'stat-value ' + (currentBalance >= initialDeposit ? 'positive' : 'negative');
+        
+        // P&L вычисляем из баланса (более надёжно)
+        const pnl = currentBalance - initialDeposit;
         const pnlEl = document.getElementById('stat-pnl');
         pnlEl.textContent = `${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}`;
         pnlEl.className = 'stat-value ' + (pnl >= 0 ? 'positive' : 'negative');
-        const completedTrades = (stats.wonTrades || 0) + (stats.lostTrades || 0);
-        const winRate = completedTrades > 0 ? ((stats.wonTrades / completedTrades) * 100).toFixed(0) : 0;
+        
+        // Считаем статистику из реальных серий (более надёжно)
+        const completedSeries = series.filter(s => s.status !== 'active');
+        const wonSeries = series.filter(s => s.status === 'won');
+        const lostSeries = series.filter(s => s.status === 'lost');
+        const cancelledSeries = series.filter(s => s.status === 'cancelled');
+        
+        const winLossSeries = wonSeries.length + lostSeries.length;
+        const winRate = winLossSeries > 0 ? ((wonSeries.length / winLossSeries) * 100).toFixed(0) : 0;
         document.getElementById('stat-winrate').textContent = `${winRate}%`;
         
-        // Stats - Row 2 (фильтры)
-        const totalSeries = (stats.wonTrades || 0) + (stats.lostTrades || 0) + (stats.cancelledTrades || 0);
-        document.getElementById('stat-total').textContent = totalSeries;
-        document.getElementById('stat-wins').textContent = stats.wonTrades || 0;
-        document.getElementById('stat-losses').textContent = stats.lostTrades || 0;
-        document.getElementById('stat-cancelled').textContent = stats.cancelledTrades || 0;
+        // Stats - Row 2 (фильтры) — из реальных серий
+        document.getElementById('stat-total').textContent = series.length;
+        document.getElementById('stat-wins').textContent = wonSeries.length;
+        document.getElementById('stat-losses').textContent = lostSeries.length;
+        document.getElementById('stat-cancelled').textContent = cancelledSeries.length;
 
         // Series
         allSeries = series;
