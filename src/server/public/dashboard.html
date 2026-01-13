@@ -46,7 +46,11 @@
     /* Stats */
     .stats-section { margin-bottom: 24px; }
     .stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 12px; }
+    .stats-row.filter-row { grid-template-columns: repeat(4, 1fr); }
     .stat-item { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 14px; text-align: center; }
+    .stat-item.clickable { cursor: pointer; transition: all 0.2s; }
+    .stat-item.clickable:hover { border-color: var(--blue); background: var(--bg3); }
+    .stat-item.clickable.active { border-color: var(--blue); background: rgba(59, 130, 246, 0.1); }
     .stat-value { font-size: 20px; font-weight: 600; }
     .stat-value.positive { color: var(--green); }
     .stat-value.negative { color: var(--red); }
@@ -143,16 +147,20 @@
           <div class="stat-label">Win Rate</div>
         </div>
       </div>
-      <div class="stats-row">
-        <div class="stat-item">
+      <div class="stats-row filter-row">
+        <div class="stat-item clickable active" data-filter="all" onclick="setFilter('all')">
+          <div class="stat-value" id="stat-total">0</div>
+          <div class="stat-label">📊 Все</div>
+        </div>
+        <div class="stat-item clickable" data-filter="won" onclick="setFilter('won')">
           <div class="stat-value positive" id="stat-wins">0</div>
           <div class="stat-label">✅ Профит</div>
         </div>
-        <div class="stat-item">
+        <div class="stat-item clickable" data-filter="lost" onclick="setFilter('lost')">
           <div class="stat-value negative" id="stat-losses">0</div>
           <div class="stat-label">❌ Убыток</div>
         </div>
-        <div class="stat-item">
+        <div class="stat-item clickable" data-filter="cancelled" onclick="setFilter('cancelled')">
           <div class="stat-value neutral" id="stat-cancelled">0</div>
           <div class="stat-label">⛔ Отмена</div>
         </div>
@@ -172,6 +180,19 @@
     const emoji = c => c === 'green' ? '🟢' : c === 'red' ? '🔴' : '⚪';
     const fmt = s => `${Math.floor(s/60)}:${(s%60).toString().padStart(2,'0')}`;
     const fmtTime = ts => new Date(ts).toLocaleTimeString('ru', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    
+    let currentFilter = 'all';
+    let allSeries = [];
+    
+    function setFilter(filter) {
+      currentFilter = filter;
+      // Обновляем активный класс
+      document.querySelectorAll('.filter-row .stat-item').forEach(el => {
+        el.classList.toggle('active', el.dataset.filter === filter);
+      });
+      // Перерисовываем серии
+      document.getElementById('series-list').innerHTML = renderSeries(allSeries);
+    }
 
     function renderCandles(id, data) {
       const el = document.getElementById(id);
@@ -205,8 +226,18 @@
       if (!series || series.length === 0) {
         return '<div class="no-series">Нет серий торговли</div>';
       }
+      
+      // Фильтруем по текущему фильтру
+      const filtered = currentFilter === 'all' 
+        ? series 
+        : series.filter(s => s.status === currentFilter);
+      
+      if (filtered.length === 0) {
+        const filterNames = { all: 'серий', won: 'профитных', lost: 'убыточных', cancelled: 'отменённых' };
+        return `<div class="no-series">Нет ${filterNames[currentFilter]} серий</div>`;
+      }
 
-      return series.map(s => {
+      return filtered.map(s => {
         const betEmoji = s.betColor === 'green' ? '🟢' : '🔴';
         const statusText = s.status === 'active' ? `Step ${s.currentStep}/4` : 
                           s.status === 'won' ? 'ПРОФИТ' : 
@@ -256,7 +287,7 @@
       try {
         const [statsRes, seriesRes] = await Promise.all([
           fetch('/api/trading/stats'),
-          fetch('/api/trading/series?limit=5'),
+          fetch('/api/trading/series?limit=20'),
         ]);
         const stats = await statsRes.json();
         const series = await seriesRes.json();
@@ -271,12 +302,15 @@
         const winRate = completedTrades > 0 ? ((stats.wonTrades / completedTrades) * 100).toFixed(0) : 0;
         document.getElementById('stat-winrate').textContent = `${winRate}%`;
         
-        // Stats - Row 2
+        // Stats - Row 2 (фильтры)
+        const totalSeries = (stats.wonTrades || 0) + (stats.lostTrades || 0) + (stats.cancelledTrades || 0);
+        document.getElementById('stat-total').textContent = totalSeries;
         document.getElementById('stat-wins').textContent = stats.wonTrades || 0;
         document.getElementById('stat-losses').textContent = stats.lostTrades || 0;
         document.getElementById('stat-cancelled').textContent = stats.cancelledTrades || 0;
 
         // Series
+        allSeries = series;
         document.getElementById('series-list').innerHTML = renderSeries(series);
       } catch(e) { console.error(e); }
     }
