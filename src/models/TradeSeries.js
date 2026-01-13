@@ -16,7 +16,11 @@ const eventSchema = new mongoose.Schema({
       'market_lost',      // Рынок закрылся не в наш цвет
       'series_won',       // Серия завершена победой
       'series_lost',      // Серия завершена проигрышем (4 шага)
+      'series_cancelled', // Серия отменена
       'insufficient_balance', // Недостаточно средств
+      'price_error',      // Не удалось получить цену
+      'hedge_bought',     // Куплен хедж
+      'hedge_sold',       // Продан хедж
     ],
     required: true 
   },
@@ -37,7 +41,7 @@ const tradeSeriesSchema = new mongoose.Schema({
   
   status: { 
     type: String, 
-    enum: ['active', 'won', 'lost'], 
+    enum: ['active', 'won', 'lost', 'cancelled'], 
     default: 'active' 
   },
   
