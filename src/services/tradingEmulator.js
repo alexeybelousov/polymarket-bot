@@ -317,6 +317,9 @@ class TradingEmulator {
     
     const loss = hedgePosition.amount - returnAmount;
     
+    // Учитываем потерю от продажи хеджа
+    series.hedgeLosses = (series.hedgeLosses || 0) + loss;
+    
     // Событие: продали хедж
     series.addEvent('sell_hedge', {
       amount: returnAmount,
@@ -451,8 +454,9 @@ class TradingEmulator {
       // Обновляем статус позиции
       if (currentPosition) currentPosition.status = 'won';
       
-      // P&L = выигрыш - вложено
-      const pnl = winAmount - series.totalInvested;
+      // P&L = выигрыш - вложено - потери на хеджах
+      const hedgeLosses = series.hedgeLosses || 0;
+      const pnl = winAmount - series.totalInvested - hedgeLosses;
       
       series.addEvent('market_won', {
         marketColor: resolvedColor,
@@ -464,9 +468,10 @@ class TradingEmulator {
       series.status = 'won';
       series.endedAt = new Date();
       
+      const hedgeNote = hedgeLosses > 0 ? ` (вкл. -$${hedgeLosses.toFixed(2)} хедж)` : '';
       series.addEvent('series_won', {
         pnl,
-        message: `Серия завершена победой на Step ${series.currentStep}! P&L: $${pnl.toFixed(2)}`,
+        message: `Серия завершена победой на Step ${series.currentStep}! P&L: $${pnl.toFixed(2)}${hedgeNote}`,
       });
       
       // Обновляем статистику
