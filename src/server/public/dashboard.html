@@ -84,7 +84,7 @@
       content: '';
       position: absolute;
       left: -24px;
-      top: 4px;
+      top: 0px;
       width: 10px;
       height: 10px;
       border-radius: 50%;
@@ -96,6 +96,7 @@
     .timeline-event.win::before { background: var(--green); border-color: var(--green); }
     .timeline-event.loss::before { background: var(--red); border-color: var(--red); }
     .timeline-event.neutral::before { background: var(--text2); border-color: var(--text2); }
+    .timeline-event.start::before { background: var(--blue); border-color: var(--blue); }
     .timeline-time { color: var(--text2); margin-right: 8px; }
     .timeline-msg { color: var(--text); }
 
@@ -459,6 +460,7 @@
     }
 
     function getEventClass(type) {
+      if (type === 'series_opened') return 'start';
       if (type === 'buy') return 'buy';
       if (type === 'hedge_bought' || type === 'sell_hedge') return 'hedge';
       if (type.includes('won') || type === 'series_won') return 'win';
