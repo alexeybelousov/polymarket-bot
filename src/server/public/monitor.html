@@ -127,6 +127,31 @@
       margin-top: 8px;
     }
     
+    .bot-labels {
+      position: absolute;
+      left: -80px;
+      top: 0;
+      width: 70px;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      z-index: 10;
+      pointer-events: none;
+    }
+    .bot-label {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text);
+      border-top: 1px solid var(--border);
+    }
+    .bot-label:first-child {
+      border-top: none;
+    }
+    
     .bot-section {
       flex: 1;
       border-top: 1px solid var(--border);
@@ -139,17 +164,6 @@
     }
     .bot-section.bot1 {
       border-bottom: 1px solid var(--border);
-    }
-    .bot-label {
-      position: absolute;
-      top: 8px;
-      left: 8px;
-      font-size: 10px;
-      color: var(--text2);
-      background: var(--bg3);
-      padding: 2px 6px;
-      border-radius: 4px;
-      z-index: 10;
     }
     
     .series-container {
@@ -223,6 +237,10 @@
     
     <div class="markets-wrapper">
       <div class="time-indicator"></div>
+      <div class="bot-labels">
+        <div class="bot-label">Bot 1</div>
+        <div class="bot-label">Bot 2</div>
+      </div>
       <div class="markets-container" id="markets-container"></div>
     </div>
   </div>
@@ -353,10 +371,20 @@
           const slug = ethCurrent.startsWith('binance-') 
             ? `binance-ethusdt-${ts * 1000}` // Binance использует миллисекунды
             : `eth-updown-15m-${ts}`;
+          
+          // Получаем цвет из API данных для предыдущих рынков
+          let pastColor = null;
+          if (i === 1 && data.eth?.prev1) {
+            pastColor = data.eth.prev1.color;
+          } else if (i === 2 && data.eth?.prev2) {
+            pastColor = data.eth.prev2.color;
+          }
+          
           newMarkets.push({
             timestamp: ts,
             slug: slug,
             isPast: true,
+            color: pastColor,
           });
         }
         
@@ -410,24 +438,10 @@
         
         const timeInfo = getMarketTime(market.timestamp);
         
-        // Определяем цвет рынка для прошлых рынков (если не указан)
-        let marketColor = market.color;
-        if (!marketColor && market.isPast) {
-          // Для прошлых рынков можно попытаться определить цвет из завершенных серий
-          // Но пока оставляем unknown
-          marketColor = 'unknown';
-        }
-        
         col.innerHTML = `
-          <div class="market-header">
-            <div class="market-status">${marketColor === 'green' ? '🟢' : marketColor === 'red' ? '🔴' : '⚪'}</div>
-          </div>
-          <div class="bot-section bot1">
-            <div class="bot-label">Bot 1</div>
-          </div>
-          <div class="bot-section bot2">
-            <div class="bot-label">Bot 2</div>
-          </div>
+          <div class="market-header"></div>
+          <div class="bot-section bot1"></div>
+          <div class="bot-section bot2"></div>
         `;
         
         // Добавляем метку времени между столбцами (справа от текущего)
