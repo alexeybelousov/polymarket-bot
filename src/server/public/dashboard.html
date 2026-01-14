@@ -289,6 +289,9 @@
     <div class="period-toggle">
       <button class="period-btn active" data-period="all" onclick="setPeriod('all')">Всего</button>
       <button class="period-btn" data-period="day" onclick="setPeriod('day')">За сутки</button>
+      <button class="period-btn active" data-asset="all" onclick="setAsset('all')">Все</button>
+      <button class="period-btn" data-asset="btc" onclick="setAsset('btc')">BTC</button>
+      <button class="period-btn" data-asset="eth" onclick="setAsset('eth')">ETH</button>
       <button class="stats-toggle-btn" onclick="toggleStats()" title="Скрыть/показать статистику">
         <span id="stats-toggle-icon">▼</span>
       </button>
@@ -367,6 +370,7 @@
     
     let currentFilter = 'all';
     let currentPeriod = 'all';
+    let currentAsset = 'all'; // Фильтр по валюте: 'all', 'btc', 'eth'
     let currentView = 'list';
     let allSeries = [];
     let showAll = false;
@@ -399,8 +403,8 @@
     }
     
     function renderChart() {
-      const periodSeries = filterByPeriod(allSeries);
-      let completedSeries = periodSeries.filter(s => s.status !== 'active').sort((a, b) => new Date(a.startedAt) - new Date(b.startedAt));
+      const filteredSeries = filterSeries(allSeries);
+      let completedSeries = filteredSeries.filter(s => s.status !== 'active').sort((a, b) => new Date(a.startedAt) - new Date(b.startedAt));
       
       // Применяем лимит для графика (берем последние N серий)
       if (chartLimit !== 'all' && completedSeries.length > chartLimit) {
@@ -498,12 +502,30 @@
     function setPeriod(period) {
       currentPeriod = period;
       showAll = false;
-      document.querySelectorAll('.period-btn').forEach(el => {
+      document.querySelectorAll('.period-btn[data-period]').forEach(el => {
         el.classList.toggle('active', el.dataset.period === period);
       });
       updateStats();
       if (currentView === 'chart') {
         renderChart();
+      } else {
+        const filteredSeries = filterSeries(allSeries);
+        document.getElementById('series-list').innerHTML = renderSeries(filteredSeries);
+      }
+    }
+    
+    function setAsset(asset) {
+      currentAsset = asset;
+      showAll = false;
+      document.querySelectorAll('.period-btn[data-asset]').forEach(el => {
+        el.classList.toggle('active', el.dataset.asset === asset);
+      });
+      updateStats();
+      if (currentView === 'chart') {
+        renderChart();
+      } else {
+        const filteredSeries = filterSeries(allSeries);
+        document.getElementById('series-list').innerHTML = renderSeries(filteredSeries);
       }
     }
     
@@ -517,7 +539,19 @@
     function filterByPeriod(series) {
       if (currentPeriod === 'all') return series;
       const dayAgo = Date.now() - 24 * 60 * 60 * 1000;
-      return series.filter(s => new Date(s.startedAt).getTime() > dayAgo);
+      return series.filter(s => {
+        const endTime = s.endedAt ? new Date(s.endedAt).getTime() : Date.now();
+        return endTime > dayAgo;
+      });
+    }
+    
+    function filterByAsset(series) {
+      if (currentAsset === 'all') return series;
+      return series.filter(s => s.asset.toLowerCase() === currentAsset);
+    }
+    
+    function filterSeries(series) {
+      return filterByAsset(filterByPeriod(series));
     }
     
     function setFilter(filter) {
@@ -528,15 +562,15 @@
         el.classList.toggle('active', el.dataset.filter === filter);
       });
       // Перерисовываем серии
-      const periodSeries = filterByPeriod(allSeries);
-      document.getElementById('series-list').innerHTML = renderSeries(periodSeries);
+      const filteredSeries = filterSeries(allSeries);
+      document.getElementById('series-list').innerHTML = renderSeries(filteredSeries);
       // График не фильтруем по типу — показываем все
     }
     
     function toggleShowAll() {
       showAll = !showAll;
-      const periodSeries = filterByPeriod(allSeries);
-      document.getElementById('series-list').innerHTML = renderSeries(periodSeries);
+      const filteredSeries = filterSeries(allSeries);
+      document.getElementById('series-list').innerHTML = renderSeries(filteredSeries);
     }
 
     function renderCandles(id, data) {
@@ -656,7 +690,7 @@
     let allBots = []; // Список всех ботов
     
     function updateStats() {
-      const periodSeries = filterByPeriod(allSeries);
+      const filteredSeries = filterSeries(allSeries);
       
       // Stats - Row 1: Баланс и P&L (всегда общие)
       const initialDeposit = globalStats.initialDeposit || 100;
@@ -675,7 +709,7 @@
         // P&L за период — сумма из серий, которые ЗАКОНЧИЛИСЬ за последние 24 часа
         // (используем endedAt, а не startedAt, потому что P&L фиксируется при завершении)
         const dayAgo = Date.now() - 24 * 60 * 60 * 1000;
-        const dayCompletedSeries = allSeries.filter(s => {
+        const dayCompletedSeries = filterByAsset(allSeries).filter(s => {
           if (s.status === 'active') return false; // Исключаем активные
           const endTime = s.endedAt ? new Date(s.endedAt).getTime() : null;
           return endTime && endTime > dayAgo; // Закончились за последние 24 часа
@@ -687,10 +721,10 @@
       }
       
       // Считаем статистику из серий за период
-      const wonSeries = periodSeries.filter(s => s.status === 'won');
-      const lostSeries = periodSeries.filter(s => s.status === 'lost');
-      const cancelledSeries = periodSeries.filter(s => s.status === 'cancelled');
-      const activeSeries = periodSeries.filter(s => s.status === 'active');
+      const wonSeries = filteredSeries.filter(s => s.status === 'won');
+      const lostSeries = filteredSeries.filter(s => s.status === 'lost');
+      const cancelledSeries = filteredSeries.filter(s => s.status === 'cancelled');
+      const activeSeries = filteredSeries.filter(s => s.status === 'active');
       
       const winLossSeries = wonSeries.length + lostSeries.length;
       const winRate = winLossSeries > 0 ? ((wonSeries.length / winLossSeries) * 100).toFixed(0) : 0;
@@ -701,14 +735,14 @@
       document.getElementById('stat-frozen').textContent = `$${frozen.toFixed(2)}`;
       
       // Stats - Row 2 (фильтры)
-      document.getElementById('stat-total').textContent = periodSeries.length;
+      document.getElementById('stat-total').textContent = filteredSeries.length;
       document.getElementById('stat-wins').textContent = wonSeries.length;
       document.getElementById('stat-losses').textContent = lostSeries.length;
       document.getElementById('stat-cancelled').textContent = cancelledSeries.length;
       document.getElementById('stat-active').textContent = activeSeries.length;
       
       // Перерисовываем серии
-      document.getElementById('series-list').innerHTML = renderSeries(periodSeries);
+      document.getElementById('series-list').innerHTML = renderSeries(filteredSeries);
       
       // Обновляем график если активен
       if (currentView === 'chart') {
