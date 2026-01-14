@@ -228,8 +228,9 @@ class TradingEmulator {
     });
     
     // Событие: серия открыта
+    const candleCount = signalType === '3candles' ? '3' : '2';
     series.addEvent('series_opened', {
-      message: `Сигнал 3${signalEmoji} → ставим на ${betEmoji}`,
+      message: `Сигнал ${candleCount}${signalEmoji} → ставим на ${betEmoji}`,
     });
     
     console.log(`[TRADE] [${this.botId}] ${type.toUpperCase()}: Series created, calling buyStep...`);
