@@ -447,8 +447,16 @@
         
         const timeInfo = getMarketTime(market.timestamp);
         
-        // Формируем slug для отображения (убираем префикс binance- если есть)
-        const displaySlug = market.slug.replace(/^binance-ethusdt-/, 'eth-updown-15m-').replace(/-\d+$/, '');
+        // Формируем slug для отображения
+        // Для binance формата: binance-ethusdt-1768412700000 -> eth-updown-15m-1768412700
+        // Для polymarket формата: eth-updown-15m-1768412700 -> eth-updown-15m-1768412700
+        let displaySlug = market.slug;
+        if (displaySlug.startsWith('binance-ethusdt-')) {
+          // Извлекаем timestamp (миллисекунды) и конвертируем в секунды
+          const ms = parseInt(displaySlug.split('-').pop());
+          const seconds = Math.floor(ms / 1000);
+          displaySlug = `eth-updown-15m-${seconds}`;
+        }
         
         col.innerHTML = `
           <div class="market-header">
