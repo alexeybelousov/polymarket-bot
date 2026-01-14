@@ -63,8 +63,8 @@ class TradingEmulator {
     this.interval = null;
     
     // Локальные константы из конфига
-    this.this.ENTRY_FEE_RATE = config.entryFee;
-    this.this.EXIT_FEE_RATE = config.exitFee;
+    this.ENTRY_FEE_RATE = config.entryFee;
+    this.EXIT_FEE_RATE = config.exitFee;
   }
 
   async start() {
@@ -114,6 +114,10 @@ class TradingEmulator {
    * Polymarket: btc-updown-15m-1768309200 (секунды)
    */
   convertToPolymarketSlug(slug) {
+    if (!slug || typeof slug !== 'string') {
+      console.warn(`[TRADE] [${this.botId}] Invalid slug provided to convertToPolymarketSlug:`, slug);
+      return slug || '';
+    }
     if (!slug.startsWith('binance-')) {
       return slug; // Уже в формате Polymarket
     }
