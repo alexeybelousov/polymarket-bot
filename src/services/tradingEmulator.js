@@ -433,7 +433,7 @@ class TradingEmulator {
     
     // Событие: купили
     const priceHash = getShortHash(tokenId);
-    const breakEvenNote = (series.currentStep === this.config.maxSteps && this.config.breakEvenOnLastStep) ? ' (break-even)' : '';
+    const breakEvenNote = (series.currentStep === this.config.maxSteps && this.config.breakEvenOnLastStep) ? ' break-even' : '';
     series.addEvent('buy', {
       amount,
       message: `Купил ${shares.toFixed(2)} shares по $${price.toFixed(2)} (${priceHash}) = $${amount.toFixed(2)} на ${betEmoji} (Step ${series.currentStep}${breakEvenNote})`,
@@ -593,7 +593,7 @@ class TradingEmulator {
     
     // Событие: ранняя покупка
     const priceHash = getShortHash(tokenId);
-    const breakEvenNote = (nextStep === this.config.maxSteps && this.config.breakEvenOnLastStep) ? ' (break-even)' : '';
+    const breakEvenNote = (nextStep === this.config.maxSteps && this.config.breakEvenOnLastStep) ? ' break-even' : '';
     series.addEvent('buy', {
       amount,
       step: nextStep,

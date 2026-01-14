@@ -692,16 +692,19 @@
     function updateStats() {
       const filteredSeries = filterSeries(allSeries);
       
-      // Stats - Row 1: Баланс и P&L (всегда общие)
+      // Stats - Row 1: Баланс и P&L
       const initialDeposit = globalStats.initialDeposit || 100;
       const currentBalance = globalStats.currentBalance || 100;
       const balanceEl = document.getElementById('stat-balance');
       balanceEl.textContent = `$${currentBalance.toFixed(2)}`;
       balanceEl.className = 'stat-value ' + (currentBalance >= initialDeposit ? 'positive' : 'negative');
       
-      // P&L зависит от периода
+      // P&L зависит от периода и валюты
       if (currentPeriod === 'all') {
-        const pnl = currentBalance - initialDeposit;
+        // P&L "Всего" - считаем из всех завершенных серий выбранной валюты
+        const assetSeries = filterByAsset(allSeries);
+        const completedSeries = assetSeries.filter(s => s.status !== 'active');
+        const pnl = completedSeries.reduce((sum, s) => sum + (s.totalPnL || 0), 0);
         const pnlEl = document.getElementById('stat-pnl');
         pnlEl.textContent = `${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}`;
         pnlEl.className = 'stat-value ' + (pnl >= 0 ? 'positive' : 'negative');
