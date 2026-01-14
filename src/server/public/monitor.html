@@ -460,10 +460,18 @@
         
         const timeInfo = getMarketTime(market.timestamp);
         
+        // Определяем цвет рынка для прошлых рынков (если не указан)
+        let marketColor = market.color;
+        if (!marketColor && market.isPast) {
+          // Для прошлых рынков можно попытаться определить цвет из завершенных серий
+          // Но пока оставляем unknown
+          marketColor = 'unknown';
+        }
+        
         col.innerHTML = `
           <div class="market-header">
             <div class="market-time">${timeInfo.time}</div>
-            <div class="market-status">${market.color === 'green' ? '🟢' : market.color === 'red' ? '🔴' : '⚪'}</div>
+            <div class="market-status">${marketColor === 'green' ? '🟢' : marketColor === 'red' ? '🔴' : '⚪'}</div>
             <div class="market-slug">${market.slug.split('-').pop()}</div>
           </div>
           <div class="bot-section bot1">
@@ -516,19 +524,33 @@
         const botTop = botIndex === 0 ? bot1Top : bot2Top;
         const botHeight = botIndex === 0 ? bot1Height : bot2Height;
         
+        // Фильтруем только серии ETH (монитор для ETH)
+        // И только те, которые активны или недавно завершились в видимом диапазоне
         const visibleSeries = botSeries.filter(s => {
+          // Только ETH серии
+          if (s.asset !== 'eth') return false;
+          
           if (!s.startedAt) return false;
           const startTime = new Date(s.startedAt).getTime() / 1000;
           const endTime = s.endedAt ? new Date(s.endedAt).getTime() / 1000 : Date.now() / 1000;
           
-          // Серия видна, если она началась или закончилась в диапазоне
-          return (startTime >= extendedMin && startTime <= extendedMax) ||
-                 (endTime >= extendedMin && endTime <= extendedMax) ||
-                 (startTime <= extendedMin && endTime >= extendedMax);
+          // Серия видна, если она пересекается с видимым диапазоном
+          return (startTime < maxTimestamp + marketInterval && endTime > minTimestamp - marketInterval);
         });
         
-        visibleSeries.forEach((s, index) => {
-          renderSeriesLine(s, botId, botTop, botHeight, index, visibleSeries.length);
+        // Ограничиваем количество активных серий - в один момент у бота может быть только одна активная серия ETH
+        // Но показываем все завершенные серии в диапазоне
+        const activeSeries = visibleSeries.filter(s => s.status === 'active');
+        const completedSeries = visibleSeries.filter(s => s.status !== 'active');
+        
+        // Если есть активная серия, показываем только её + завершенные
+        // Если активных нет, показываем все завершенные
+        const seriesToShow = activeSeries.length > 0 
+          ? [...activeSeries, ...completedSeries.slice(-5)] // Активная + последние 5 завершенных
+          : completedSeries.slice(-10); // Последние 10 завершенных
+        
+        seriesToShow.forEach((s, index) => {
+          renderSeriesLine(s, botId, botTop, botHeight, index, seriesToShow.length);
         });
       });
     }
@@ -696,11 +718,12 @@
       const currentColIndex = markets.findIndex(m => m.isCurrent);
       const currentColPosition = currentColIndex * marketColumnWidth;
       
-      // В начале периода столбец должен быть справа от индикатора на ширину столбца
-      // К концу периода столбец должен быть слева от индикатора
-      // За 15 минут столбец проходит расстояние = ширина столбца
-      const startOffset = indicatorPosition - currentColPosition - marketColumnWidth;
-      const endOffset = indicatorPosition - currentColPosition;
+      // Столбцы двигаются ВЛЕВО
+      // В начале периода (progress=0) столбец должен быть справа от индикатора
+      // К концу периода (progress=1) столбец должен быть слева от индикатора
+      // За 15 минут столбец проходит расстояние = ширина столбца влево
+      const startOffset = indicatorPosition - currentColPosition; // В начале столбец на позиции индикатора
+      const endOffset = indicatorPosition - currentColPosition - marketColumnWidth; // В конце столбец сдвинулся влево на ширину
       const targetOffset = startOffset + (progress * (endOffset - startOffset));
       
       const container = document.getElementById('markets-container');
