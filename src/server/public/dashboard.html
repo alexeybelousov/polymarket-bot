@@ -590,7 +590,10 @@
 
       const seriesHtml = displaySeries.map(s => {
         const betEmoji = s.betColor === 'green' ? '🟢' : '🔴';
-        const statusText = s.status === 'active' ? `Step ${s.currentStep}/4` : 
+        // Находим maxSteps для этой серии по botId
+        const bot = allBots.find(b => b.botId === s.botId);
+        const maxSteps = bot?.config?.maxSteps || 4; // Fallback на 4 для старых данных
+        const statusText = s.status === 'active' ? `Step ${s.currentStep}/${maxSteps}` : 
                           s.status === 'won' ? 'ПРОФИТ' : 
                           s.status === 'cancelled' ? 'ОТМЕНА' : 'УБЫТОК';
         const pnlText = s.totalPnL ? (s.totalPnL >= 0 ? `+$${s.totalPnL.toFixed(2)}` : `-$${Math.abs(s.totalPnL).toFixed(2)}`) : '';
@@ -603,9 +606,13 @@
           </div>`;
         }).join('');
 
+        // Получаем полный ID серии (может быть _id или id)
+        const seriesId = s._id || s.id || '';
+        const fullId = seriesId ? seriesId.toString() : '';
+        
         return `<div class="series-card ${s.status}">
           <div class="series-header">
-            <span class="series-asset">${s.asset.toUpperCase()} ${betEmoji}</span>
+            <span class="series-asset">${s.asset.toUpperCase()} ${betEmoji}${fullId ? ` <span style="opacity: 0.6; font-size: 0.85em; font-family: monospace;">[${fullId}]</span>` : ''}</span>
             <span class="series-status ${s.status}">${statusText}</span>
           </div>
           <div class="series-info">

@@ -432,9 +432,10 @@ class TradingEmulator {
     
     // Событие: купили
     const priceHash = getShortHash(tokenId);
+    const breakEvenNote = (series.currentStep === this.config.maxSteps && this.config.breakEvenOnLastStep) ? ' (break-even)' : '';
     series.addEvent('buy', {
       amount,
-      message: `Купил ${shares.toFixed(2)} shares по $${price.toFixed(2)} (${priceHash}) = $${amount.toFixed(2)} на ${betEmoji} (Step ${series.currentStep})`,
+      message: `Купил ${shares.toFixed(2)} shares по $${price.toFixed(2)} (${priceHash}) = $${amount.toFixed(2)} на ${betEmoji} (Step ${series.currentStep}${breakEvenNote})`,
     });
     
     // Событие: ждём рынок
@@ -453,6 +454,13 @@ class TradingEmulator {
   async buyNextStepEarly(series, context) {
     const asset = series.asset.toUpperCase();
     const nextStep = series.currentStep + 1;
+    
+    // Проверяем, что следующий шаг не превышает максимальное количество шагов
+    if (nextStep > this.config.maxSteps) {
+      console.log(`[TRADE] [${this.botId}] ${asset}: Cannot buy hedge - next step ${nextStep} exceeds maxSteps ${this.config.maxSteps}`);
+      return;
+    }
+    
     const stats = await TradingStats.getStats(this.botId);
     const betEmoji = series.betColor === 'green' ? '🟢' : '🔴';
     const betOutcome = series.betColor === 'green' ? 'up' : 'down';
@@ -584,10 +592,11 @@ class TradingEmulator {
     
     // Событие: ранняя покупка
     const priceHash = getShortHash(tokenId);
+    const breakEvenNote = (nextStep === this.config.maxSteps && this.config.breakEvenOnLastStep) ? ' (break-even)' : '';
     series.addEvent('buy', {
       amount,
       step: nextStep,
-      message: `⚡ Хедж: ${shares.toFixed(2)} shares- по $${price.toFixed(2)} (${priceHash}) = $${amount.toFixed(2)} на ${betEmoji} (Step ${nextStep})`,
+      message: `⚡ Хедж: ${shares.toFixed(2)} shares- по $${price.toFixed(2)} (${priceHash}) = $${amount.toFixed(2)} на ${betEmoji} (Step ${nextStep}${breakEvenNote})`,
     });
     
     await series.save();
@@ -831,7 +840,7 @@ class TradingEmulator {
       }
       
       // РАННЯЯ ПОКУПКА: если рынок идёт против нас (цвет = signalColor), покупаем следующий шаг заранее
-      if (!series.nextStepBought && series.currentStep < 4 && currentColor === series.signalColor) {
+      if (!series.nextStepBought && series.currentStep < this.config.maxSteps && currentColor === series.signalColor) {
         await this.buyNextStepEarly(series, context);
       }
       
@@ -943,6 +952,40 @@ class TradingEmulator {
       
       // Проверяем: если следующий шаг уже куплен заранее (хедж)
       if (series.nextStepBought) {
+        const nextStep = series.currentStep + 1;
+        
+        // Проверяем, что следующий шаг не превышает максимальное количество шагов
+        if (nextStep > this.config.maxSteps) {
+          // Хедж был куплен на шаг, который превышает maxSteps - завершаем серию
+          const pnl = -series.totalInvested - series.totalCommission;
+          series.totalPnL = pnl;
+          series.status = 'lost';
+          series.endedAt = new Date();
+          
+          series.addEvent('series_lost', {
+            pnl,
+            message: `Серия проиграна после ${series.currentStep} шагов (хедж на Step ${nextStep} превышает maxSteps ${this.config.maxSteps}). P&L: $${pnl.toFixed(2)}`,
+          });
+          
+          // Обновляем статистику
+          const stats = await TradingStats.getStats(this.botId);
+          stats.totalTrades++;
+          stats.lostTrades++;
+          stats.totalPnL += pnl;
+          stats.totalCommissions += series.totalCommission;
+          stats.currentStreak = stats.currentStreak <= 0 ? stats.currentStreak - 1 : -1;
+          stats.maxLossStreak = Math.max(stats.maxLossStreak, Math.abs(stats.currentStreak));
+          await stats.save();
+          
+          await series.save();
+          this.activeSeries.delete(series.asset);
+          
+          console.log(`[TRADE] [${this.botId}] ${asset}: ❌ SERIES LOST - hedge on Step ${nextStep} exceeds maxSteps ${this.config.maxSteps}! PnL: $${pnl.toFixed(2)}`);
+          await this.log(series.asset, series.currentMarketSlug, `❌ SERIES LOST: hedge Step ${nextStep} > maxSteps ${this.config.maxSteps}, P&L: $${pnl.toFixed(2)}`, { step: series.currentStep, nextStep, maxSteps: this.config.maxSteps, pnl });
+          await this.notifyUsers(series, `❌ УБЫТОК! ${series.currentStep} шага, P&L: $${pnl.toFixed(2)}`);
+          return;
+        }
+        
         // Переходим на уже купленный следующий шаг
         series.currentStep++;
         series.currentMarketSlug = series.nextMarketSlug;
@@ -959,8 +1002,8 @@ class TradingEmulator {
         return;
       }
       
-      if (series.currentStep >= 4) {
-        // Серия проиграна после 4 шагов
+      if (series.currentStep >= this.config.maxSteps) {
+        // Серия проиграна после всех шагов
         const pnl = -series.totalInvested - series.totalCommission;
         series.totalPnL = pnl;
         series.status = 'lost';
@@ -968,7 +1011,7 @@ class TradingEmulator {
         
         series.addEvent('series_lost', {
           pnl,
-          message: `Серия проиграна после 4 шагов. P&L: $${pnl.toFixed(2)}`,
+          message: `Серия проиграна после ${this.config.maxSteps} шагов. P&L: $${pnl.toFixed(2)}`,
         });
         
         // Обновляем статистику
@@ -984,11 +1027,44 @@ class TradingEmulator {
         await series.save();
         this.activeSeries.delete(series.asset);
         
-        console.log(`[TRADE] [${this.botId}] ${asset}: ❌ SERIES LOST after 4 steps! PnL: $${pnl.toFixed(2)}`);
-        await this.log(series.asset, series.currentMarketSlug, `❌ SERIES LOST after 4 steps: P&L: $${pnl.toFixed(2)}`, { step: 4, pnl, totalInvested: series.totalInvested });
-        await this.notifyUsers(series, `❌ УБЫТОК! 4 шага, P&L: $${pnl.toFixed(2)}`);
+        console.log(`[TRADE] [${this.botId}] ${asset}: ❌ SERIES LOST after ${this.config.maxSteps} steps! PnL: $${pnl.toFixed(2)}`);
+        await this.log(series.asset, series.currentMarketSlug, `❌ SERIES LOST after ${this.config.maxSteps} steps: P&L: $${pnl.toFixed(2)}`, { step: this.config.maxSteps, pnl, totalInvested: series.totalInvested });
+        await this.notifyUsers(series, `❌ УБЫТОК! ${this.config.maxSteps} шага, P&L: $${pnl.toFixed(2)}`);
         
       } else {
+        // Проверяем, что следующий шаг не превышает максимальное количество шагов
+        const nextStep = series.currentStep + 1;
+        if (nextStep > this.config.maxSteps) {
+          // Серия проиграна - следующий шаг превышает maxSteps
+          const pnl = -series.totalInvested - series.totalCommission;
+          series.totalPnL = pnl;
+          series.status = 'lost';
+          series.endedAt = new Date();
+          
+          series.addEvent('series_lost', {
+            pnl,
+            message: `Серия проиграна после ${series.currentStep} шагов (следующий шаг ${nextStep} превышает maxSteps ${this.config.maxSteps}). P&L: $${pnl.toFixed(2)}`,
+          });
+          
+          // Обновляем статистику
+          const stats = await TradingStats.getStats(this.botId);
+          stats.totalTrades++;
+          stats.lostTrades++;
+          stats.totalPnL += pnl;
+          stats.totalCommissions += series.totalCommission;
+          stats.currentStreak = stats.currentStreak <= 0 ? stats.currentStreak - 1 : -1;
+          stats.maxLossStreak = Math.max(stats.maxLossStreak, Math.abs(stats.currentStreak));
+          await stats.save();
+          
+          await series.save();
+          this.activeSeries.delete(series.asset);
+          
+          console.log(`[TRADE] [${this.botId}] ${asset}: ❌ SERIES LOST - next step ${nextStep} exceeds maxSteps ${this.config.maxSteps}! PnL: $${pnl.toFixed(2)}`);
+          await this.log(series.asset, series.currentMarketSlug, `❌ SERIES LOST: next step ${nextStep} > maxSteps ${this.config.maxSteps}, P&L: $${pnl.toFixed(2)}`, { step: series.currentStep, nextStep, maxSteps: this.config.maxSteps, pnl });
+          await this.notifyUsers(series, `❌ УБЫТОК! ${series.currentStep} шага, P&L: $${pnl.toFixed(2)}`);
+          return;
+        }
+        
         // Следующий шаг Мартингейла (покупаем сейчас)
         series.currentStep++;
         series.currentMarketSlug = context.slugs.current;
