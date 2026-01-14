@@ -74,7 +74,7 @@
     
     .markets-container {
       display: flex;
-      gap: 1px;
+      gap: 0;
       background: var(--border);
       height: 100%;
       position: relative;
@@ -86,8 +86,25 @@
       display: flex;
       flex-direction: column;
       position: relative;
-      width: 200px;
-      flex-shrink: 0;
+      flex: 1;
+      min-width: 0;
+      border-right: 1px solid var(--border);
+    }
+    .market-column:last-child {
+      border-right: none;
+    }
+    
+    .market-label {
+      position: absolute;
+      top: 0;
+      right: -50px;
+      width: 100px;
+      text-align: center;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text);
+      z-index: 10;
+      pointer-events: none;
     }
     .market-column.current {
       background: rgba(59, 130, 246, 0.05);
@@ -103,27 +120,22 @@
       padding: 12px;
       border-bottom: 1px solid var(--border);
       text-align: center;
-    }
-    .market-time {
-      font-size: 14px;
-      font-weight: 600;
-      margin-bottom: 4px;
+      min-height: 60px;
     }
     .market-status {
       font-size: 20px;
-    }
-    .market-slug {
-      font-size: 10px;
-      color: var(--text2);
-      margin-top: 4px;
+      margin-top: 8px;
     }
     
     .bot-section {
       flex: 1;
-      position: relative;
       border-top: 1px solid var(--border);
       min-height: 300px;
-      overflow: visible;
+      overflow-y: auto;
+      padding: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
     }
     .bot-section.bot1 {
       border-bottom: 1px solid var(--border);
@@ -150,57 +162,25 @@
       overflow: visible;
     }
     
-    .markets-series-overlay {
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      pointer-events: none;
-      z-index: 1;
-    }
-    
-    .markets-series-overlay .bot-layer {
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-    }
-    
     .series-card {
-      position: absolute;
       background: var(--bg3);
       border: 1px solid var(--border);
       border-radius: 4px;
-      z-index: 5;
-      pointer-events: auto;
-      display: flex;
       min-height: 60px;
+      display: flex;
+      flex-direction: column;
     }
     .series-card.won { border-color: var(--green); background: rgba(34, 197, 94, 0.1); }
     .series-card.lost { border-color: var(--red); background: rgba(239, 68, 68, 0.1); }
     .series-card.active { border-color: var(--blue); background: rgba(59, 130, 246, 0.1); }
     .series-card.cooldown { border-color: var(--text2); background: rgba(113, 113, 122, 0.1); opacity: 0.7; }
     
-    .series-column {
-      width: 200px;
-      flex-shrink: 0;
-      border-right: 1px solid var(--border);
-      padding: 8px;
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-    }
-    .series-column:last-child {
-      border-right: none;
-    }
-    
     .series-header {
       font-size: 10px;
       font-weight: 600;
       color: var(--text);
-      margin-bottom: 4px;
+      padding: 6px 8px;
+      border-bottom: 1px solid var(--border);
     }
     
     .series-events {
@@ -208,6 +188,7 @@
       flex-direction: column;
       gap: 2px;
       font-size: 9px;
+      padding: 6px 8px;
     }
     
     .series-event {
@@ -227,32 +208,6 @@
     .series-event.neutral { background: var(--bg2); color: var(--text2); }
     .series-event.orderbook { background: var(--bg2); color: var(--text2); }
     
-    .event-marker {
-      position: absolute;
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: var(--text2);
-      border: 2px solid var(--bg2);
-      transform: translate(-50%, -50%);
-      z-index: 6;
-      pointer-events: auto;
-    }
-    .event-marker.buy { background: #f97316; }
-    .event-marker.hedge { background: #f97316; }
-    .event-marker.win { background: var(--green); }
-    .event-marker.loss { background: var(--red); }
-    .event-marker.neutral { background: var(--text2); }
-    .event-marker.orderbook { background: var(--text2); }
-    
-    .no-data {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      height: 100%;
-      color: var(--text2);
-      font-size: 12px;
-    }
   </style>
 </head>
 <body>
@@ -269,10 +224,6 @@
     <div class="markets-wrapper">
       <div class="time-indicator"></div>
       <div class="markets-container" id="markets-container"></div>
-      <div class="markets-series-overlay" id="series-overlay">
-        <div class="bot-layer" data-bot="bot1"></div>
-        <div class="bot-layer" data-bot="bot2"></div>
-      </div>
     </div>
   </div>
 
@@ -284,7 +235,6 @@
     let series = { bot1: [], bot2: [] };
     let allBots = [];
     let marketsStartTime = null; // Время начала движения столбцов
-    let marketColumnWidth = 200; // Ширина столбца
     let marketDuration = 15 * 60; // 15 минут в секундах
     
     function getEventClass(type) {
@@ -470,19 +420,23 @@
         
         col.innerHTML = `
           <div class="market-header">
-            <div class="market-time">${timeInfo.time}</div>
             <div class="market-status">${marketColor === 'green' ? '🟢' : marketColor === 'red' ? '🔴' : '⚪'}</div>
-            <div class="market-slug">${market.slug.split('-').pop()}</div>
           </div>
           <div class="bot-section bot1">
             <div class="bot-label">Bot 1</div>
-            <div class="no-data">—</div>
           </div>
           <div class="bot-section bot2">
             <div class="bot-label">Bot 2</div>
-            <div class="no-data">—</div>
           </div>
         `;
+        
+        // Добавляем метку времени между столбцами (справа от текущего)
+        if (index < markets.length - 1) {
+          const label = document.createElement('div');
+          label.className = 'market-label';
+          label.textContent = timeInfo.time;
+          col.appendChild(label);
+        }
         
         container.appendChild(col);
       });
@@ -493,9 +447,12 @@
     function renderSeries() {
       if (!markets.length) return;
       
-      // Очищаем предыдущие серии
-      document.querySelectorAll('.bot-layer').forEach(layer => {
-        layer.innerHTML = '';
+      // Очищаем предыдущие серии из всех столбцов
+      document.querySelectorAll('.bot-section').forEach(section => {
+        // Удаляем все карточки, кроме bot-label
+        const label = section.querySelector('.bot-label');
+        section.innerHTML = '';
+        if (label) section.appendChild(label);
       });
       
       // Фильтруем серии, которые видны в рамках 6 столбцов
@@ -503,198 +460,147 @@
       const maxTimestamp = Math.max(...markets.map(m => m.timestamp));
       const marketInterval = 15 * 60;
       
-      // Расширяем диапазон на один интервал с каждой стороны для серий, которые могут пересекать границы
-      const extendedMin = minTimestamp - marketInterval;
-      const extendedMax = maxTimestamp + marketInterval;
-      
-      // Вычисляем высоту секции бота для позиционирования
-      const firstCol = document.querySelector('.market-column');
-      if (!firstCol) return;
-      const bot1Section = firstCol.querySelector('.bot-section.bot1');
-      const bot2Section = firstCol.querySelector('.bot-section.bot2');
-      if (!bot1Section || !bot2Section) return;
-      
-      const bot1Top = bot1Section.offsetTop;
-      const bot1Height = bot1Section.offsetHeight;
-      const bot2Top = bot2Section.offsetTop;
-      const bot2Height = bot2Section.offsetHeight;
-      
       [series.bot1, series.bot2].forEach((botSeries, botIndex) => {
         const botId = botIndex === 0 ? 'bot1' : 'bot2';
-        const botTop = botIndex === 0 ? bot1Top : bot2Top;
-        const botHeight = botIndex === 0 ? bot1Height : bot2Height;
         
         // Фильтруем только серии ETH (монитор для ETH)
-        // И только те, которые активны или недавно завершились в видимом диапазоне
         const visibleSeries = botSeries.filter(s => {
-          // Только ETH серии
           if (s.asset !== 'eth') return false;
-          
           if (!s.startedAt) return false;
           const startTime = new Date(s.startedAt).getTime() / 1000;
           const endTime = s.endedAt ? new Date(s.endedAt).getTime() / 1000 : Date.now() / 1000;
-          
-          // Серия видна, если она пересекается с видимым диапазоном
           return (startTime < maxTimestamp + marketInterval && endTime > minTimestamp - marketInterval);
         });
         
-        // Ограничиваем количество активных серий - в один момент у бота может быть только одна активная серия ETH
-        // Но показываем все завершенные серии в диапазоне
+        // Ограничиваем количество
         const activeSeries = visibleSeries.filter(s => s.status === 'active');
         const completedSeries = visibleSeries.filter(s => s.status !== 'active');
-        
-        // Если есть активная серия, показываем только её + завершенные
-        // Если активных нет, показываем все завершенные
         const seriesToShow = activeSeries.length > 0 
-          ? [...activeSeries, ...completedSeries.slice(-5)] // Активная + последние 5 завершенных
-          : completedSeries.slice(-10); // Последние 10 завершенных
+          ? [...activeSeries, ...completedSeries.slice(-5)]
+          : completedSeries.slice(-10);
         
-        seriesToShow.forEach((s, index) => {
-          renderSeriesLine(s, botId, botTop, botHeight, index, seriesToShow.length);
+        // Для каждой серии создаем карточки в соответствующих столбцах
+        seriesToShow.forEach(seriesItem => {
+          renderSeriesCard(seriesItem, botId);
         });
       });
+      
+      // Определяем цвет сигналов для каждого столбца и красим фон
+      updateColumnSignals();
     }
     
-    function renderSeriesLine(seriesItem, botId, botTop, botHeight, index, total) {
+    function renderSeriesCard(seriesItem, botId) {
       if (!seriesItem.startedAt) return;
       
       const startTime = new Date(seriesItem.startedAt).getTime() / 1000;
       const endTime = seriesItem.endedAt ? new Date(seriesItem.endedAt).getTime() / 1000 : Date.now() / 1000;
       
       // Находим столбцы, где серия активна
-      const columns = markets.map((market, idx) => {
+      markets.forEach((market, idx) => {
         const marketStart = market.timestamp;
         const marketEnd = market.timestamp + (15 * 60);
         
         // Серия пересекается с рынком, если она началась до конца рынка и закончилась после начала
         const intersects = startTime < marketEnd && endTime > marketStart;
+        if (!intersects) return;
         
-        // Собираем события для этого столбца
-        const columnEvents = (seriesItem.events || []).filter(event => {
-          if (!event.timestamp) return false;
-          const eventTime = new Date(event.timestamp).getTime() / 1000;
-          return eventTime >= marketStart && eventTime < marketEnd;
-        });
+        // Находим DOM элемент столбца
+        const colEl = document.querySelector(`[data-timestamp="${market.timestamp}"]`);
+        if (!colEl) return;
         
-        return { index: idx, market, intersects, events: columnEvents };
-      }).filter(c => c.intersects);
-      
-      if (columns.length === 0) return;
-      
-      const firstCol = columns[0];
-      const lastCol = columns[columns.length - 1];
-      
-      // Находим DOM элементы столбцов
-      const firstColEl = document.querySelector(`[data-timestamp="${firstCol.market.timestamp}"]`);
-      const lastColEl = document.querySelector(`[data-timestamp="${lastCol.market.timestamp}"]`);
-      
-      if (!firstColEl || !lastColEl) return;
-      
-      // Находим overlay слой для этого бота
-      const botLayer = document.querySelector(`.bot-layer[data-bot="${botId}"]`);
-      if (!botLayer) return;
-      
-      // Вычисляем позицию карточки относительно markets-container
-      const marketsContainer = document.getElementById('markets-container');
-      const firstColRect = firstColEl.getBoundingClientRect();
-      const lastColRect = lastColEl.getBoundingClientRect();
-      const marketsRect = marketsContainer.getBoundingClientRect();
-      
-      const left = firstColRect.left - marketsRect.left;
-      const width = lastColRect.right - firstColRect.left;
-      const top = botTop + (botHeight / (total + 1)) * (index + 1);
-      
-      // Вычисляем максимальное количество событий во ВСЕХ столбцах для определения высоты
-      const allColumnsForHeight = markets.slice(firstCol.index, lastCol.index + 1);
-      const maxEvents = Math.max(...allColumnsForHeight.map(market => {
-        const marketStart = market.timestamp;
-        const marketEnd = market.timestamp + (15 * 60);
-        return (seriesItem.events || []).filter(event => {
-          if (!event.timestamp) return false;
-          const eventTime = new Date(event.timestamp).getTime() / 1000;
-          return eventTime >= marketStart && eventTime < marketEnd;
-        }).length;
-      }), 1);
-      const cardHeight = Math.max(60, 40 + (maxEvents * 18)); // Минимум 60px, +18px на событие
-      
-      // Создаем карточку серии
-      const card = document.createElement('div');
-      card.className = `series-card ${getSeriesClass(seriesItem.status)}`;
-      card.style.left = `${left}px`;
-      card.style.width = `${width}px`;
-      card.style.top = `${top}px`;
-      card.style.height = `${cardHeight}px`;
-      card.dataset.seriesId = seriesItem._id || seriesItem.id;
-      
-      // Добавляем информацию о серии в заголовок
-      const statusEmoji = seriesItem.status === 'won' ? '✅' : seriesItem.status === 'lost' ? '❌' : seriesItem.status === 'active' ? '🔄' : seriesItem.status === 'cooldown' ? '⏸️' : '⛔';
-      const pnl = seriesItem.totalPnL || 0;
-      const pnlText = pnl >= 0 ? `+$${pnl.toFixed(2)}` : `-$${Math.abs(pnl).toFixed(2)}`;
-      const stepInfo = seriesItem.status === 'active' ? ` Step ${seriesItem.currentStep || 1}` : '';
-      const assetText = seriesItem.asset ? seriesItem.asset.toUpperCase() : '';
-      
-      // Создаем части карточки для каждого столбца, где серия активна
-      // Но нужно создать части для ВСЕХ столбцов между первым и последним
-      const allColumns = markets.slice(firstCol.index, lastCol.index + 1);
-      
-      console.log(`[MONITOR] Series ${seriesItem._id}: firstCol.index=${firstCol.index}, lastCol.index=${lastCol.index}, allColumns.length=${allColumns.length}`);
-      
-      allColumns.forEach((market, idx) => {
-        const colPart = document.createElement('div');
-        colPart.className = 'series-column';
+        // Находим секцию бота в этом столбце
+        const botSection = colEl.querySelector(`.bot-section.${botId}`);
+        if (!botSection) return;
         
         // Находим события для этого столбца
-        const marketStart = market.timestamp;
-        const marketEnd = market.timestamp + (15 * 60);
         const columnEvents = (seriesItem.events || []).filter(event => {
           if (!event.timestamp) return false;
           const eventTime = new Date(event.timestamp).getTime() / 1000;
           return eventTime >= marketStart && eventTime < marketEnd;
         });
         
-        // Заголовок с информацией о серии (только в первом столбце)
-        if (idx === 0) {
+        // Создаем карточку для этого столбца
+        const card = document.createElement('div');
+        card.className = `series-card ${getSeriesClass(seriesItem.status)}`;
+        card.dataset.seriesId = seriesItem._id || seriesItem.id;
+        
+        // Заголовок с информацией о серии (только если это первый столбец серии)
+        const isFirstColumn = idx === 0 || !markets.slice(0, idx).some(m => {
+          const mStart = m.timestamp;
+          const mEnd = m.timestamp + (15 * 60);
+          return startTime < mEnd && endTime > mStart;
+        });
+        
+        const statusEmoji = seriesItem.status === 'won' ? '✅' : seriesItem.status === 'lost' ? '❌' : seriesItem.status === 'active' ? '🔄' : seriesItem.status === 'cooldown' ? '⏸️' : '⛔';
+        const pnl = seriesItem.totalPnL || 0;
+        const pnlText = pnl >= 0 ? `+$${pnl.toFixed(2)}` : `-$${Math.abs(pnl).toFixed(2)}`;
+        const stepInfo = seriesItem.status === 'active' ? ` Step ${seriesItem.currentStep || 1}` : '';
+        const assetText = seriesItem.asset ? seriesItem.asset.toUpperCase() : '';
+        
+        if (isFirstColumn) {
           const header = document.createElement('div');
           header.className = 'series-header';
           header.textContent = `${statusEmoji} ${assetText} ${pnlText}${stepInfo}`;
-          colPart.appendChild(header);
-        } else {
-          const header = document.createElement('div');
-          header.className = 'series-header';
-          header.textContent = ' ';
-          colPart.appendChild(header);
+          card.appendChild(header);
         }
         
         // События этого столбца
         const eventsContainer = document.createElement('div');
         eventsContainer.className = 'series-events';
         
-        if (columnEvents.length === 0) {
-          // Если нет событий, показываем пустое место
-          const emptyEvent = document.createElement('div');
-          emptyEvent.className = 'series-event';
-          emptyEvent.style.opacity = '0.3';
-          emptyEvent.textContent = '—';
-          eventsContainer.appendChild(emptyEvent);
-        } else {
-          columnEvents.forEach(event => {
-            const eventEl = document.createElement('div');
-            eventEl.className = `series-event ${getEventClass(event.type)}`;
-            const time = fmtTime(event.timestamp);
-            // Обрезаем длинные сообщения
-            const message = (event.message || event.type).substring(0, 50);
-            eventEl.textContent = `${time} ${message}`;
-            eventEl.title = `${time}: ${event.message || event.type}`;
-            eventsContainer.appendChild(eventEl);
-          });
-        }
+        columnEvents.forEach(event => {
+          const eventEl = document.createElement('div');
+          eventEl.className = `series-event ${getEventClass(event.type)}`;
+          const time = fmtTime(event.timestamp);
+          const message = (event.message || event.type).substring(0, 50);
+          eventEl.textContent = `${time} ${message}`;
+          eventEl.title = `${time}: ${event.message || event.type}`;
+          eventsContainer.appendChild(eventEl);
+        });
         
-        colPart.appendChild(eventsContainer);
-        card.appendChild(colPart);
+        card.appendChild(eventsContainer);
+        card.title = `${assetText} ${seriesItem.status} - P&L: ${pnlText}${stepInfo}`;
+        botSection.appendChild(card);
       });
-      
-      card.title = `${assetText} ${seriesItem.status} - P&L: ${pnlText}${stepInfo}`;
-      botLayer.appendChild(card);
+    }
+    
+    function updateColumnSignals() {
+      // Определяем цвет сигнала для каждого столбца на основе событий series_opened
+      markets.forEach(market => {
+        const colEl = document.querySelector(`[data-timestamp="${market.timestamp}"]`);
+        if (!colEl) return;
+        
+        // Ищем событие series_opened для этого рынка
+        let signalColor = null;
+        [series.bot1, series.bot2].forEach(botSeries => {
+          botSeries.forEach(s => {
+            if (s.asset !== 'eth' || !s.events) return;
+            const marketStart = market.timestamp;
+            const marketEnd = market.timestamp + (15 * 60);
+            
+            const signalEvent = s.events.find(event => {
+              if (event.type !== 'series_opened') return false;
+              if (!event.timestamp) return false;
+              const eventTime = new Date(event.timestamp).getTime() / 1000;
+              return eventTime >= marketStart && eventTime < marketEnd;
+            });
+            
+            if (signalEvent) {
+              // Определяем цвет из сообщения (🟢 или 🔴)
+              if (signalEvent.message && signalEvent.message.includes('🟢')) {
+                signalColor = 'green';
+              } else if (signalEvent.message && signalEvent.message.includes('🔴')) {
+                signalColor = 'red';
+              }
+            }
+          });
+        });
+        
+        // Красим фон столбца
+        if (signalColor) {
+          colEl.classList.add(`${signalColor}-bg`);
+        }
+      });
     }
     
     function updateMarketsPosition() {
@@ -716,14 +622,16 @@
       
       // Позиция текущего столбца относительно начала контейнера (без учета transform)
       const currentColIndex = markets.findIndex(m => m.isCurrent);
-      const currentColPosition = currentColIndex * marketColumnWidth;
+      const currentCol = document.querySelector(`[data-timestamp="${currentMarket.timestamp}"]`);
+      const currentColWidth = currentCol ? currentCol.offsetWidth : wrapperWidth / markets.length;
+      const currentColPosition = currentColIndex * currentColWidth;
       
       // Столбцы двигаются ВЛЕВО
       // В начале периода (progress=0) столбец должен быть справа от индикатора
       // К концу периода (progress=1) столбец должен быть слева от индикатора
       // За 15 минут столбец проходит расстояние = ширина столбца влево
       const startOffset = indicatorPosition - currentColPosition; // В начале столбец на позиции индикатора
-      const endOffset = indicatorPosition - currentColPosition - marketColumnWidth; // В конце столбец сдвинулся влево на ширину
+      const endOffset = indicatorPosition - currentColPosition - currentColWidth; // В конце столбец сдвинулся влево на ширину
       const targetOffset = startOffset + (progress * (endOffset - startOffset));
       
       const container = document.getElementById('markets-container');
