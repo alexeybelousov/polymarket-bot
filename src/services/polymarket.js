@@ -400,6 +400,38 @@ async function getOrderBookSize(tokenId) {
   }
 }
 
+/**
+ * Получить детальную информацию об order book для токена
+ * @param {string} tokenId - ID токена
+ * @returns {Promise<{bids: Array<{price: number, size: number}>, asks: Array<{price: number, size: number}>} | null>}
+ */
+async function getOrderBookDetails(tokenId) {
+  try {
+    const { data } = await clob.get('/book', {
+      params: {
+        token_id: tokenId,
+      },
+    });
+    
+    if (!data || !data.bids || !data.asks) return null;
+    
+    const bids = data.bids.map(bid => ({
+      price: parseFloat(bid.price || 0),
+      size: parseFloat(bid.size || 0),
+    }));
+    
+    const asks = data.asks.map(ask => ({
+      price: parseFloat(ask.price || 0),
+      size: parseFloat(ask.size || 0),
+    }));
+    
+    return { bids, asks };
+  } catch (error) {
+    console.error(`Error getting order book details for token ${tokenId}:`, error.message);
+    return null;
+  }
+}
+
 module.exports = {
   get15mContext,
   getMarketUrl,
@@ -410,4 +442,5 @@ module.exports = {
   getBuyPrice,
   getSellPrice,
   getOrderBookSize,
+  getOrderBookDetails,
 };

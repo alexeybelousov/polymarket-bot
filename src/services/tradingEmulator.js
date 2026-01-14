@@ -667,6 +667,27 @@ class TradingEmulator {
           message: `📤 Продал Step ${pos.step}: ${pos.shares.toFixed(2)} shares- по $${sellPrice.toFixed(2)} (${sellHash}) = $${netReturn.toFixed(2)}`,
         });
         
+        // Если это Step 1, получаем детальную информацию об order book и добавляем отдельное событие
+        if (sellTokenId) {
+          try {
+            const orderBookDetails = await polymarket.getOrderBookDetails(sellTokenId);
+            if (orderBookDetails) {
+              const bidsText = orderBookDetails.bids.map(bid => `$${bid.price.toFixed(2)}:${bid.size.toFixed(2)}`).join(', ');
+              const asksText = orderBookDetails.asks.map(ask => `$${ask.price.toFixed(2)}:${ask.size.toFixed(2)}`).join(', ');
+              series.addEvent('order_book', {
+                step: 1,
+                message: `📊 Order Book: Bids [${bidsText}] | Asks [${asksText}]`,
+                data: {
+                  bids: orderBookDetails.bids,
+                  asks: orderBookDetails.asks,
+                },
+              });
+            }
+          } catch (error) {
+            console.error(`[TRADE] Error getting order book details for Step 1:`, error.message);
+          }
+        }
+        
         console.log(`[TRADE] [${this.botId}] Sold ${pos.shares.toFixed(2)} shares- по $${sellPrice.toFixed(3)} = $${grossReturn.toFixed(2)} - $${exitFee.toFixed(2)} fee = $${netReturn.toFixed(2)}`);
       }
     }
@@ -714,7 +735,7 @@ class TradingEmulator {
     const polySlug = this.convertToPolymarketSlug(hedgePosition.marketSlug);
     let sellPrice = null;
     let sellTokenId = null;
-    let orderBookSize = null;
+    let orderBookDetails = null;
     
     try {
       const priceData = await polymarket.getSellPrice(polySlug, betOutcome);
@@ -723,15 +744,17 @@ class TradingEmulator {
         sellTokenId = priceData.tokenId;
         console.log(`[TRADE] [${this.botId}] Got sell price for hedge ${polySlug}: $${sellPrice.toFixed(3)}`);
         
-        // Если это продажа за 20 секунд до конца, получаем размер order book
+        // Если это продажа за 20 секунд до конца, получаем детальную информацию об order book
         if (timeToEnd !== null && timeToEnd <= 20 && sellTokenId) {
           try {
-            orderBookSize = await polymarket.getOrderBookSize(sellTokenId);
-            if (orderBookSize) {
-              console.log(`[TRADE] [${this.botId}] Order book size for hedge: ${orderBookSize.totalSize.toFixed(2)} (bids: ${orderBookSize.bidsSize.toFixed(2)}, asks: ${orderBookSize.asksSize.toFixed(2)})`);
+            orderBookDetails = await polymarket.getOrderBookDetails(sellTokenId);
+            if (orderBookDetails) {
+              const bidsTotal = orderBookDetails.bids.reduce((sum, bid) => sum + bid.size, 0);
+              const asksTotal = orderBookDetails.asks.reduce((sum, ask) => sum + ask.size, 0);
+              console.log(`[TRADE] [${this.botId}] Order book details for hedge: bids: ${bidsTotal.toFixed(2)}, asks: ${asksTotal.toFixed(2)}`);
             }
           } catch (error) {
-            console.error(`[TRADE] Error getting order book size:`, error.message);
+            console.error(`[TRADE] Error getting order book details:`, error.message);
           }
         }
       }
@@ -773,15 +796,25 @@ class TradingEmulator {
     // Событие: продали хедж
     const sellHash = sellTokenId ? getShortHash(sellTokenId) : '';
     const priceText = sellPrice ? `по $${sellPrice.toFixed(2)} (${sellHash})` : '';
-    let orderBookText = '';
-    if (orderBookSize && timeToEnd !== null && timeToEnd <= 20) {
-      orderBookText = ` | OB: ${orderBookSize.totalSize.toFixed(2)}`;
-    }
     series.addEvent('sell_hedge', {
       amount: returnAmount,
       step: hedgeStep,
-      message: `📤 Продал хедж Step ${hedgeStep}${priceText ? ` ${priceText}` : ''}${orderBookText}: вернул $${returnAmount.toFixed(2)} ($${loss.toFixed(2)})`,
+      message: `📤 Продал хедж Step ${hedgeStep}${priceText ? ` ${priceText}` : ''}: вернул $${returnAmount.toFixed(2)} ($${loss.toFixed(2)})`,
     });
+    
+    // Если есть детальная информация об order book, добавляем отдельное событие
+    if (orderBookDetails && timeToEnd !== null && timeToEnd <= 20) {
+      const bidsText = orderBookDetails.bids.map(bid => `$${bid.price.toFixed(2)}:${bid.size.toFixed(2)}`).join(', ');
+      const asksText = orderBookDetails.asks.map(ask => `$${ask.price.toFixed(2)}:${ask.size.toFixed(2)}`).join(', ');
+      series.addEvent('order_book', {
+        step: hedgeStep,
+        message: `📊 Order Book: Bids [${bidsText}] | Asks [${asksText}]`,
+        data: {
+          bids: orderBookDetails.bids,
+          asks: orderBookDetails.asks,
+        },
+      });
+    }
     
     await series.save();
     console.log(`[TRADE] [${this.botId}] ${asset}: 📤 SELL HEDGE - Returned $${returnAmount.toFixed(2)} (Step ${hedgeStep})`);
