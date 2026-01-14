@@ -21,13 +21,12 @@
     }
     
     .monitor-container {
-      display: grid;
-      grid-template-columns: 80px 1fr;
+      display: flex;
+      flex-direction: column;
       height: 100vh;
     }
     
     header {
-      grid-column: 1 / -1;
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -44,27 +43,6 @@
     a { color: var(--text2); text-decoration: none; }
     a:hover { color: var(--text); }
     
-    .time-scale {
-      background: var(--bg2);
-      border-right: 1px solid var(--border);
-      padding: 16px 8px;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      overflow-y: auto;
-    }
-    .time-marker {
-      font-size: 11px;
-      color: var(--text2);
-      text-align: center;
-      padding: 4px;
-      border-top: 1px solid var(--border);
-    }
-    .time-marker.current {
-      color: var(--blue);
-      font-weight: 600;
-      border-top-color: var(--blue);
-    }
     
     .markets-wrapper {
       overflow-x: auto;
@@ -172,11 +150,28 @@
       z-index: 5;
       opacity: 0.6;
       pointer-events: auto;
+      display: flex;
+      align-items: center;
+      padding: 0 4px;
     }
     .series-line.won { background: var(--green); opacity: 1; }
     .series-line.lost { background: var(--red); opacity: 1; }
     .series-line.active { background: var(--blue); opacity: 1; }
     .series-line.cooldown { background: var(--text2); opacity: 0.5; }
+    
+    .series-label {
+      position: absolute;
+      left: 4px;
+      top: -8px;
+      font-size: 9px;
+      color: var(--text);
+      background: var(--bg3);
+      padding: 1px 4px;
+      border-radius: 2px;
+      white-space: nowrap;
+      pointer-events: none;
+      border: 1px solid var(--border);
+    }
     
     .event-marker {
       position: absolute;
@@ -216,8 +211,6 @@
         <a href="/logs">logs</a>
       </div>
     </header>
-    
-    <div class="time-scale" id="time-scale"></div>
     
     <div class="markets-wrapper">
       <div class="markets-container" id="markets-container"></div>
@@ -370,6 +363,7 @@
       }
     }
     
+    
     async function loadSeries() {
       try {
         const [bot1Res, bot2Res] = await Promise.all([
@@ -387,32 +381,6 @@
       } catch(e) { 
         console.error('[MONITOR] Error loading series:', e); 
       }
-    }
-    
-    function renderTimeScale() {
-      const scaleEl = document.getElementById('time-scale');
-      if (!scaleEl) {
-        console.error('[MONITOR] Time scale element not found');
-        return;
-      }
-      
-      scaleEl.innerHTML = '';
-      
-      if (!markets || markets.length === 0) {
-        console.warn('[MONITOR] No markets to render in time scale');
-        return;
-      }
-      
-      markets.forEach((market, index) => {
-        const timeInfo = getMarketTime(market.timestamp);
-        const marker = document.createElement('div');
-        marker.className = `time-marker ${market.isCurrent ? 'current' : ''}`;
-        marker.textContent = timeInfo.time;
-        marker.title = timeInfo.full;
-        scaleEl.appendChild(marker);
-      });
-      
-      console.log('[MONITOR] Time scale rendered with', markets.length, 'markers');
     }
     
     function renderMarkets() {
@@ -453,7 +421,6 @@
         container.appendChild(col);
       });
       
-      renderTimeScale();
       renderSeries();
     }
     
@@ -557,7 +524,20 @@
       line.style.width = `${width}px`;
       line.style.top = `${top}px`;
       line.dataset.seriesId = seriesItem._id || seriesItem.id;
-      line.title = `${seriesItem.asset.toUpperCase()} ${seriesItem.status} - P&L: $${(seriesItem.totalPnL || 0).toFixed(2)}`;
+      
+      // Добавляем информацию о серии
+      const statusEmoji = seriesItem.status === 'won' ? '✅' : seriesItem.status === 'lost' ? '❌' : seriesItem.status === 'active' ? '🔄' : seriesItem.status === 'cooldown' ? '⏸️' : '⛔';
+      const pnl = seriesItem.totalPnL || 0;
+      const pnlText = pnl >= 0 ? `+$${pnl.toFixed(2)}` : `-$${Math.abs(pnl).toFixed(2)}`;
+      const stepInfo = seriesItem.status === 'active' ? ` Step ${seriesItem.currentStep || 1}` : '';
+      
+      const label = document.createElement('div');
+      label.className = 'series-label';
+      label.textContent = `${statusEmoji} ${pnlText}${stepInfo}`;
+      label.title = `${seriesItem.asset.toUpperCase()} ${seriesItem.status} - P&L: ${pnlText}${stepInfo}`;
+      
+      line.appendChild(label);
+      line.title = `${seriesItem.asset.toUpperCase()} ${seriesItem.status} - P&L: ${pnlText}${stepInfo}`;
       
       botLayer.appendChild(line);
       
