@@ -578,8 +578,17 @@
       const width = lastColRect.right - firstColRect.left;
       const top = botTop + (botHeight / (total + 1)) * (index + 1);
       
-      // Вычисляем максимальное количество событий в столбце для определения высоты
-      const maxEvents = Math.max(...columns.map(c => c.events.length), 1);
+      // Вычисляем максимальное количество событий во ВСЕХ столбцах для определения высоты
+      const allColumnsForHeight = markets.slice(firstCol.index, lastCol.index + 1);
+      const maxEvents = Math.max(...allColumnsForHeight.map(market => {
+        const marketStart = market.timestamp;
+        const marketEnd = market.timestamp + (15 * 60);
+        return (seriesItem.events || []).filter(event => {
+          if (!event.timestamp) return false;
+          const eventTime = new Date(event.timestamp).getTime() / 1000;
+          return eventTime >= marketStart && eventTime < marketEnd;
+        }).length;
+      }), 1);
       const cardHeight = Math.max(60, 40 + (maxEvents * 18)); // Минимум 60px, +18px на событие
       
       // Создаем карточку серии
@@ -598,13 +607,25 @@
       const stepInfo = seriesItem.status === 'active' ? ` Step ${seriesItem.currentStep || 1}` : '';
       const assetText = seriesItem.asset ? seriesItem.asset.toUpperCase() : '';
       
-      // Создаем части карточки для каждого столбца
-      columns.forEach(col => {
+      // Создаем части карточки для каждого столбца, где серия активна
+      // Но нужно создать части для ВСЕХ столбцов между первым и последним
+      const allColumns = markets.slice(firstCol.index, lastCol.index + 1);
+      
+      allColumns.forEach((market, idx) => {
         const colPart = document.createElement('div');
         colPart.className = 'series-column';
         
+        // Находим события для этого столбца
+        const marketStart = market.timestamp;
+        const marketEnd = market.timestamp + (15 * 60);
+        const columnEvents = (seriesItem.events || []).filter(event => {
+          if (!event.timestamp) return false;
+          const eventTime = new Date(event.timestamp).getTime() / 1000;
+          return eventTime >= marketStart && eventTime < marketEnd;
+        });
+        
         // Заголовок с информацией о серии (только в первом столбце)
-        if (col === firstCol) {
+        if (idx === 0) {
           const header = document.createElement('div');
           header.className = 'series-header';
           header.textContent = `${statusEmoji} ${assetText} ${pnlText}${stepInfo}`;
@@ -620,14 +641,25 @@
         const eventsContainer = document.createElement('div');
         eventsContainer.className = 'series-events';
         
-        col.events.forEach(event => {
-          const eventEl = document.createElement('div');
-          eventEl.className = `series-event ${getEventClass(event.type)}`;
-          const time = fmtTime(event.timestamp);
-          eventEl.textContent = `${time} ${event.message || event.type}`;
-          eventEl.title = `${time}: ${event.message || event.type}`;
-          eventsContainer.appendChild(eventEl);
-        });
+        if (columnEvents.length === 0) {
+          // Если нет событий, показываем пустое место
+          const emptyEvent = document.createElement('div');
+          emptyEvent.className = 'series-event';
+          emptyEvent.style.opacity = '0.3';
+          emptyEvent.textContent = '—';
+          eventsContainer.appendChild(emptyEvent);
+        } else {
+          columnEvents.forEach(event => {
+            const eventEl = document.createElement('div');
+            eventEl.className = `series-event ${getEventClass(event.type)}`;
+            const time = fmtTime(event.timestamp);
+            // Обрезаем длинные сообщения
+            const message = (event.message || event.type).substring(0, 50);
+            eventEl.textContent = `${time} ${message}`;
+            eventEl.title = `${time}: ${event.message || event.type}`;
+            eventsContainer.appendChild(eventEl);
+          });
+        }
         
         colPart.appendChild(eventsContainer);
         card.appendChild(colPart);
