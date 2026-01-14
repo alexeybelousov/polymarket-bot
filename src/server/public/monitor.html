@@ -667,18 +667,20 @@
       const currentColPosition = currentColIndex * currentColWidth;
       
       // Столбцы двигаются ВЛЕВО
-      // В начале периода (progress=0) столбец должен быть справа от индикатора
-      // К концу периода (progress=1) столбец должен быть слева от индикатора
-      // За 15 минут столбец проходит расстояние = ширина столбца влево
-      const startOffset = indicatorPosition - currentColPosition; // В начале столбец на позиции индикатора
-      const endOffset = indicatorPosition - currentColPosition - currentColWidth; // В конце столбец сдвинулся влево на ширину
-      const baseOffset = startOffset + (progress * (endOffset - startOffset));
+      // Линия NOW должна быть точно на границе между текущим и следующим столбцом
+      // В начале периода (progress=0): линия на правой границе текущего столбца
+      // В конце периода (progress=1): линия на правой границе следующего столбца
       
-      // Корректируем позицию линии NOW: она должна быть точно на границе между столбцами
-      // В начале периода (progress=0) линия на правой границе текущего столбца
-      // В конце периода (progress=1) линия на правой границе следующего столбца
-      const lineCorrection = progress * currentColWidth;
-      const targetOffset = baseOffset - lineCorrection;
+      // Позиция правой границы текущего столбца
+      const currentColRightEdge = currentColPosition + currentColWidth;
+      // Позиция правой границы следующего столбца
+      const nextColRightEdge = currentColRightEdge + currentColWidth;
+      
+      // Позиция линии NOW должна быть между этими границами
+      const targetLinePosition = currentColRightEdge + (progress * currentColWidth);
+      
+      // Смещаем контейнер так, чтобы линия NOW была на нужной позиции
+      const targetOffset = indicatorPosition - targetLinePosition;
       
       const container = document.getElementById('markets-container');
       if (container) {
