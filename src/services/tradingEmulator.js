@@ -154,18 +154,40 @@ class TradingEmulator {
     // Получаем цену для проверки максимального лимита
     const polySlug = this.convertToPolymarketSlug(nextMarketSlug);
     let buyPrice = null;
+    let errorReason = 'unknown';
+    let errorMessage = '';
+    
     try {
       const polymarket = require('./polymarket');
       const priceData = await polymarket.getBuyPrice(polySlug, betOutcome);
       if (priceData && priceData.price) {
         buyPrice = priceData.price;
+      } else {
+        errorReason = 'price_unavailable';
+        errorMessage = `Не удалось получить цену для ${polySlug}`;
       }
     } catch (error) {
-      console.error(`[TRADE] Error getting price for check:`, error.message);
+      console.error(`[TRADE] [${this.botId}] Error getting price for check:`, error.message);
+      if (error.response?.status === 404) {
+        errorReason = 'market_not_found';
+        errorMessage = `Рынок ${polySlug} не найден в Polymarket`;
+      } else {
+        errorReason = 'api_error';
+        errorMessage = `Ошибка API: ${error.message}`;
+      }
     }
     
     if (!buyPrice) {
-      console.log(`[TRADE] [${this.botId}] ${type.toUpperCase()}: Cannot get price, skipping`);
+      const reasonText = errorReason === 'market_not_found' 
+        ? `MARKET_NOT_FOUND: ${errorMessage}`
+        : `CANNOT_GET_PRICE: ${errorMessage || `Не удалось получить цену для ${polySlug}`}`;
+      console.log(`[TRADE] [${this.botId}] ${type.toUpperCase()}: Cannot get price (${errorReason}), skipping`);
+      await this.log(type, polySlug, reasonText, {
+        action: 'price_check_failed',
+        betOutcome,
+        errorReason,
+        errorMessage,
+      });
       return;
     }
     
@@ -234,6 +256,9 @@ class TradingEmulator {
     
     let price = null;
     let tokenId = null;
+    let errorReason = 'unknown';
+    let errorMessage = '';
+    
     try {
       const polymarket = require('./polymarket');
       const priceData = await polymarket.getBuyPrice(polySlug, betOutcome);
@@ -241,17 +266,37 @@ class TradingEmulator {
         price = priceData.price;
         tokenId = priceData.tokenId;
         console.log(`[TRADE] [${this.botId}] Got Polymarket price for ${polySlug}: $${price.toFixed(3)} (tokenId: ${tokenId})`);
+      } else {
+        errorReason = 'price_unavailable';
+        errorMessage = `Не удалось получить цену для ${polySlug}`;
       }
     } catch (error) {
-      console.error(`[TRADE] Error getting Polymarket price for ${polySlug}:`, error.message);
+      console.error(`[TRADE] [${this.botId}] Error getting Polymarket price for ${polySlug}:`, error.message);
+      if (error.response?.status === 404) {
+        errorReason = 'market_not_found';
+        errorMessage = `Рынок ${polySlug} не найден в Polymarket`;
+      } else {
+        errorReason = 'api_error';
+        errorMessage = `Ошибка API: ${error.message}`;
+      }
     }
     
     // Если цена не получена — отменяем покупку
     if (!price) {
-      console.warn(`[TRADE] Cannot get price for ${polySlug}, skipping buy`);
+      const reasonText = errorReason === 'market_not_found' 
+        ? `MARKET_NOT_FOUND: ${errorMessage} (Step ${series.currentStep})`
+        : `CANNOT_GET_PRICE: ${errorMessage || `Не удалось получить цену для ${polySlug}`} (Step ${series.currentStep})`;
+      console.warn(`[TRADE] [${this.botId}] Cannot get price for ${polySlug} (${errorReason}), skipping buy`);
       series.addEvent('price_error', {
         message: `❌ Не удалось получить цену для ${polySlug}`,
         slug: polySlug,
+      });
+      await this.log(series.asset, polySlug, reasonText, {
+        action: 'buy_failed',
+        step: series.currentStep,
+        seriesId: series._id,
+        errorReason,
+        errorMessage,
       });
       return false;
     }
@@ -380,6 +425,9 @@ class TradingEmulator {
     
     let price = null;
     let tokenId = null;
+    let errorReason = 'unknown';
+    let errorMessage = '';
+    
     try {
       const polymarket = require('./polymarket');
       const priceData = await polymarket.getBuyPrice(polySlug, betOutcome);
@@ -387,17 +435,37 @@ class TradingEmulator {
         price = priceData.price;
         tokenId = priceData.tokenId;
         console.log(`[TRADE] [${this.botId}] Got Polymarket price for hedge ${polySlug}: $${price.toFixed(3)} (tokenId: ${tokenId})`);
+      } else {
+        errorReason = 'price_unavailable';
+        errorMessage = `Не удалось получить цену хеджа для ${polySlug}`;
       }
     } catch (error) {
-      console.error(`[TRADE] Error getting Polymarket price for hedge ${polySlug}:`, error.message);
+      console.error(`[TRADE] [${this.botId}] Error getting Polymarket price for hedge ${polySlug}:`, error.message);
+      if (error.response?.status === 404) {
+        errorReason = 'market_not_found';
+        errorMessage = `Рынок ${polySlug} не найден в Polymarket`;
+      } else {
+        errorReason = 'api_error';
+        errorMessage = `Ошибка API: ${error.message}`;
+      }
     }
     
     // Если цена не получена — отменяем хедж
     if (!price) {
-      console.warn(`[TRADE] Cannot get price for hedge ${polySlug}, skipping`);
+      const reasonText = errorReason === 'market_not_found' 
+        ? `MARKET_NOT_FOUND_HEDGE: ${errorMessage} (Step ${nextStep})`
+        : `CANNOT_GET_PRICE_HEDGE: ${errorMessage || `Не удалось получить цену хеджа для ${polySlug}`} (Step ${nextStep})`;
+      console.warn(`[TRADE] [${this.botId}] Cannot get price for hedge ${polySlug} (${errorReason}), skipping`);
       series.addEvent('price_error', {
         message: `❌ Не удалось получить цену хеджа для ${polySlug}`,
         slug: polySlug,
+      });
+      await this.log(asset, polySlug, reasonText, {
+        action: 'hedge_failed',
+        step: nextStep,
+        seriesId: series._id,
+        errorReason,
+        errorMessage,
       });
       await series.save();
       return;
