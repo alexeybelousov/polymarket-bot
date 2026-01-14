@@ -22,6 +22,7 @@ const eventSchema = new mongoose.Schema({
       'price_error',      // Не удалось получить цену
       'hedge_bought',     // Куплен хедж
       'hedge_sold',       // Продан хедж
+      'order_book',       // Информация об order book
     ],
     required: true 
   },
