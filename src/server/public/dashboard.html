@@ -66,6 +66,7 @@
     .series-card.won { border-color: var(--green); }
     .series-card.lost { border-color: var(--red); }
     .series-card.cancelled { border-color: var(--yellow); }
+    .series-card.cooldown { border-color: var(--text2); opacity: 0.7; }
     .series-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
     .series-asset { font-weight: 600; font-size: 16px; }
     .series-status { font-size: 12px; padding: 4px 8px; border-radius: 4px; }
@@ -73,6 +74,7 @@
     .series-status.won { background: rgba(34, 197, 94, 0.2); color: var(--green); }
     .series-status.lost { background: rgba(239, 68, 68, 0.2); color: var(--red); }
     .series-status.cancelled { background: rgba(234, 179, 8, 0.2); color: var(--yellow); }
+    .series-status.cooldown { background: rgba(113, 113, 122, 0.2); color: var(--text2); }
     .series-info { display: flex; gap: 16px; margin-bottom: 12px; font-size: 12px; color: var(--text2); }
     .series-info span { display: flex; align-items: center; gap: 4px; }
 
@@ -368,6 +370,7 @@
     const emoji = c => c === 'green' ? '🟢' : c === 'red' ? '🔴' : '⚪';
     const fmt = s => `${Math.floor(s/60)}:${(s%60).toString().padStart(2,'0')}`;
     const fmtTime = ts => new Date(ts).toLocaleTimeString('ru', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    const MS_PER_MINUTE = 60 * 1000;
     
     let currentFilter = 'all';
     let currentPeriod = 'all';
@@ -600,6 +603,7 @@
       if (type === 'order_book') return 'orderbook';
       if (type.includes('won') || type === 'series_won') return 'win';
       if (type.includes('lost') || type === 'series_lost') return 'loss';
+      if (type === 'cooldown_started' || type === 'cooldown_ended') return 'neutral';
       if (type === 'waiting_market' || type === 'market_active' || type === 'signal_cancelled' || type === 'series_cancelled') return 'neutral';
       return '';
     }
@@ -629,9 +633,26 @@
         // Находим maxSteps для этой серии по botId
         const bot = allBots.find(b => b.botId === s.botId);
         const maxSteps = bot?.config?.maxSteps || 4; // Fallback на 4 для старых данных
-        const statusText = s.status === 'active' ? `Step ${s.currentStep}/${maxSteps}` : 
-                          s.status === 'won' ? 'ПРОФИТ' : 
-                          s.status === 'cancelled' ? 'ОТМЕНА' : 'УБЫТОК';
+        let statusText = '';
+        if (s.status === 'active') {
+          statusText = `Step ${s.currentStep}/${maxSteps}`;
+        } else if (s.status === 'cooldown') {
+          const now = new Date();
+          const endedAt = s.endedAt ? new Date(s.endedAt) : null;
+          if (endedAt && endedAt > now) {
+            const remainingMs = endedAt - now;
+            const remainingMin = Math.ceil(remainingMs / MS_PER_MINUTE);
+            statusText = `⏸️ Cooldown: ${remainingMin} мин`;
+          } else {
+            statusText = '⏸️ Cooldown';
+          }
+        } else if (s.status === 'won') {
+          statusText = 'ПРОФИТ';
+        } else if (s.status === 'cancelled') {
+          statusText = 'ОТМЕНА';
+        } else {
+          statusText = 'УБЫТОК';
+        }
         const pnlText = s.totalPnL ? (s.totalPnL >= 0 ? `+$${s.totalPnL.toFixed(2)}` : `-$${Math.abs(s.totalPnL).toFixed(2)}`) : '';
 
         const timeline = (s.events || []).map(e => {
@@ -646,9 +667,13 @@
         const seriesId = s._id || s.id || '';
         const fullId = seriesId ? seriesId.toString() : '';
         
+        const assetText = s.status === 'cooldown' 
+          ? `⏸️ Cooldown: ${s.asset.toUpperCase()}`
+          : `${s.asset.toUpperCase()} ${betEmoji}`;
+        
         return `<div class="series-card ${s.status}">
           <div class="series-header">
-            <span class="series-asset">${s.asset.toUpperCase()} ${betEmoji}${fullId ? ` <span style="opacity: 0.6; font-size: 0.65em; font-family: monospace;">[${fullId}]</span>` : ''}</span>
+            <span class="series-asset">${assetText}${fullId ? ` <span style="opacity: 0.6; font-size: 0.65em; font-family: monospace;">[${fullId}]</span>` : ''}</span>
             <span class="series-status ${s.status}">${statusText}</span>
           </div>
           <div class="series-info">
@@ -703,28 +728,28 @@
       let activeSeries = [];
       
       if (currentPeriod === 'all') {
-        // P&L "Всего" - считаем из всех завершенных серий выбранной валюты
+        // P&L "Всего" - считаем из всех завершенных серий выбранной валюты (исключаем cooldown)
         const assetSeries = filterByAsset(allSeries);
-        completedSeries = assetSeries.filter(s => s.status !== 'active');
-        activeSeries = assetSeries.filter(s => s.status === 'active');
+        completedSeries = assetSeries.filter(s => s.status !== 'active' && s.status !== 'cooldown');
+        activeSeries = assetSeries.filter(s => s.status === 'active' || s.status === 'cooldown');
         pnl = completedSeries.reduce((sum, s) => sum + (s.totalPnL || 0), 0);
       } else {
-        // P&L за период — сумма из серий, которые ЗАКОНЧИЛИСЬ за последние 24 часа
+        // P&L за период — сумма из серий, которые ЗАКОНЧИЛИСЬ за последние 24 часа (исключаем cooldown)
         // (используем endedAt, а не startedAt, потому что P&L фиксируется при завершении)
         const dayAgo = Date.now() - 24 * 60 * 60 * 1000;
         const assetSeries = filterByAsset(allSeries);
         completedSeries = assetSeries.filter(s => {
-          if (s.status === 'active') return false; // Исключаем активные
+          if (s.status === 'active' || s.status === 'cooldown') return false; // Исключаем активные и cooldown
           const endTime = s.endedAt ? new Date(s.endedAt).getTime() : null;
           return endTime && endTime > dayAgo; // Закончились за последние 24 часа
         });
-        // Активные серии для "За сутки" - все активные серии выбранной валюты
-        activeSeries = assetSeries.filter(s => s.status === 'active');
+        // Активные серии для "За сутки" - все активные и cooldown серии выбранной валюты
+        activeSeries = assetSeries.filter(s => s.status === 'active' || s.status === 'cooldown');
         pnl = completedSeries.reduce((sum, s) => sum + (s.totalPnL || 0), 0);
       }
       
-      // Заморожено — сумма инвестиций в активных сериях
-      const frozen = activeSeries.reduce((sum, s) => sum + (s.totalInvested || 0), 0);
+      // Заморожено — сумма инвестиций в активных сериях (исключаем cooldown, у них нет инвестиций)
+      const frozen = activeSeries.filter(s => s.status === 'active').reduce((sum, s) => sum + (s.totalInvested || 0), 0);
       
       // Баланс пересчитываем из серий для согласованности: initialDeposit + P&L - Торгуется
       const calculatedBalance = initialDeposit + pnl - frozen;

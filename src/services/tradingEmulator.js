@@ -28,6 +28,7 @@ const TRADING_CONFIGS = {
     entryFee: 0.015,            // Комиссия на вход: 1.5%
     exitFee: 0.015,             // Комиссия на выход: 1.5%
     breakEvenOnLastStep: true,  // На последнем шаге просто покрываем убытки без прибыли
+    cooldownAfterFullLoss: 15 * 60 * 1000, // 15 минут в миллисекундах после полного проигрыша
   },
 };
 
@@ -53,6 +54,9 @@ function getShortHash(tokenId) {
   if (!tokenId || typeof tokenId !== 'string') return '';
   return tokenId.substring(0, 7);
 }
+
+// Константы для конвертации времени
+const MS_PER_MINUTE = 60 * 1000;
 
 class TradingEmulator {
   constructor(bot, dataProvider, botId = 'bot1', config = TRADING_CONFIGS.bot1) {
@@ -85,6 +89,14 @@ class TradingEmulator {
       console.log(`💰 [${this.botId}] Resumed ${s.asset.toUpperCase()} series at Step ${s.currentStep}`);
     }
     
+    // Загружаем активные cooldown серии
+    const cooldownSeries = await TradeSeries.find({ botId: this.botId, status: 'cooldown' });
+    console.log(`💰 [${this.botId}] Found ${cooldownSeries.length} active cooldown series`);
+    for (const s of cooldownSeries) {
+      this.activeSeries.set(s.asset, s);
+      console.log(`💰 [${this.botId}] Resumed ${s.asset.toUpperCase()} cooldown until ${s.endedAt}`);
+    }
+    
     console.log(`💰 [${this.botId}] Trading emulator started`);
     this.interval = setInterval(() => this.tick(), 5000);
   }
@@ -114,6 +126,71 @@ class TradingEmulator {
   }
 
   // ==================== УТИЛИТЫ ====================
+  
+  /**
+   * Завершить cooldown серию
+   */
+  async endCooldown(cooldownSeries) {
+    if (cooldownSeries.status !== 'cooldown') return;
+    
+    cooldownSeries.status = 'cooldown'; // Оставляем статус cooldown
+    cooldownSeries.endedAt = new Date();
+    cooldownSeries.addEvent('cooldown_ended', {
+      message: `⏸️ Cooldown завершен`,
+    });
+    
+    await cooldownSeries.save();
+    console.log(`[TRADE] [${this.botId}] ${cooldownSeries.asset.toUpperCase()}: Cooldown ended`);
+  }
+  
+  /**
+   * Создать cooldown серию для валюты
+   */
+  async createCooldown(asset) {
+    // Проверяем, нет ли уже активной cooldown серии
+    const existingCooldown = await TradeSeries.findOne({
+      botId: this.botId,
+      asset,
+      status: 'cooldown',
+    });
+    
+    if (existingCooldown) {
+      console.log(`[TRADE] [${this.botId}] ${asset.toUpperCase()}: Cooldown already exists`);
+      return existingCooldown;
+    }
+    
+    const cooldownDuration = this.config.cooldownAfterFullLoss || 0;
+    if (!cooldownDuration || cooldownDuration <= 0) {
+      return null; // Cooldown не настроен
+    }
+    
+    const now = new Date();
+    const endedAt = new Date(now.getTime() + cooldownDuration);
+    const cooldownMinutes = Math.ceil(cooldownDuration / MS_PER_MINUTE);
+    
+    const cooldownSeries = new TradeSeries({
+      botId: this.botId,
+      asset,
+      signalColor: 'unknown', // Не важно для cooldown
+      betColor: 'unknown', // Не важно для cooldown
+      status: 'cooldown',
+      currentStep: 0,
+      totalInvested: 0,
+      totalPnL: 0,
+      startedAt: now,
+      endedAt,
+    });
+    
+    cooldownSeries.addEvent('cooldown_started', {
+      message: `⏸️ Cooldown начат (${cooldownMinutes} мин)`,
+    });
+    
+    await cooldownSeries.save();
+    this.activeSeries.set(asset, cooldownSeries);
+    
+    console.log(`[TRADE] [${this.botId}] ${asset.toUpperCase()}: Cooldown created until ${endedAt.toISOString()}`);
+    return cooldownSeries;
+  }
   
   /**
    * Конвертирует slug из формата Binance в формат Polymarket
@@ -158,8 +235,23 @@ class TradingEmulator {
     
     // Проверяем нет ли активной серии
     if (this.activeSeries.has(type)) {
-      console.log(`[TRADE] [${this.botId}] ${type.toUpperCase()}: Already active series, skipping`);
-      return;
+      const existingSeries = this.activeSeries.get(type);
+      // Если это cooldown серия, проверяем не истекла ли она
+      if (existingSeries.status === 'cooldown') {
+        if (existingSeries.endedAt && new Date(existingSeries.endedAt) > new Date()) {
+          const remainingMs = new Date(existingSeries.endedAt) - new Date();
+          const remainingMin = Math.ceil(remainingMs / MS_PER_MINUTE);
+          console.log(`[TRADE] [${this.botId}] ${type.toUpperCase()}: Cooldown active (${remainingMin} min remaining), skipping signal`);
+          return;
+        } else {
+          // Cooldown истек, но серия еще не закрыта - закроем её
+          await this.endCooldown(existingSeries);
+          this.activeSeries.delete(type);
+        }
+      } else {
+        console.log(`[TRADE] [${this.botId}] ${type.toUpperCase()}: Already active series, skipping`);
+        return;
+      }
     }
 
     const betColor = signalColor === 'green' ? 'red' : 'green';
@@ -829,7 +921,22 @@ class TradingEmulator {
   // ==================== ПРОВЕРКА КАЖДЫЕ 5 СЕК ====================
   
   async tick() {
+    // Проверяем и завершаем истекшие cooldown серии
+    const now = new Date();
     for (const [type, series] of this.activeSeries) {
+      if (series.status === 'cooldown' && series.endedAt && new Date(series.endedAt) <= now) {
+        try {
+          await this.endCooldown(series);
+          this.activeSeries.delete(type);
+        } catch (error) {
+          console.error(`[TRADE] Error ending cooldown for ${type}:`, error.message);
+        }
+      }
+    }
+    
+    // Проверяем обычные серии
+    for (const [type, series] of this.activeSeries) {
+      if (series.status === 'cooldown') continue; // Пропускаем cooldown серии
       try {
         await this.checkSeries(series);
       } catch (error) {
@@ -1044,6 +1151,9 @@ class TradingEmulator {
           console.log(`[TRADE] [${this.botId}] ${asset}: ❌ SERIES LOST - hedge on Step ${nextStep} exceeds maxSteps ${this.config.maxSteps}! PnL: $${pnl.toFixed(2)}`);
           await this.log(series.asset, series.currentMarketSlug, `❌ SERIES LOST: hedge Step ${nextStep} > maxSteps ${this.config.maxSteps}, P&L: $${pnl.toFixed(2)}`, { step: series.currentStep, nextStep, maxSteps: this.config.maxSteps, pnl });
           await this.notifyUsers(series, `❌ УБЫТОК! ${series.currentStep} шага, P&L: $${pnl.toFixed(2)}`);
+          
+          // Создаем cooldown после полного проигрыша
+          await this.createCooldown(series.asset);
           return;
         }
         
@@ -1092,6 +1202,9 @@ class TradingEmulator {
         await this.log(series.asset, series.currentMarketSlug, `❌ SERIES LOST after ${this.config.maxSteps} steps: P&L: $${pnl.toFixed(2)}`, { step: this.config.maxSteps, pnl, totalInvested: series.totalInvested });
         await this.notifyUsers(series, `❌ УБЫТОК! ${this.config.maxSteps} шага, P&L: $${pnl.toFixed(2)}`);
         
+        // Создаем cooldown после полного проигрыша
+        await this.createCooldown(series.asset);
+        
       } else {
         // Проверяем, что следующий шаг не превышает максимальное количество шагов
         const nextStep = series.currentStep + 1;
@@ -1121,6 +1234,9 @@ class TradingEmulator {
           this.activeSeries.delete(series.asset);
           
           console.log(`[TRADE] [${this.botId}] ${asset}: ❌ SERIES LOST - next step ${nextStep} exceeds maxSteps ${this.config.maxSteps}! PnL: $${pnl.toFixed(2)}`);
+          
+          // Создаем cooldown после полного проигрыша
+          await this.createCooldown(series.asset);
           await this.log(series.asset, series.currentMarketSlug, `❌ SERIES LOST: next step ${nextStep} > maxSteps ${this.config.maxSteps}, P&L: $${pnl.toFixed(2)}`, { step: series.currentStep, nextStep, maxSteps: this.config.maxSteps, pnl });
           await this.notifyUsers(series, `❌ УБЫТОК! ${series.currentStep} шага, P&L: $${pnl.toFixed(2)}`);
           return;

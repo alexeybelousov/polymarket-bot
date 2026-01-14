@@ -44,7 +44,7 @@ const tradeSeriesSchema = new mongoose.Schema({
   
   status: { 
     type: String, 
-    enum: ['active', 'won', 'lost', 'cancelled'], 
+    enum: ['active', 'won', 'lost', 'cancelled', 'cooldown'], 
     default: 'active' 
   },
   
