@@ -9,7 +9,7 @@ const User = require('../models/User');
 // Конфигурации для нескольких ботов
 const TRADING_CONFIGS = {
   bot1: {
-    name: '3 свечи, Мартингейл, 2%, 4 шага, цена <= $0.55',              // Имя бота для отображения
+    name: '3 свечи, 2%, 4 шага, ≤$0.55',              // Имя бота для отображения
     firstBetPercent: 0.02,      // Первая ставка: 2% от депозита
     signalType: '3candles',     // На каком сигнале начинается торговля: 3 свечи
     maxSteps: 4,                // Количество шагов
@@ -19,7 +19,7 @@ const TRADING_CONFIGS = {
     exitFee: 0.015,             // Комиссия на выход: 1.5%
   },
   bot2: {
-    name: '2 свечи, Мартингейл, 2%, 3 шага, цена <= $0.55',              // Имя бота для отображения
+    name: '2 свечи, 1.5%, 3 шага (break-even), ≤$0.55',              // Имя бота для отображения
     firstBetPercent: 0.015,     // Первая ставка: 1,5% от депозита
     signalType: '2candles',     // На каком сигнале начинается торговля: 2 свечи
     maxSteps: 3,                // Количество шагов
@@ -27,6 +27,7 @@ const TRADING_CONFIGS = {
     maxPrice: 0.55,             // Верхний предел цены (не входим если цена выше)
     entryFee: 0.015,            // Комиссия на вход: 1.5%
     exitFee: 0.015,             // Комиссия на выход: 1.5%
+    breakEvenOnLastStep: true,  // На последнем шаге просто покрываем убытки без прибыли
   },
 };
 
@@ -367,7 +368,16 @@ class TradingEmulator {
     const previousLosses = series.totalInvested || 0;
     const profitMultiplier = (1 - this.ENTRY_FEE_RATE) / price - 1;
     const firstBetAmount = deposit * this.config.firstBetPercent;
-    const targetProfit = firstBetAmount * profitMultiplier;
+    
+    // Если это последний шаг и breakEvenOnLastStep = true, то просто покрываем убытки без прибыли
+    let targetProfit;
+    if (series.currentStep === this.config.maxSteps && this.config.breakEvenOnLastStep) {
+      targetProfit = 0; // Просто покрываем убытки, без прибыли
+      console.log(`[TRADE] [${this.botId}] ${series.asset.toUpperCase()}: Last step (${series.currentStep}), breakEven mode - no profit, just covering losses`);
+    } else {
+      targetProfit = firstBetAmount * profitMultiplier; // Обычная логика с прибылью
+    }
+    
     const amount = calculateDynamicBet(price, previousLosses, targetProfit, this.ENTRY_FEE_RATE);
     
     if (!amount || amount <= 0) {
@@ -515,7 +525,16 @@ class TradingEmulator {
     const previousLosses = series.totalInvested || 0;
     const profitMultiplier = (1 - this.ENTRY_FEE_RATE) / price - 1;
     const firstBetAmount = deposit * this.config.firstBetPercent;
-    const targetProfit = firstBetAmount * profitMultiplier;
+    
+    // Если следующий шаг - последний и breakEvenOnLastStep = true, то просто покрываем убытки без прибыли
+    let targetProfit;
+    if (nextStep === this.config.maxSteps && this.config.breakEvenOnLastStep) {
+      targetProfit = 0; // Просто покрываем убытки, без прибыли
+      console.log(`[TRADE] [${this.botId}] ${asset}: Hedge for last step (${nextStep}), breakEven mode - no profit, just covering losses`);
+    } else {
+      targetProfit = firstBetAmount * profitMultiplier; // Обычная логика с прибылью
+    }
+    
     const amount = calculateDynamicBet(price, previousLosses, targetProfit, this.ENTRY_FEE_RATE);
     
     if (!amount || amount <= 0) {
