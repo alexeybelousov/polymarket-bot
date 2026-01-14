@@ -337,7 +337,7 @@ async function getBuyPrice(slug, outcome = 'down') {
  * Получить цену продажи с CLOB API
  * @param {string} slug - slug рынка
  * @param {string} outcome - 'up' или 'down'
- * @returns {Promise<{price: number, tokenId: string} | null>}
+ * @returns {Promise<{price: number, tokenId: string, size?: number} | null>}
  */
 async function getSellPrice(slug, outcome = 'down') {
   try {
@@ -354,12 +354,48 @@ async function getSellPrice(slug, outcome = 'down') {
       },
     });
     
-    return {
+    const result = {
       price: parseFloat(data.price),
       tokenId,
     };
+    
+    // Добавляем размер order book, если доступен
+    if (data.size !== undefined) {
+      result.size = parseFloat(data.size);
+    }
+    
+    return result;
   } catch (error) {
     console.error(`Error getting sell price for ${slug}:`, error.message);
+    return null;
+  }
+}
+
+/**
+ * Получить размер order book для токена
+ * @param {string} tokenId - ID токена
+ * @returns {Promise<{bidsSize: number, asksSize: number, totalSize: number} | null>}
+ */
+async function getOrderBookSize(tokenId) {
+  try {
+    const { data } = await clob.get('/book', {
+      params: {
+        token_id: tokenId,
+      },
+    });
+    
+    if (!data || !data.bids || !data.asks) return null;
+    
+    const bidsSize = data.bids.reduce((sum, bid) => sum + parseFloat(bid.size || 0), 0);
+    const asksSize = data.asks.reduce((sum, ask) => sum + parseFloat(ask.size || 0), 0);
+    
+    return {
+      bidsSize,
+      asksSize,
+      totalSize: bidsSize + asksSize,
+    };
+  } catch (error) {
+    console.error(`Error getting order book size for token ${tokenId}:`, error.message);
     return null;
   }
 }
@@ -373,4 +409,5 @@ module.exports = {
   getCurrentIntervalStart,
   getBuyPrice,
   getSellPrice,
+  getOrderBookSize,
 };

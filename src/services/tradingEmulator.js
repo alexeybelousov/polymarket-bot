@@ -699,7 +699,7 @@ class TradingEmulator {
 
   // ==================== ПРОДАЖА ХЕДЖА ====================
   
-  async sellHedge(series) {
+  async sellHedge(series, timeToEnd = null) {
     const asset = series.asset.toUpperCase();
     const hedgeStep = series.currentStep + 1;
     const betEmoji = series.betColor === 'green' ? '🟢' : '🔴';
@@ -714,6 +714,7 @@ class TradingEmulator {
     const polySlug = this.convertToPolymarketSlug(hedgePosition.marketSlug);
     let sellPrice = null;
     let sellTokenId = null;
+    let orderBookSize = null;
     
     try {
       const priceData = await polymarket.getSellPrice(polySlug, betOutcome);
@@ -721,6 +722,18 @@ class TradingEmulator {
         sellPrice = priceData.price;
         sellTokenId = priceData.tokenId;
         console.log(`[TRADE] [${this.botId}] Got sell price for hedge ${polySlug}: $${sellPrice.toFixed(3)}`);
+        
+        // Если это продажа за 20 секунд до конца, получаем размер order book
+        if (timeToEnd !== null && timeToEnd <= 20 && sellTokenId) {
+          try {
+            orderBookSize = await polymarket.getOrderBookSize(sellTokenId);
+            if (orderBookSize) {
+              console.log(`[TRADE] [${this.botId}] Order book size for hedge: ${orderBookSize.totalSize.toFixed(2)} (bids: ${orderBookSize.bidsSize.toFixed(2)}, asks: ${orderBookSize.asksSize.toFixed(2)})`);
+            }
+          } catch (error) {
+            console.error(`[TRADE] Error getting order book size:`, error.message);
+          }
+        }
       }
     } catch (error) {
       console.error(`[TRADE] Error getting sell price for hedge ${polySlug}:`, error.message);
@@ -759,16 +772,20 @@ class TradingEmulator {
     
     // Событие: продали хедж
     const sellHash = sellTokenId ? getShortHash(sellTokenId) : '';
-    const priceText = sellPrice ? `@ $${sellPrice.toFixed(2)} (${sellHash})` : '';
+    const priceText = sellPrice ? `по $${sellPrice.toFixed(2)} (${sellHash})` : '';
+    let orderBookText = '';
+    if (orderBookSize && timeToEnd !== null && timeToEnd <= 20) {
+      orderBookText = ` | OB: ${orderBookSize.totalSize.toFixed(2)}`;
+    }
     series.addEvent('sell_hedge', {
       amount: returnAmount,
       step: hedgeStep,
-      message: `📤 Продал хедж Step ${hedgeStep}${priceText ? ` ${priceText}` : ''}: вернул $${returnAmount.toFixed(2)} (-$${loss.toFixed(2)})`,
+      message: `📤 Продал хедж Step ${hedgeStep}${priceText ? ` ${priceText}` : ''}${orderBookText}: вернул $${returnAmount.toFixed(2)} ($${loss.toFixed(2)})`,
     });
     
     await series.save();
     console.log(`[TRADE] [${this.botId}] ${asset}: 📤 SELL HEDGE - Returned $${returnAmount.toFixed(2)} (Step ${hedgeStep})`);
-    await this.log(series.asset, series.currentMarketSlug, `SELL HEDGE Step ${hedgeStep}: returned $${returnAmount.toFixed(2)} (-$${loss.toFixed(2)})`, { step: hedgeStep, returnAmount, loss });
+    await this.log(series.asset, series.currentMarketSlug, `SELL HEDGE Step ${hedgeStep}: returned $${returnAmount.toFixed(2)} ($${loss.toFixed(2)})`, { step: hedgeStep, returnAmount, loss });
     await this.notifyUsers(series, `📤 Продал хедж`);
   }
 
@@ -848,7 +865,7 @@ class TradingEmulator {
       // ПРОДАЖА ХЕДЖА: за 20 сек до конца, если рынок наш цвет — продаём хедж
       const timeToEnd = context.current.timeToEnd;
       if (series.nextStepBought && currentColor === series.betColor && timeToEnd <= 20) {
-        await this.sellHedge(series);
+        await this.sellHedge(series, timeToEnd);
       }
       
       if (config.debug) {
@@ -888,7 +905,7 @@ class TradingEmulator {
       // Если хедж был куплен, продаём его при выигрыше (даже если рынок закрылся раньше проверки за 20 сек)
       if (series.nextStepBought) {
         console.log(`[TRADE] [${this.botId}] ${asset}: Market won, selling hedge before calculating P&L...`);
-        await this.sellHedge(series);
+        await this.sellHedge(series, null); // null = не за 20 секунд до конца
       }
       
       // ПРОФИТ! Получаем shares (каждая = $1)
