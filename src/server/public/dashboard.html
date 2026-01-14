@@ -491,7 +491,7 @@
               ticks: { 
                 color: '#71717a', 
                 font: { size: 10 },
-                callback: v => '$' + v
+                callback: v => '$' + parseFloat(v).toFixed(0)
               }
             }
           }
