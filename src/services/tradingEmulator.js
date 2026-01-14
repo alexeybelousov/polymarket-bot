@@ -885,6 +885,12 @@ class TradingEmulator {
     series.marketState = 'closed';
     
     if (won) {
+      // Если хедж был куплен, продаём его при выигрыше (даже если рынок закрылся раньше проверки за 20 сек)
+      if (series.nextStepBought) {
+        console.log(`[TRADE] [${this.botId}] ${asset}: Market won, selling hedge before calculating P&L...`);
+        await this.sellHedge(series);
+      }
+      
       // ПРОФИТ! Получаем shares (каждая = $1)
       const currentPosition = series.positions.find(p => p.step === series.currentStep && p.status === 'active');
       const shares = currentPosition?.shares || 0;
