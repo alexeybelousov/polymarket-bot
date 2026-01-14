@@ -615,6 +615,8 @@
       // Но нужно создать части для ВСЕХ столбцов между первым и последним
       const allColumns = markets.slice(firstCol.index, lastCol.index + 1);
       
+      console.log(`[MONITOR] Series ${seriesItem._id}: firstCol.index=${firstCol.index}, lastCol.index=${lastCol.index}, allColumns.length=${allColumns.length}`);
+      
       allColumns.forEach((market, idx) => {
         const colPart = document.createElement('div');
         colPart.className = 'series-column';
