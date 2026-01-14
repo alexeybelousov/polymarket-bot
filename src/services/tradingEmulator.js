@@ -63,8 +63,14 @@ class TradingEmulator {
     this.interval = null;
     
     // Локальные константы из конфига
+    if (!config || !config.entryFee || !config.exitFee) {
+      console.error(`[TRADE] [${botId}] Invalid config provided:`, config);
+      throw new Error(`Invalid config for bot ${botId}: missing entryFee or exitFee`);
+    }
     this.ENTRY_FEE_RATE = config.entryFee;
     this.EXIT_FEE_RATE = config.exitFee;
+    
+    console.log(`[TRADE] [${botId}] Initialized with ENTRY_FEE_RATE: ${this.ENTRY_FEE_RATE}, EXIT_FEE_RATE: ${this.EXIT_FEE_RATE}`);
   }
 
   async start() {
@@ -139,10 +145,15 @@ class TradingEmulator {
   // ==================== СИГНАЛ ====================
   
   async onSignal(type, signalColor, signalMarketSlug, nextMarketSlug, signalType = '3candles') {
+    console.log(`[TRADE] [${this.botId}] Received signal: ${type.toUpperCase()} ${signalType} ${signalColor} (config: ${this.config.signalType})`);
+    
     // Проверяем тип сигнала - бот торгует только на сигналы, соответствующие его конфигу
     if (this.config.signalType !== signalType) {
+      console.log(`[TRADE] [${this.botId}] ${type.toUpperCase()}: Signal type mismatch (${signalType} !== ${this.config.signalType}), skipping`);
       return; // Пропускаем сигналы, которые не соответствуют конфигу бота
     }
+    
+    console.log(`[TRADE] [${this.botId}] ${type.toUpperCase()}: Signal type matches, proceeding...`);
     
     // Проверяем нет ли активной серии
     if (this.activeSeries.has(type)) {
@@ -201,6 +212,8 @@ class TradingEmulator {
       return;
     }
     
+    console.log(`[TRADE] [${this.botId}] ${type.toUpperCase()}: Price OK ($${buyPrice.toFixed(3)}), creating series...`);
+    
     // Создаём серию
     const series = new TradeSeries({
       botId: this.botId,
@@ -218,8 +231,12 @@ class TradingEmulator {
       message: `Сигнал 3${signalEmoji} → ставим на ${betEmoji}`,
     });
     
+    console.log(`[TRADE] [${this.botId}] ${type.toUpperCase()}: Series created, calling buyStep...`);
+    
     // Покупаем первую ставку
     const bought = await this.buyStep(series);
+    
+    console.log(`[TRADE] [${this.botId}] ${type.toUpperCase()}: buyStep returned: ${bought}`);
     if (!bought) {
       // Не удалось купить — отменяем серию
       series.status = 'cancelled';
@@ -249,6 +266,13 @@ class TradingEmulator {
   // ==================== ПОКУПКА СТАВКИ ====================
   
   async buyStep(series, marketSlugOverride = null) {
+    // Проверка что this определен
+    if (!this || !this.ENTRY_FEE_RATE) {
+      console.error(`[TRADE] [${this?.botId || 'unknown'}] ERROR: this.ENTRY_FEE_RATE is undefined!`);
+      console.error(`[TRADE] this:`, this);
+      throw new Error('this.ENTRY_FEE_RATE is undefined');
+    }
+    
     const stats = await TradingStats.getStats(this.botId);
     const betEmoji = series.betColor === 'green' ? '🟢' : '🔴';
     const betOutcome = series.betColor === 'green' ? 'up' : 'down';
@@ -341,10 +365,10 @@ class TradingEmulator {
     // Используем текущий баланс для расчёта первой ставки (2% от баланса)
     const deposit = stats.currentBalance || this.config.baseDeposit;
     const previousLosses = series.totalInvested || 0;
-    const profitMultiplier = (1 - this.this.ENTRY_FEE_RATE) / price - 1;
+    const profitMultiplier = (1 - this.ENTRY_FEE_RATE) / price - 1;
     const firstBetAmount = deposit * this.config.firstBetPercent;
     const targetProfit = firstBetAmount * profitMultiplier;
-    const amount = calculateDynamicBet(price, previousLosses, targetProfit, this.this.ENTRY_FEE_RATE);
+    const amount = calculateDynamicBet(price, previousLosses, targetProfit, this.ENTRY_FEE_RATE);
     
     if (!amount || amount <= 0) {
       console.warn(`[TRADE] Cannot calculate bet amount at price $${price.toFixed(3)}`);
