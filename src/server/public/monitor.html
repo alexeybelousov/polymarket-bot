@@ -667,17 +667,17 @@
       const currentColPosition = currentColIndex * currentColWidth;
       
       // Столбцы двигаются ВЛЕВО
-      // Линия NOW должна быть точно на границе между текущим и следующим столбцом
-      // В начале периода (progress=0): линия на правой границе текущего столбца
-      // В конце периода (progress=1): линия на правой границе следующего столбца
+      // Линия NOW должна быть точно на границе между предыдущим и текущим столбцом
+      // В начале периода (progress=0): линия на правой границе предыдущего столбца
+      // В конце периода (progress=1): линия на правой границе текущего столбца
       
+      // Позиция правой границы предыдущего столбца (на один столбец влево)
+      const prevColRightEdge = currentColPosition;
       // Позиция правой границы текущего столбца
       const currentColRightEdge = currentColPosition + currentColWidth;
-      // Позиция правой границы следующего столбца
-      const nextColRightEdge = currentColRightEdge + currentColWidth;
       
       // Позиция линии NOW должна быть между этими границами
-      const targetLinePosition = currentColRightEdge + (progress * currentColWidth);
+      const targetLinePosition = prevColRightEdge + (progress * currentColWidth);
       
       // Смещаем контейнер так, чтобы линия NOW была на нужной позиции
       const targetOffset = indicatorPosition - targetLinePosition;
