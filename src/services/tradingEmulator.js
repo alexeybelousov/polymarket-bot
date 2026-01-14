@@ -34,11 +34,13 @@ const TRADING_CONFIGS = {
 
 /**
  * Динамический расчёт ставки на основе цены
- * Формула: profitMultiplier = (1 - fee) / price - 1
+ * Формула учитывает обе комиссии (entry и exit):
+ * profitMultiplier = (1 - entryFee) * (1 - exitFee) / price - 1
  * betAmount = (previousLosses + targetProfit) / profitMultiplier
  */
-function calculateDynamicBet(buyPrice, previousLosses, targetProfit, entryFeeRate) {
-  const profitMultiplier = (1 - entryFeeRate) / buyPrice - 1;
+function calculateDynamicBet(buyPrice, previousLosses, targetProfit, entryFeeRate, exitFeeRate) {
+  // Учитываем обе комиссии: при покупке (entry) и при продаже (exit)
+  const profitMultiplier = (1 - entryFeeRate) * (1 - exitFeeRate) / buyPrice - 1;
   if (profitMultiplier <= 0) {
     return null; // Невозможно получить профит при такой цене
   }
@@ -459,7 +461,6 @@ class TradingEmulator {
     // Используем текущий баланс для расчёта первой ставки (2% от баланса)
     const deposit = stats.currentBalance || this.config.baseDeposit;
     const previousLosses = series.totalInvested || 0;
-    const profitMultiplier = (1 - this.ENTRY_FEE_RATE) / price - 1;
     const firstBetAmount = deposit * this.config.firstBetPercent;
     
     // Если это последний шаг и breakEvenOnLastStep = true, то просто покрываем убытки без прибыли
@@ -468,10 +469,12 @@ class TradingEmulator {
       targetProfit = 0; // Просто покрываем убытки, без прибыли
       console.log(`[TRADE] [${this.botId}] ${series.asset.toUpperCase()}: Last step (${series.currentStep}), breakEven mode - no profit, just covering losses`);
     } else {
-      targetProfit = firstBetAmount * profitMultiplier; // Обычная логика с прибылью
+      // Фиксированный профит 1.5% от депозита
+      targetProfit = this.config.baseDeposit * 0.015; // $1.50 при депозите $100
+      console.log(`[TRADE] [${this.botId}] ${series.asset.toUpperCase()}: Target profit: $${targetProfit.toFixed(2)} (1.5% of $${this.config.baseDeposit})`);
     }
     
-    const amount = calculateDynamicBet(price, previousLosses, targetProfit, this.ENTRY_FEE_RATE);
+    const amount = calculateDynamicBet(price, previousLosses, targetProfit, this.ENTRY_FEE_RATE, this.EXIT_FEE_RATE);
     
     if (!amount || amount <= 0) {
       console.warn(`[TRADE] Cannot calculate bet amount at price $${price.toFixed(3)}`);
@@ -621,10 +624,9 @@ class TradingEmulator {
     }
     
     // Рассчитываем ставку динамически
-    // Используем текущий баланс для расчёта первой ставки (2% от баланса)
+    // Используем текущий баланс для расчёта первой ставки
     const deposit = stats.currentBalance || this.config.baseDeposit;
     const previousLosses = series.totalInvested || 0;
-    const profitMultiplier = (1 - this.ENTRY_FEE_RATE) / price - 1;
     const firstBetAmount = deposit * this.config.firstBetPercent;
     
     // Если следующий шаг - последний и breakEvenOnLastStep = true, то просто покрываем убытки без прибыли
@@ -633,10 +635,12 @@ class TradingEmulator {
       targetProfit = 0; // Просто покрываем убытки, без прибыли
       console.log(`[TRADE] [${this.botId}] ${asset}: Hedge for last step (${nextStep}), breakEven mode - no profit, just covering losses`);
     } else {
-      targetProfit = firstBetAmount * profitMultiplier; // Обычная логика с прибылью
+      // Фиксированный профит 1.5% от депозита
+      targetProfit = this.config.baseDeposit * 0.015; // $1.50 при депозите $100
+      console.log(`[TRADE] [${this.botId}] ${asset}: Hedge target profit: $${targetProfit.toFixed(2)} (1.5% of $${this.config.baseDeposit})`);
     }
     
-    const amount = calculateDynamicBet(price, previousLosses, targetProfit, this.ENTRY_FEE_RATE);
+    const amount = calculateDynamicBet(price, previousLosses, targetProfit, this.ENTRY_FEE_RATE, this.EXIT_FEE_RATE);
     
     if (!amount || amount <= 0) {
       console.warn(`[TRADE] Cannot calculate hedge bet amount at price $${price.toFixed(3)}`);
