@@ -672,11 +672,13 @@ class TradingEmulator {
           try {
             const orderBookDetails = await polymarket.getOrderBookDetails(sellTokenId);
             if (orderBookDetails) {
-              const bidsText = orderBookDetails.bids.map(bid => `$${bid.price.toFixed(2)}:${bid.size.toFixed(2)}`).join(', ');
-              const asksText = orderBookDetails.asks.map(ask => `$${ask.price.toFixed(2)}:${ask.size.toFixed(2)}`).join(', ');
+              const bidsTotal = orderBookDetails.bids.reduce((sum, bid) => sum + bid.size, 0);
+              const asksTotal = orderBookDetails.asks.reduce((sum, ask) => sum + ask.size, 0);
+              const bidsCount = orderBookDetails.bids.length;
+              const asksCount = orderBookDetails.asks.length;
               series.addEvent('order_book', {
                 step: 1,
-                message: `📊 Order Book: Bids [${bidsText}] | Asks [${asksText}]`,
+                message: `📊 Order Book: Bids ${bidsTotal.toFixed(0)} (${bidsCount} levels) | Asks ${asksTotal.toFixed(0)} (${asksCount} levels)`,
                 data: {
                   bids: orderBookDetails.bids,
                   asks: orderBookDetails.asks,
@@ -804,11 +806,13 @@ class TradingEmulator {
     
     // Если есть детальная информация об order book, добавляем отдельное событие
     if (orderBookDetails && timeToEnd !== null && timeToEnd <= 20) {
-      const bidsText = orderBookDetails.bids.map(bid => `$${bid.price.toFixed(2)}:${bid.size.toFixed(2)}`).join(', ');
-      const asksText = orderBookDetails.asks.map(ask => `$${ask.price.toFixed(2)}:${ask.size.toFixed(2)}`).join(', ');
+      const bidsTotal = orderBookDetails.bids.reduce((sum, bid) => sum + bid.size, 0);
+      const asksTotal = orderBookDetails.asks.reduce((sum, ask) => sum + ask.size, 0);
+      const bidsCount = orderBookDetails.bids.length;
+      const asksCount = orderBookDetails.asks.length;
       series.addEvent('order_book', {
         step: hedgeStep,
-        message: `📊 Order Book: Bids [${bidsText}] | Asks [${asksText}]`,
+        message: `📊 Order Book: Bids ${bidsTotal.toFixed(0)} (${bidsCount} levels) | Asks ${asksTotal.toFixed(0)} (${asksCount} levels)`,
         data: {
           bids: orderBookDetails.bids,
           asks: orderBookDetails.asks,
