@@ -96,6 +96,7 @@
     .timeline-event.win::before { background: var(--green); border-color: var(--green); }
     .timeline-event.loss::before { background: var(--red); border-color: var(--red); }
     .timeline-event.neutral::before { background: var(--text2); border-color: var(--text2); }
+    .timeline-event.orderbook::before { background: var(--text2); border-color: var(--text2); }
     .timeline-time { color: var(--text2); margin-right: 8px; }
     .timeline-msg { color: var(--text); }
 
@@ -596,6 +597,7 @@
       if (type === 'series_opened') return 'neutral';
       if (type === 'buy' || type === 'sell') return 'buy';
       if (type === 'hedge_bought' || type === 'sell_hedge') return 'hedge';
+      if (type === 'order_book') return 'orderbook';
       if (type.includes('won') || type === 'series_won') return 'win';
       if (type.includes('lost') || type === 'series_lost') return 'loss';
       if (type === 'waiting_market' || type === 'market_active' || type === 'signal_cancelled' || type === 'series_cancelled') return 'neutral';
