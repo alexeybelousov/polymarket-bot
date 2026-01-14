@@ -56,17 +56,17 @@
       top: 0;
       bottom: 0;
       width: 2px;
-      background: var(--blue);
+      background: var(--red);
       z-index: 100;
       pointer-events: none;
     }
-    .time-indicator::before {
+    .time-indicator::after {
       content: 'NOW';
       position: absolute;
-      top: 0;
+      bottom: 0;
       left: 4px;
       font-size: 10px;
-      color: var(--blue);
+      color: var(--red);
       background: var(--bg);
       padding: 2px 4px;
       border-radius: 2px;
@@ -467,10 +467,13 @@
         `;
         
         // Добавляем метку времени между столбцами (справа от текущего)
+        // Время должно быть на 15 минут позже (следующий интервал)
         if (index < markets.length - 1) {
+          const nextMarket = markets[index + 1];
+          const nextTimeInfo = getMarketTime(nextMarket.timestamp);
           const label = document.createElement('div');
           label.className = 'market-label';
-          label.textContent = timeInfo.time;
+          label.textContent = nextTimeInfo.time;
           col.appendChild(label);
         }
         
