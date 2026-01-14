@@ -878,10 +878,17 @@ class TradingEmulator {
       // ПРОФИТ! Получаем shares (каждая = $1)
       const currentPosition = series.positions.find(p => p.step === series.currentStep && p.status === 'active');
       const shares = currentPosition?.shares || 0;
-      const winAmount = shares; // shares * $1
+      
+      // Рассчитываем выигрыш с учетом комиссии на выход
+      const grossReturn = shares * 1.0; // shares * $1
+      const exitFee = grossReturn * this.EXIT_FEE_RATE;
+      const winAmount = grossReturn - exitFee;
       
       // Обновляем статус позиции
       if (currentPosition) currentPosition.status = 'won';
+      
+      // Учитываем комиссию на выход в общей комиссии
+      series.totalCommission += exitFee;
       
       // P&L = выигрыш - вложено - потери на хеджах
       const hedgeLosses = series.hedgeLosses || 0;
