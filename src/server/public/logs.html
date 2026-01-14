@@ -93,8 +93,13 @@
       if (!data.logs.length) { tbody.innerHTML = '<tr><td colspan="6" class="empty">Нет логов</td></tr>'; }
       else {
         tbody.innerHTML = data.logs.map(l => {
-          const bot = allBots.find(b => b.botId === l.botId);
-          const botName = bot ? bot.name : (l.botId || 'bot1');
+          // Для сигналов detect botId не должен быть установлен (сигналы независимы от ботов)
+          // Для trade логов показываем имя бота
+          let botName = '—';
+          if (l.botId && l.action === 'trade') {
+            const bot = allBots.find(b => b.botId === l.botId);
+            botName = bot ? bot.name : l.botId;
+          }
           return `<tr>
             <td>${formatTime(l.timestamp)}</td>
             <td style="font-size: 10px; color: var(--text2);">${botName}</td>

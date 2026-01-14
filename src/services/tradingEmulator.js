@@ -139,9 +139,9 @@ class TradingEmulator {
   // ==================== СИГНАЛ ====================
   
   async onSignal(type, signalColor, signalMarketSlug, nextMarketSlug, signalType = '3candles') {
-    // Проверяем тип сигнала (торгуем только на 3 свечи)
-    if (this.config.signalType === '3candles' && signalType !== '3candles') {
-      return; // Пропускаем сигналы 2 свечи
+    // Проверяем тип сигнала - бот торгует только на сигналы, соответствующие его конфигу
+    if (this.config.signalType !== signalType) {
+      return; // Пропускаем сигналы, которые не соответствуют конфигу бота
     }
     
     // Проверяем нет ли активной серии

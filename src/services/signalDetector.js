@@ -215,23 +215,21 @@ class SignalDetector {
       console.log(`🎯 Signal detected: ${asset} ${candleCount}c ${color} (${context.current.timeToEnd}s left)`);
       await this.log(type, context.slugs.current, 'detect', `${candleCount}c ${color} signal`, { signalId: signal._id });
 
-      // Запускаем торговлю только для 3-свечных сигналов
-      if (candleCount === 3) {
-        if (this.tradingEmulators.length > 0) {
-          const nextMarketSlug = context.slugs.next || context.slugs.current;
-          const signalType = candleCount === 3 ? '3candles' : '2candles';
-          console.log(`[SIGNAL] Calling tradingEmulator.onSignal for ${type.toUpperCase()} (${this.tradingEmulators.length} bot(s))...`);
-          // Передаем сигнал всем ботам
-          for (const emulator of this.tradingEmulators) {
-            try {
-              await emulator.onSignal(type, color, context.slugs.current, nextMarketSlug, signalType);
-            } catch (err) {
-              console.error(`[SIGNAL] Error in tradingEmulator.onSignal for ${emulator.botId}:`, err.message);
-            }
+      // Передаем сигнал всем ботам - каждый бот сам решает, торговать ли ему на основе своего конфига
+      if (this.tradingEmulators.length > 0) {
+        const nextMarketSlug = context.slugs.next || context.slugs.current;
+        const signalType = candleCount === 3 ? '3candles' : '2candles';
+        console.log(`[SIGNAL] Calling tradingEmulator.onSignal for ${type.toUpperCase()} ${candleCount}c (${this.tradingEmulators.length} bot(s))...`);
+        // Передаем сигнал всем ботам - они сами проверят, соответствует ли сигнал их конфигу
+        for (const emulator of this.tradingEmulators) {
+          try {
+            await emulator.onSignal(type, color, context.slugs.current, nextMarketSlug, signalType);
+          } catch (err) {
+            console.error(`[SIGNAL] Error in tradingEmulator.onSignal for ${emulator.botId}:`, err.message);
           }
-        } else {
-          console.log(`[SIGNAL] No trading emulators configured!`);
         }
+      } else {
+        console.log(`[SIGNAL] No trading emulators configured!`);
       }
 
       return signal;

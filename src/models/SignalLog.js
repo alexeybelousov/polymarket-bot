@@ -7,7 +7,7 @@ const signalLogSchema = new mongoose.Schema({
   },
   botId: {
     type: String,
-    default: 'bot1', // Для обратной совместимости
+    // Без дефолта - сигналы detect не привязаны к ботам, только trade логи имеют botId
   },
   type: {
     type: String,

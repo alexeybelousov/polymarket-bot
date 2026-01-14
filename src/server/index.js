@@ -161,8 +161,27 @@ function createServer(port = 3000, tradingEmulators = null) {
 
       const query = {};
       if (type) query.type = type;
-      if (action) query.action = action;
-      if (botId) query.botId = botId;
+      
+      // Если выбран бот, показываем его trade логи И все detect сигналы (они независимы от ботов)
+      if (botId) {
+        if (action === 'detect') {
+          // Для detect сигналов botId не применяется (они независимы от ботов)
+          query.action = 'detect';
+        } else if (action === 'trade') {
+          // Для trade логов показываем только выбранного бота
+          query.action = 'trade';
+          query.botId = botId;
+        } else {
+          // Если action не указан, показываем trade логи бота + все detect сигналы
+          query.$or = [
+            { botId: botId, action: 'trade' },
+            { action: 'detect' },
+          ];
+        }
+      } else {
+        // Если бот не выбран, применяем обычный фильтр по action
+        if (action) query.action = action;
+      }
 
       const [logs, total] = await Promise.all([
         SignalLog.find(query).sort({ timestamp: -1 }).skip((page - 1) * limit).limit(limit).lean(),
