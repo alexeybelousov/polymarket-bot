@@ -257,12 +257,29 @@
     }
     
     function parseMarketSlug(slug) {
-      // eth-updown-15m-1768410000
+      // Поддерживаем оба формата:
+      // Polymarket: eth-updown-15m-1768410000
+      // Binance: binance-ethusdt-1768410000000 (миллисекунды)
+      
+      if (!slug) return null;
+      
+      // Формат Binance: binance-ethusdt-1768410000000
+      if (slug.startsWith('binance-')) {
+        const parts = slug.split('-');
+        if (parts.length >= 3) {
+          const timestampMs = parseInt(parts[parts.length - 1]);
+          const timestamp = Math.floor(timestampMs / 1000); // Конвертируем в секунды
+          return { timestamp, slug };
+        }
+      }
+      
+      // Формат Polymarket: eth-updown-15m-1768410000
       const parts = slug.split('-');
       if (parts.length >= 4) {
         const timestamp = parseInt(parts[parts.length - 1]);
         return { timestamp, slug };
       }
+      
       return null;
     }
     
@@ -286,21 +303,37 @@
         const res = await fetch('/api/markets/live');
         const data = await res.json();
         
+        console.log('[MONITOR] Markets data:', data);
+        
         // Получаем текущий рынок ETH
         const ethCurrent = data.eth?.current?.slug;
-        if (!ethCurrent) return;
+        console.log('[MONITOR] ETH current slug:', ethCurrent);
+        
+        if (!ethCurrent) {
+          console.error('[MONITOR] No ETH current slug found');
+          return;
+        }
         
         const currentMarket = parseMarketSlug(ethCurrent);
-        if (!currentMarket) return;
+        console.log('[MONITOR] Parsed market:', currentMarket);
+        
+        if (!currentMarket) {
+          console.error('[MONITOR] Failed to parse market slug');
+          return;
+        }
         
         // Вычисляем 6 рынков: будущий, текущий, предыдущие 4
         const marketInterval = 15 * 60; // 15 минут в секундах
         const newMarkets = [];
         
         // Будущий рынок (справа)
+        const futureTs = currentMarket.timestamp + marketInterval;
+        const futureSlug = ethCurrent.startsWith('binance-')
+          ? `binance-ethusdt-${futureTs * 1000}` // Binance использует миллисекунды
+          : `eth-updown-15m-${futureTs}`;
         newMarkets.push({
-          timestamp: currentMarket.timestamp + marketInterval,
-          slug: `eth-updown-15m-${currentMarket.timestamp + marketInterval}`,
+          timestamp: futureTs,
+          slug: futureSlug,
           isFuture: true,
         });
         
@@ -315,9 +348,13 @@
         // Предыдущие 4 рынка
         for (let i = 1; i <= 4; i++) {
           const ts = currentMarket.timestamp - (marketInterval * i);
+          // Формируем slug в зависимости от формата исходного
+          const slug = ethCurrent.startsWith('binance-') 
+            ? `binance-ethusdt-${ts * 1000}` // Binance использует миллисекунды
+            : `eth-updown-15m-${ts}`;
           newMarkets.push({
             timestamp: ts,
-            slug: `eth-updown-15m-${ts}`,
+            slug: slug,
             isPast: true,
           });
         }
@@ -325,8 +362,12 @@
         // Реверсируем, чтобы будущий был справа
         markets = newMarkets.reverse();
         
+        console.log('[MONITOR] Markets array:', markets);
+        
         renderMarkets();
-      } catch(e) { console.error(e); }
+      } catch(e) { 
+        console.error('[MONITOR] Error loading markets:', e); 
+      }
     }
     
     async function loadSeries() {
@@ -339,13 +380,28 @@
         series.bot1 = await bot1Res.json();
         series.bot2 = await bot2Res.json();
         
+        console.log('[MONITOR] Bot1 series:', series.bot1.length);
+        console.log('[MONITOR] Bot2 series:', series.bot2.length);
+        
         renderSeries();
-      } catch(e) { console.error(e); }
+      } catch(e) { 
+        console.error('[MONITOR] Error loading series:', e); 
+      }
     }
     
     function renderTimeScale() {
       const scaleEl = document.getElementById('time-scale');
+      if (!scaleEl) {
+        console.error('[MONITOR] Time scale element not found');
+        return;
+      }
+      
       scaleEl.innerHTML = '';
+      
+      if (!markets || markets.length === 0) {
+        console.warn('[MONITOR] No markets to render in time scale');
+        return;
+      }
       
       markets.forEach((market, index) => {
         const timeInfo = getMarketTime(market.timestamp);
@@ -355,11 +411,20 @@
         marker.title = timeInfo.full;
         scaleEl.appendChild(marker);
       });
+      
+      console.log('[MONITOR] Time scale rendered with', markets.length, 'markers');
     }
     
     function renderMarkets() {
       const container = document.getElementById('markets-container');
+      if (!container) {
+        console.error('[MONITOR] Markets container not found');
+        return;
+      }
+      
       container.innerHTML = '';
+      
+      console.log('[MONITOR] Rendering', markets.length, 'markets');
       
       markets.forEach((market, index) => {
         const col = document.createElement('div');
