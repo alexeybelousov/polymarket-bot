@@ -696,47 +696,57 @@
       
       // Stats - Row 1: Баланс и P&L
       const initialDeposit = globalStats.initialDeposit || 100;
-      const currentBalance = globalStats.currentBalance || 100;
-      const balanceEl = document.getElementById('stat-balance');
-      balanceEl.textContent = `$${currentBalance.toFixed(2)}`;
-      balanceEl.className = 'stat-value ' + (currentBalance >= initialDeposit ? 'positive' : 'negative');
       
       // P&L зависит от периода и валюты
+      let pnl = 0;
+      let completedSeries = [];
+      let activeSeries = [];
+      
       if (currentPeriod === 'all') {
         // P&L "Всего" - считаем из всех завершенных серий выбранной валюты
         const assetSeries = filterByAsset(allSeries);
-        const completedSeries = assetSeries.filter(s => s.status !== 'active');
-        const pnl = completedSeries.reduce((sum, s) => sum + (s.totalPnL || 0), 0);
-        const pnlEl = document.getElementById('stat-pnl');
-        pnlEl.textContent = `${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}`;
-        pnlEl.className = 'stat-value ' + (pnl >= 0 ? 'positive' : 'negative');
+        completedSeries = assetSeries.filter(s => s.status !== 'active');
+        activeSeries = assetSeries.filter(s => s.status === 'active');
+        pnl = completedSeries.reduce((sum, s) => sum + (s.totalPnL || 0), 0);
       } else {
         // P&L за период — сумма из серий, которые ЗАКОНЧИЛИСЬ за последние 24 часа
         // (используем endedAt, а не startedAt, потому что P&L фиксируется при завершении)
         const dayAgo = Date.now() - 24 * 60 * 60 * 1000;
-        const dayCompletedSeries = filterByAsset(allSeries).filter(s => {
+        const assetSeries = filterByAsset(allSeries);
+        completedSeries = assetSeries.filter(s => {
           if (s.status === 'active') return false; // Исключаем активные
           const endTime = s.endedAt ? new Date(s.endedAt).getTime() : null;
           return endTime && endTime > dayAgo; // Закончились за последние 24 часа
         });
-        const pnl = dayCompletedSeries.reduce((sum, s) => sum + (s.totalPnL || 0), 0);
-        const pnlEl = document.getElementById('stat-pnl');
-        pnlEl.textContent = `${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}`;
-        pnlEl.className = 'stat-value ' + (pnl >= 0 ? 'positive' : 'negative');
+        // Активные серии для "За сутки" - все активные серии выбранной валюты
+        activeSeries = assetSeries.filter(s => s.status === 'active');
+        pnl = completedSeries.reduce((sum, s) => sum + (s.totalPnL || 0), 0);
       }
+      
+      // Заморожено — сумма инвестиций в активных сериях
+      const frozen = activeSeries.reduce((sum, s) => sum + (s.totalInvested || 0), 0);
+      
+      // Баланс пересчитываем из серий для согласованности: initialDeposit + P&L - Торгуется
+      const calculatedBalance = initialDeposit + pnl - frozen;
+      
+      const balanceEl = document.getElementById('stat-balance');
+      balanceEl.textContent = `$${calculatedBalance.toFixed(2)}`;
+      balanceEl.className = 'stat-value ' + (calculatedBalance >= initialDeposit ? 'positive' : 'negative');
+      
+      const pnlEl = document.getElementById('stat-pnl');
+      pnlEl.textContent = `${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}`;
+      pnlEl.className = 'stat-value ' + (pnl >= 0 ? 'positive' : 'negative');
       
       // Считаем статистику из серий за период
       const wonSeries = filteredSeries.filter(s => s.status === 'won');
       const lostSeries = filteredSeries.filter(s => s.status === 'lost');
       const cancelledSeries = filteredSeries.filter(s => s.status === 'cancelled');
-      const activeSeries = filteredSeries.filter(s => s.status === 'active');
+      const activeSeriesFiltered = filteredSeries.filter(s => s.status === 'active');
       
       const winLossSeries = wonSeries.length + lostSeries.length;
       const winRate = winLossSeries > 0 ? ((wonSeries.length / winLossSeries) * 100).toFixed(0) : 0;
       document.getElementById('stat-winrate').textContent = `${winRate}%`;
       
-      // Заморожено — сумма инвестиций в активных сериях
-      const frozen = activeSeries.reduce((sum, s) => sum + (s.totalInvested || 0), 0);
       document.getElementById('stat-frozen').textContent = `$${frozen.toFixed(2)}`;
       
       // Stats - Row 2 (фильтры)
