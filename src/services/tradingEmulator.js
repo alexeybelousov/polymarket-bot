@@ -17,6 +17,8 @@ const TRADING_CONFIGS = {
     maxPrice: 0.55,             // Верхний предел цены (не входим если цена выше)
     entryFee: 0.015,            // Комиссия на вход: 1.5%
     exitFee: 0.015,             // Комиссия на выход: 1.5%
+    buyStrategy: 'signal',      // Тип покупки: "signal" - покупаем сразу по сигналу, "validated" - проверяем стабильность перед покупкой
+    sellStrategy: 'early_exit', // Тип продажи: "early_exit" - продаем за 20 сек если сигнал изменился, "hold" - не продаем заранее
   },
   bot2: {
     name: '2 свечи, 1.5%, 3 шага (break-even), ≤$0.55',              // Имя бота для отображения
@@ -27,9 +29,25 @@ const TRADING_CONFIGS = {
     maxPrice: 0.55,             // Верхний предел цены (не входим если цена выше)
     entryFee: 0.015,            // Комиссия на вход: 1.5%
     exitFee: 0.015,             // Комиссия на выход: 1.5%
+    buyStrategy: 'signal',      // Тип покупки: "signal" - покупаем сразу по сигналу, "validated" - проверяем стабильность перед покупкой
+    sellStrategy: 'early_exit', // Тип продажи: "early_exit" - продаем за 20 сек если сигнал изменился, "hold" - не продаем заранее
     breakEvenOnLastStep: true,  // На последнем шаге просто покрываем убытки без прибыли
     cooldownAfterFullLoss: 15 * 60 * 1000, // 15 минут в миллисекундах после полного проигрыша
   },
+  // bot3: {
+  //   name: '2 свечи, 1.5%, 3 шага (validated), ≤$0.55',              // Имя бота для отображения
+  //   firstBetPercent: 0.015,     // Первая ставка: 1,5% от депозита
+  //   signalType: '2candles',     // На каком сигнале начинается торговля: 2 свечи
+  //   maxSteps: 3,                // Количество шагов
+  //   baseDeposit: 100,           // Базовый депозит: $100
+  //   maxPrice: 0.55,             // Верхний предел цены (не входим если цена выше)
+  //   entryFee: 0.015,            // Комиссия на вход: 1.5%
+  //   exitFee: 0.015,             // Комиссия на выход: 1.5%
+  //   breakEvenOnLastStep: true,  // На последнем шаге просто покрываем убытки без прибыли
+  //   cooldownAfterFullLoss: 15 * 60 * 1000, // 15 минут в миллисекундах после полного проигрыша
+  //   buyStrategy: 'validated',  // Тип покупки: "signal" - покупаем сразу по сигналу, "validated" - проверяем стабильность перед покупкой (логика будет добавлена позже)
+  //   sellStrategy: 'hold',      // Тип продажи: "early_exit" - продаем за 20 сек если сигнал изменился, "hold" - не продаем заранее
+  // },
 };
 
 /**
@@ -77,7 +95,11 @@ class TradingEmulator {
     this.ENTRY_FEE_RATE = config.entryFee;
     this.EXIT_FEE_RATE = config.exitFee;
     
-    console.log(`[TRADE] [${botId}] Initialized with ENTRY_FEE_RATE: ${this.ENTRY_FEE_RATE}, EXIT_FEE_RATE: ${this.EXIT_FEE_RATE}`);
+    // Значения по умолчанию для стратегий
+    this.config.buyStrategy = this.config.buyStrategy || 'signal';
+    this.config.sellStrategy = this.config.sellStrategy || 'early_exit';
+    
+    console.log(`[TRADE] [${botId}] Initialized with ENTRY_FEE_RATE: ${this.ENTRY_FEE_RATE}, EXIT_FEE_RATE: ${this.EXIT_FEE_RATE}, buyStrategy: ${this.config.buyStrategy}, sellStrategy: ${this.config.sellStrategy}`);
   }
 
   async start() {
@@ -327,10 +349,19 @@ class TradingEmulator {
       message: `Сигнал ${candleCount}${signalEmoji} → ставим на ${betEmoji}`,
     });
     
-    console.log(`[TRADE] [${this.botId}] ${type.toUpperCase()}: Series created, calling buyStep...`);
+    console.log(`[TRADE] [${this.botId}] ${type.toUpperCase()}: Series created, buyStrategy: ${this.config.buyStrategy || 'signal'}`);
     
-    // Покупаем первую ставку
-    const bought = await this.buyStep(series);
+    // Покупаем первую ставку в зависимости от стратегии
+    let bought = false;
+    if (this.config.buyStrategy === 'validated') {
+      // TODO: Реализовать логику проверки стабильности перед покупкой
+      // Пока используем стратегию 'signal' как fallback
+      console.log(`[TRADE] [${this.botId}] ${type.toUpperCase()}: buyStrategy 'validated' not yet implemented, using 'signal' as fallback`);
+      bought = await this.buyStep(series);
+    } else {
+      // buyStrategy === 'signal' (по умолчанию) - покупаем сразу по сигналу
+      bought = await this.buyStep(series);
+    }
     
     console.log(`[TRADE] [${this.botId}] ${type.toUpperCase()}: buyStep returned: ${bought}`);
     if (!bought) {
@@ -966,7 +997,8 @@ class TradingEmulator {
     const colorEmoji = currentColor === 'green' ? '🟢' : '🔴';
 
     // ПРОВЕРКА ОТМЕНЫ СИГНАЛА: если рынок где был сигнал ещё активен и цвет изменился
-    if (series.signalMarketSlug && series.currentStep === 1) {
+    // Работает только если sellStrategy === 'early_exit'
+    if (series.signalMarketSlug && series.currentStep === 1 && this.config.sellStrategy === 'early_exit') {
       const signalTimestamp = getTimestamp(series.signalMarketSlug);
       
       // Сигнальный рынок ещё активен
@@ -1006,13 +1038,15 @@ class TradingEmulator {
       }
       
       // РАННЯЯ ПОКУПКА: если рынок идёт против нас (цвет = signalColor), покупаем следующий шаг заранее
-      if (!series.nextStepBought && series.currentStep < this.config.maxSteps && currentColor === series.signalColor) {
+      // Работает только если buyStrategy === 'signal' (при 'validated' нужно проверять стабильность)
+      if (!series.nextStepBought && series.currentStep < this.config.maxSteps && currentColor === series.signalColor && this.config.buyStrategy === 'signal') {
         await this.buyNextStepEarly(series, context);
       }
       
       // ПРОДАЖА ХЕДЖА: за 20 сек до конца, если рынок наш цвет — продаём хедж
+      // Работает только если sellStrategy === 'early_exit'
       const timeToEnd = context.current.timeToEnd;
-      if (series.nextStepBought && currentColor === series.betColor && timeToEnd <= 20) {
+      if (series.nextStepBought && currentColor === series.betColor && timeToEnd <= 20 && this.config.sellStrategy === 'early_exit') {
         await this.sellHedge(series, timeToEnd);
       }
       

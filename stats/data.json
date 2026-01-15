@@ -1,0 +1,2709 @@
+[
+  {
+    "_id": "6968c8e3e7109691c4f7e4e0",
+    "botId": "bot2",
+    "asset": "eth",
+    "signalMarketSlug": "binance-ethusdt-1768474800000",
+    "signalColor": "red",
+    "betColor": "green",
+    "status": "active",
+    "currentStep": 1,
+    "currentMarketSlug": "binance-ethusdt-1768475700000",
+    "marketState": "waiting",
+    "nextStepBought": false,
+    "totalInvested": 1.5305325628611586,
+    "totalCommission": 0.02295798844291738,
+    "totalPnL": 0,
+    "positions": [
+      {
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768475700000",
+        "tokenId": "34733156025550572802246703726728937314686936813004462645434690813575472285768",
+        "amount": 1.5305325628611586,
+        "price": 0.49,
+        "shares": 3.076682804935186,
+        "commission": 0.02295798844291738,
+        "status": "active",
+        "_id": "6968c8e4e7109691c4f7e4e3"
+      }
+    ],
+    "events": [
+      {
+        "timestamp": "2026-01-15T11:00:51.664Z",
+        "type": "series_opened",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768475700000",
+        "message": "Сигнал 2🔴 → ставим на 🟢"
+      },
+      {
+        "timestamp": "2026-01-15T11:00:52.012Z",
+        "type": "buy",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768475700000",
+        "amount": 1.5305325628611586,
+        "message": "Купил 3.08 shares по $0.49 (3473315) = $1.53 на 🟢 (Step 1)"
+      },
+      {
+        "timestamp": "2026-01-15T11:00:52.012Z",
+        "type": "waiting_market",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768475700000",
+        "message": "Жду начало рынка..."
+      }
+    ],
+    "startedAt": "2026-01-15T11:00:51.663Z",
+    "__v": 0
+  },
+  {
+    "_id": "6968c1f9e7109691c4f7de04",
+    "botId": "bot2",
+    "asset": "eth",
+    "signalMarketSlug": "binance-ethusdt-1768473000000",
+    "signalColor": "green",
+    "betColor": "red",
+    "status": "won",
+    "currentStep": 1,
+    "currentMarketSlug": "binance-ethusdt-1768473900000",
+    "marketState": "closed",
+    "nextStepBought": false,
+    "totalInvested": 1.5949811260566755,
+    "totalCommission": 0.17829546867270282,
+    "totalPnL": 1.3268690690098968,
+    "positions": [
+      {
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768473900000",
+        "tokenId": "73052480046518282557998738897417757417851369856732397600057589360002584607716",
+        "amount": 1.594981126056675,
+        "price": 0.5,
+        "shares": 3.14211281833165,
+        "commission": 0.023924716890850125,
+        "status": "won",
+        "_id": "6968c1f9e7109691c4f7de07"
+      },
+      {
+        "step": 2,
+        "marketSlug": "binance-ethusdt-1768474800000",
+        "tokenId": "15134155754234580600089994677222912653226278684566526261995589113529231310957",
+        "amount": 3.574635316895932,
+        "price": 0.52,
+        "shares": 6.771184206043255,
+        "commission": 0.05361952975343898,
+        "status": "sold",
+        "_id": "6968c52ee7109691c4f7e10f"
+      }
+    ],
+    "events": [
+      {
+        "timestamp": "2026-01-15T10:31:21.299Z",
+        "type": "series_opened",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768473900000",
+        "message": "Сигнал 2🟢 → ставим на 🔴"
+      },
+      {
+        "timestamp": "2026-01-15T10:31:21.592Z",
+        "type": "buy",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768473900000",
+        "amount": 1.594981126056675,
+        "message": "Купил 3.14 shares по $0.50 (7305248) = $1.59 на 🔴 (Step 1)"
+      },
+      {
+        "timestamp": "2026-01-15T10:31:21.593Z",
+        "type": "waiting_market",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768473900000",
+        "message": "Жду начало рынка..."
+      },
+      {
+        "timestamp": "2026-01-15T10:45:01.894Z",
+        "type": "market_active",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768473900000",
+        "message": "Рынок активен"
+      },
+      {
+        "timestamp": "2026-01-15T10:45:02.223Z",
+        "type": "buy",
+        "step": 2,
+        "marketSlug": "binance-ethusdt-1768473900000",
+        "amount": 3.574635316895932,
+        "message": "⚡ Хедж: 6.77 shares- по $0.52 (1513415) = $3.57 на 🔴 (Step 2)"
+      },
+      {
+        "timestamp": "2026-01-15T10:59:42.347Z",
+        "type": "sell_hedge",
+        "step": 2,
+        "marketSlug": "binance-ethusdt-1768473900000",
+        "amount": 3.401504385905829,
+        "message": "📤 Продал хедж Step 2 по $0.51 (1513415): вернул $3.40 ($0.17)"
+      },
+      {
+        "timestamp": "2026-01-15T10:59:42.347Z",
+        "type": "order_book",
+        "step": 2,
+        "marketSlug": "binance-ethusdt-1768473900000",
+        "message": "📊 Order Book: Bids 18856 (40 levels) | Asks 21176 (43 levels)"
+      },
+      {
+        "timestamp": "2026-01-15T11:00:07.469Z",
+        "type": "market_won",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768473900000",
+        "marketColor": "red",
+        "pnl": 1.5,
+        "message": "Рынок закрылся 🔴 — ПРОФИТ! Получил $3.09 (+$1.50)"
+      },
+      {
+        "timestamp": "2026-01-15T11:00:07.469Z",
+        "type": "series_won",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768473900000",
+        "pnl": 1.3268690690098968,
+        "message": "Серия завершена победой на Step 1! P&L: $1.33 (вкл. -$0.17 хедж)"
+      }
+    ],
+    "startedAt": "2026-01-15T10:31:21.299Z",
+    "__v": 4,
+    "nextMarketSlug": null,
+    "endedAt": "2026-01-15T11:00:07.469Z"
+  },
+  {
+    "_id": "6968badde7109691c4f7d6e3",
+    "botId": "bot2",
+    "asset": "eth",
+    "signalMarketSlug": "binance-ethusdt-1768471200000",
+    "signalColor": "red",
+    "betColor": "green",
+    "status": "won",
+    "currentStep": 1,
+    "currentMarketSlug": "binance-ethusdt-1768472100000",
+    "marketState": "closed",
+    "nextStepBought": false,
+    "totalInvested": 1.4687133459125907,
+    "totalCommission": 0.1581137817819553,
+    "totalPnL": 1.4098073079524642,
+    "positions": [
+      {
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768472100000",
+        "tokenId": "34241210732770340982182846983481772432122698638523910539260503231698295101173",
+        "amount": 1.468713345912591,
+        "price": 0.48,
+        "shares": 3.013922178591463,
+        "commission": 0.022030700188688863,
+        "status": "won",
+        "_id": "6968badde7109691c4f7d6e8"
+      },
+      {
+        "step": 2,
+        "marketSlug": "binance-ethusdt-1768473000000",
+        "tokenId": "111997963413836579741518212541875721482140604603480231240692762739059318019154",
+        "amount": 3.0291416304798156,
+        "price": 0.49,
+        "shares": 6.089192869433915,
+        "commission": 0.045437124457197234,
+        "status": "sold",
+        "_id": "6968be2ce7109691c4f7da0d"
+      }
+    ],
+    "events": [
+      {
+        "timestamp": "2026-01-15T10:01:01.249Z",
+        "type": "series_opened",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768472100000",
+        "message": "Сигнал 2🔴 → ставим на 🟢"
+      },
+      {
+        "timestamp": "2026-01-15T10:01:01.529Z",
+        "type": "buy",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768472100000",
+        "amount": 1.468713345912591,
+        "message": "Купил 3.01 shares по $0.48 (3424121) = $1.47 на 🟢 (Step 1)"
+      },
+      {
+        "timestamp": "2026-01-15T10:01:01.529Z",
+        "type": "waiting_market",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768472100000",
+        "message": "Жду начало рынка..."
+      },
+      {
+        "timestamp": "2026-01-15T10:15:07.742Z",
+        "type": "market_active",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768472100000",
+        "message": "Рынок активен"
+      },
+      {
+        "timestamp": "2026-01-15T10:15:08.023Z",
+        "type": "buy",
+        "step": 2,
+        "marketSlug": "binance-ethusdt-1768472100000",
+        "amount": 3.0291416304798156,
+        "message": "⚡ Хедж: 6.09 shares- по $0.49 (1119979) = $3.03 на 🟢 (Step 2)"
+      },
+      {
+        "timestamp": "2026-01-15T10:29:42.290Z",
+        "type": "sell_hedge",
+        "step": 2,
+        "marketSlug": "binance-ethusdt-1768472100000",
+        "amount": 2.9389489384322793,
+        "message": "📤 Продал хедж Step 2 по $0.49 (1119979): вернул $2.94 ($0.09)"
+      },
+      {
+        "timestamp": "2026-01-15T10:29:42.291Z",
+        "type": "order_book",
+        "step": 2,
+        "marketSlug": "binance-ethusdt-1768472100000",
+        "message": "📊 Order Book: Bids 19630 (43 levels) | Asks 27517 (44 levels)"
+      },
+      {
+        "timestamp": "2026-01-15T10:30:07.543Z",
+        "type": "market_won",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768472100000",
+        "marketColor": "green",
+        "pnl": 1.5000000000000002,
+        "message": "Рынок закрылся 🟢 — ПРОФИТ! Получил $2.97 (+$1.50)"
+      },
+      {
+        "timestamp": "2026-01-15T10:30:07.543Z",
+        "type": "series_won",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768472100000",
+        "pnl": 1.4098073079524642,
+        "message": "Серия завершена победой на Step 1! P&L: $1.41 (вкл. -$0.09 хедж)"
+      }
+    ],
+    "startedAt": "2026-01-15T10:01:01.249Z",
+    "__v": 4,
+    "nextMarketSlug": null,
+    "endedAt": "2026-01-15T10:30:07.543Z"
+  },
+  {
+    "_id": "6968b3b7e7109691c4f7cde0",
+    "botId": "bot2",
+    "asset": "eth",
+    "signalMarketSlug": "binance-ethusdt-1768469400000",
+    "signalColor": "green",
+    "betColor": "red",
+    "status": "won",
+    "currentStep": 1,
+    "currentMarketSlug": "binance-ethusdt-1768470300000",
+    "marketState": "closed",
+    "nextStepBought": false,
+    "totalInvested": 1.6622304307675595,
+    "totalCommission": 0.18730235414330193,
+    "totalPnL": 1.526030172124468,
+    "positions": [
+      {
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768470300000",
+        "tokenId": "32414353534548232685220437278991280567911404688450626122288914533982092101181",
+        "amount": 1.6622304307675595,
+        "price": 0.51,
+        "shares": 3.2103862241295023,
+        "commission": 0.024933456461513393,
+        "status": "won",
+        "_id": "6968b3b7e7109691c4f7cde5"
+      },
+      {
+        "step": 2,
+        "marketSlug": "binance-ethusdt-1768471200000",
+        "tokenId": "53286966154524046681749952341439903977692999795663373501978893292219865031682",
+        "amount": 3.8071034773281998,
+        "price": 0.53,
+        "shares": 7.075465896543918,
+        "commission": 0.057106552159922996,
+        "status": "sold",
+        "_id": "6968b723e7109691c4f7d241"
+      }
+    ],
+    "events": [
+      {
+        "timestamp": "2026-01-15T09:30:31.253Z",
+        "type": "series_opened",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768470300000",
+        "message": "Сигнал 2🟢 → ставим на 🔴"
+      },
+      {
+        "timestamp": "2026-01-15T09:30:31.527Z",
+        "type": "buy",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768470300000",
+        "amount": 1.6622304307675595,
+        "message": "Купил 3.21 shares по $0.51 (3241435) = $1.66 на 🔴 (Step 1)"
+      },
+      {
+        "timestamp": "2026-01-15T09:30:31.527Z",
+        "type": "waiting_market",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768470300000",
+        "message": "Жду начало рынка..."
+      },
+      {
+        "timestamp": "2026-01-15T09:45:07.337Z",
+        "type": "market_active",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768470300000",
+        "message": "Рынок активен"
+      },
+      {
+        "timestamp": "2026-01-15T09:45:07.661Z",
+        "type": "buy",
+        "step": 2,
+        "marketSlug": "binance-ethusdt-1768470300000",
+        "amount": 3.8071034773281998,
+        "message": "⚡ Хедж: 7.08 shares- по $0.53 (5328696) = $3.81 на 🔴 (Step 2)"
+      },
+      {
+        "timestamp": "2026-01-15T09:59:42.594Z",
+        "type": "sell_hedge",
+        "step": 2,
+        "marketSlug": "binance-ethusdt-1768470300000",
+        "amount": 3.8331336494526678,
+        "message": "📤 Продал хедж Step 2 по $0.55 (5328696): вернул $3.83 ($-0.03)"
+      },
+      {
+        "timestamp": "2026-01-15T09:59:42.595Z",
+        "type": "order_book",
+        "step": 2,
+        "marketSlug": "binance-ethusdt-1768470300000",
+        "message": "📊 Order Book: Bids 26030 (48 levels) | Asks 16254 (39 levels)"
+      },
+      {
+        "timestamp": "2026-01-15T10:00:06.881Z",
+        "type": "market_won",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768470300000",
+        "marketColor": "red",
+        "pnl": 1.5,
+        "message": "Рынок закрылся 🔴 — ПРОФИТ! Получил $3.16 (+$1.50)"
+      },
+      {
+        "timestamp": "2026-01-15T10:00:06.882Z",
+        "type": "series_won",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768470300000",
+        "pnl": 1.526030172124468,
+        "message": "Серия завершена победой на Step 1! P&L: $1.53"
+      }
+    ],
+    "startedAt": "2026-01-15T09:30:31.253Z",
+    "__v": 4,
+    "nextMarketSlug": null,
+    "endedAt": "2026-01-15T10:00:06.882Z"
+  },
+  {
+    "_id": "6968b029e7109691c4f7ca35",
+    "botId": "bot2",
+    "asset": "eth",
+    "signalMarketSlug": "binance-ethusdt-1768468500000",
+    "signalColor": "red",
+    "betColor": "green",
+    "status": "cancelled",
+    "currentStep": 1,
+    "currentMarketSlug": "binance-ethusdt-1768469400000",
+    "marketState": "waiting",
+    "nextStepBought": false,
+    "totalInvested": 1.5305325628611586,
+    "totalCommission": 0.044187099796970164,
+    "totalPnL": -0.1364875839450257,
+    "positions": [
+      {
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768469400000",
+        "tokenId": "3945475232514191948001387570846487868647069052426963613336818508970705359390",
+        "amount": 1.5305325628611586,
+        "price": 0.49,
+        "shares": 3.076682804935186,
+        "commission": 0.02295798844291738,
+        "status": "sold",
+        "_id": "6968b029e7109691c4f7ca40"
+      }
+    ],
+    "events": [
+      {
+        "timestamp": "2026-01-15T09:15:21.190Z",
+        "type": "series_opened",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768469400000",
+        "message": "Сигнал 2🔴 → ставим на 🟢"
+      },
+      {
+        "timestamp": "2026-01-15T09:15:21.559Z",
+        "type": "buy",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768469400000",
+        "amount": 1.5305325628611586,
+        "message": "Купил 3.08 shares по $0.49 (3945475) = $1.53 на 🟢 (Step 1)"
+      },
+      {
+        "timestamp": "2026-01-15T09:15:21.559Z",
+        "type": "waiting_market",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768469400000",
+        "message": "Жду начало рынка..."
+      },
+      {
+        "timestamp": "2026-01-15T09:29:42.381Z",
+        "type": "sell",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768469400000",
+        "amount": 1.3940449789161329,
+        "message": "📤 Продал Step 1: 3.08 shares- по $0.46 (3945475) = $1.39"
+      },
+      {
+        "timestamp": "2026-01-15T09:29:42.528Z",
+        "type": "order_book",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768469400000",
+        "message": "📊 Order Book: Bids 19502 (31 levels) | Asks 32288 (41 levels)"
+      },
+      {
+        "timestamp": "2026-01-15T09:29:42.531Z",
+        "type": "signal_cancelled",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768469400000",
+        "marketColor": "green",
+        "pnl": -0.1364875839450257,
+        "message": "⚠️ Сигнал отменён: рынок 🟢 (был 🔴) → вернул $1.39 (P&L: $-0.14)"
+      }
+    ],
+    "startedAt": "2026-01-15T09:15:21.190Z",
+    "__v": 1,
+    "endedAt": "2026-01-15T09:29:42.531Z",
+    "nextMarketSlug": null
+  },
+  {
+    "_id": "6968a921e7109691c4f7c30b",
+    "botId": "bot2",
+    "asset": "eth",
+    "signalMarketSlug": "binance-ethusdt-1768466700000",
+    "signalColor": "green",
+    "betColor": "red",
+    "status": "won",
+    "currentStep": 1,
+    "currentMarketSlug": "binance-ethusdt-1768467600000",
+    "marketState": "closed",
+    "nextStepBought": false,
+    "totalInvested": 1.5949811260566755,
+    "totalCommission": 0.17829546867270282,
+    "totalPnL": 1.460261397868949,
+    "positions": [
+      {
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768467600000",
+        "tokenId": "104483769293014600846064334343967290328829477120048685753221060248615968452326",
+        "amount": 1.594981126056675,
+        "price": 0.5,
+        "shares": 3.14211281833165,
+        "commission": 0.023924716890850125,
+        "status": "won",
+        "_id": "6968a921e7109691c4f7c30e"
+      },
+      {
+        "step": 2,
+        "marketSlug": "binance-ethusdt-1768468500000",
+        "tokenId": "83946501146530861644364361350323137605534126098391168953182030882452101089418",
+        "amount": 3.574635316895932,
+        "price": 0.52,
+        "shares": 6.771184206043255,
+        "commission": 0.05361952975343898,
+        "status": "sold",
+        "_id": "6968aed1e7109691c4f7c852"
+      }
+    ],
+    "events": [
+      {
+        "timestamp": "2026-01-15T08:45:21.219Z",
+        "type": "series_opened",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768467600000",
+        "message": "Сигнал 2🟢 → ставим на 🔴"
+      },
+      {
+        "timestamp": "2026-01-15T08:45:21.490Z",
+        "type": "buy",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768467600000",
+        "amount": 1.594981126056675,
+        "message": "Купил 3.14 shares по $0.50 (1044837) = $1.59 на 🔴 (Step 1)"
+      },
+      {
+        "timestamp": "2026-01-15T08:45:21.490Z",
+        "type": "waiting_market",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768467600000",
+        "message": "Жду начало рынка..."
+      },
+      {
+        "timestamp": "2026-01-15T09:00:06.822Z",
+        "type": "market_active",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768467600000",
+        "message": "Рынок активен"
+      },
+      {
+        "timestamp": "2026-01-15T09:09:37.565Z",
+        "type": "buy",
+        "step": 2,
+        "marketSlug": "binance-ethusdt-1768467600000",
+        "amount": 3.574635316895932,
+        "message": "⚡ Хедж: 6.77 shares- по $0.52 (8394650) = $3.57 на 🔴 (Step 2)"
+      },
+      {
+        "timestamp": "2026-01-15T09:14:42.439Z",
+        "type": "sell_hedge",
+        "step": 2,
+        "marketSlug": "binance-ethusdt-1768467600000",
+        "amount": 3.5348967147648813,
+        "message": "📤 Продал хедж Step 2 по $0.53 (8394650): вернул $3.53 ($0.04)"
+      },
+      {
+        "timestamp": "2026-01-15T09:14:42.440Z",
+        "type": "order_book",
+        "step": 2,
+        "marketSlug": "binance-ethusdt-1768467600000",
+        "message": "📊 Order Book: Bids 23036 (40 levels) | Asks 24138 (35 levels)"
+      },
+      {
+        "timestamp": "2026-01-15T09:15:07.203Z",
+        "type": "market_won",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768467600000",
+        "marketColor": "red",
+        "pnl": 1.5,
+        "message": "Рынок закрылся 🔴 — ПРОФИТ! Получил $3.09 (+$1.50)"
+      },
+      {
+        "timestamp": "2026-01-15T09:15:07.204Z",
+        "type": "series_won",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768467600000",
+        "pnl": 1.460261397868949,
+        "message": "Серия завершена победой на Step 1! P&L: $1.46 (вкл. -$0.04 хедж)"
+      }
+    ],
+    "startedAt": "2026-01-15T08:45:21.219Z",
+    "__v": 4,
+    "nextMarketSlug": null,
+    "endedAt": "2026-01-15T09:15:07.204Z"
+  },
+  {
+    "_id": "69689e9fe7109691c4f7b8df",
+    "botId": "bot2",
+    "asset": "eth",
+    "signalMarketSlug": "binance-ethusdt-1768464000000",
+    "signalColor": "red",
+    "betColor": "green",
+    "status": "won",
+    "currentStep": 2,
+    "currentMarketSlug": "binance-ethusdt-1768465800000",
+    "marketState": "closed",
+    "nextStepBought": false,
+    "totalInvested": 5.024695666311777,
+    "totalCommission": 0.3417753235427946,
+    "totalPnL": 0.9104955750323098,
+    "positions": [
+      {
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768464900000",
+        "tokenId": "68309970440895887706290134549233026552385307259800568686234864575017145608457",
+        "amount": 1.594981126056675,
+        "price": 0.5,
+        "shares": 3.14211281833165,
+        "commission": 0.023924716890850125,
+        "status": "lost",
+        "_id": "69689e9fe7109691c4f7b8e7"
+      },
+      {
+        "step": 2,
+        "marketSlug": "binance-ethusdt-1768465800000",
+        "tokenId": "9715469124107717327538000569881732505644422691410809631408464957889833986773",
+        "amount": 3.429714540255102,
+        "price": 0.51,
+        "shares": 6.624056514022109,
+        "commission": 0.05144571810382653,
+        "status": "won",
+        "_id": "6968a229e7109691c4f7bc21"
+      },
+      {
+        "step": 3,
+        "marketSlug": "binance-ethusdt-1768466700000",
+        "tokenId": "106607624844426219091268301714025345334156152977026826326030534639383986611569",
+        "amount": 5.568134694592876,
+        "price": 0.51,
+        "shares": 10.754142498380357,
+        "commission": 0.08352202041889314,
+        "status": "sold",
+        "_id": "6968a5b1e7109691c4f7bf8f"
+      }
+    ],
+    "events": [
+      {
+        "timestamp": "2026-01-15T08:00:31.119Z",
+        "type": "series_opened",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768464900000",
+        "message": "Сигнал 2🔴 → ставим на 🟢"
+      },
+      {
+        "timestamp": "2026-01-15T08:00:31.396Z",
+        "type": "buy",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768464900000",
+        "amount": 1.594981126056675,
+        "message": "Купил 3.14 shares по $0.50 (6830997) = $1.59 на 🟢 (Step 1)"
+      },
+      {
+        "timestamp": "2026-01-15T08:00:31.396Z",
+        "type": "waiting_market",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768464900000",
+        "message": "Жду начало рынка..."
+      },
+      {
+        "timestamp": "2026-01-15T08:15:06.560Z",
+        "type": "market_active",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768464900000",
+        "message": "Рынок активен"
+      },
+      {
+        "timestamp": "2026-01-15T08:15:37.255Z",
+        "type": "buy",
+        "step": 2,
+        "marketSlug": "binance-ethusdt-1768464900000",
+        "amount": 3.429714540255102,
+        "message": "⚡ Хедж: 6.62 shares- по $0.51 (9715469) = $3.43 на 🟢 (Step 2)"
+      },
+      {
+        "timestamp": "2026-01-15T08:30:07.084Z",
+        "type": "market_lost",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768464900000",
+        "marketColor": "red",
+        "message": "Рынок закрылся 🔴 — проигрыш шага (потеряно $1.59)"
+      },
+      {
+        "timestamp": "2026-01-15T08:30:07.085Z",
+        "type": "waiting_market",
+        "step": 2,
+        "marketSlug": "binance-ethusdt-1768465800000",
+        "message": "Переход на Step 2 (хедж уже куплен)"
+      },
+      {
+        "timestamp": "2026-01-15T08:30:11.465Z",
+        "type": "market_active",
+        "step": 2,
+        "marketSlug": "binance-ethusdt-1768465800000",
+        "message": "Рынок активен"
+      },
+      {
+        "timestamp": "2026-01-15T08:30:41.835Z",
+        "type": "buy",
+        "step": 3,
+        "marketSlug": "binance-ethusdt-1768465800000",
+        "amount": 5.568134694592876,
+        "message": "⚡ Хедж: 10.75 shares- по $0.51 (1066076) = $5.57 на 🟢 (Step 3 break-even)"
+      },
+      {
+        "timestamp": "2026-01-15T08:44:42.024Z",
+        "type": "sell_hedge",
+        "step": 3,
+        "marketSlug": "binance-ethusdt-1768465800000",
+        "amount": 4.978630269625186,
+        "message": "📤 Продал хедж Step 3 по $0.47 (1066076): вернул $4.98 ($0.59)"
+      },
+      {
+        "timestamp": "2026-01-15T08:44:42.025Z",
+        "type": "order_book",
+        "step": 3,
+        "marketSlug": "binance-ethusdt-1768465800000",
+        "message": "📊 Order Book: Bids 22203 (33 levels) | Asks 21262 (40 levels)"
+      },
+      {
+        "timestamp": "2026-01-15T08:45:06.981Z",
+        "type": "market_won",
+        "step": 2,
+        "marketSlug": "binance-ethusdt-1768465800000",
+        "marketColor": "green",
+        "pnl": 3.0949811260566746,
+        "message": "Рынок закрылся 🟢 — ПРОФИТ! Получил $6.52 (+$3.09)"
+      },
+      {
+        "timestamp": "2026-01-15T08:45:06.983Z",
+        "type": "series_won",
+        "step": 2,
+        "marketSlug": "binance-ethusdt-1768465800000",
+        "pnl": 0.9104955750323098,
+        "message": "Серия завершена победой на Step 2! P&L: $0.91 (вкл. -$0.59 хедж)"
+      }
+    ],
+    "startedAt": "2026-01-15T08:00:31.118Z",
+    "__v": 7,
+    "nextMarketSlug": null,
+    "endedAt": "2026-01-15T08:45:06.983Z"
+  },
+  {
+    "_id": "69689098e7109691c4f7aa2b",
+    "botId": "bot2",
+    "asset": "eth",
+    "signalMarketSlug": "binance-ethusdt-1768460400000",
+    "signalColor": "green",
+    "betColor": "red",
+    "status": "won",
+    "currentStep": 3,
+    "currentMarketSlug": "binance-ethusdt-1768463100000",
+    "marketState": "closed",
+    "nextStepBought": false,
+    "totalInvested": 10.605554199103944,
+    "totalCommission": 0.3205892144957562,
+    "totalPnL": -1.7763568394002505e-15,
+    "positions": [
+      {
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768461300000",
+        "tokenId": "72349418727546627211976556760647729332453165093637033206413044802003798717282",
+        "amount": 1.5305325628611586,
+        "price": 0.49,
+        "shares": 3.076682804935186,
+        "commission": 0.02295798844291738,
+        "status": "lost",
+        "_id": "69689099e7109691c4f7aa2e"
+      },
+      {
+        "step": 2,
+        "marketSlug": "binance-ethusdt-1768462200000",
+        "tokenId": "40051399939114108848387278539231067402098746558292439993835147485089145565326",
+        "amount": 3.5001986399862344,
+        "price": 0.52,
+        "shares": 6.630183962281617,
+        "commission": 0.05250297959979351,
+        "status": "lost",
+        "_id": "696893fae7109691c4f7adb6"
+      },
+      {
+        "step": 3,
+        "marketSlug": "binance-ethusdt-1768463100000",
+        "tokenId": "29314295339893267828424523488052388397107532370233006336287476971487892404569",
+        "amount": 5.57482299625655,
+        "price": 0.51,
+        "shares": 10.76706010061314,
+        "commission": 0.08362234494384825,
+        "status": "won",
+        "_id": "69689783e7109691c4f7b12c"
+      }
+    ],
+    "events": [
+      {
+        "timestamp": "2026-01-15T07:00:40.925Z",
+        "type": "series_opened",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768461300000",
+        "message": "Сигнал 2🟢 → ставим на 🔴"
+      },
+      {
+        "timestamp": "2026-01-15T07:00:41.193Z",
+        "type": "buy",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768461300000",
+        "amount": 1.5305325628611586,
+        "message": "Купил 3.08 shares по $0.49 (7234941) = $1.53 на 🔴 (Step 1)"
+      },
+      {
+        "timestamp": "2026-01-15T07:00:41.194Z",
+        "type": "waiting_market",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768461300000",
+        "message": "Жду начало рынка..."
+      },
+      {
+        "timestamp": "2026-01-15T07:15:06.390Z",
+        "type": "market_active",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768461300000",
+        "message": "Рынок активен"
+      },
+      {
+        "timestamp": "2026-01-15T07:15:06.722Z",
+        "type": "buy",
+        "step": 2,
+        "marketSlug": "binance-ethusdt-1768461300000",
+        "amount": 3.5001986399862344,
+        "message": "⚡ Хедж: 6.63 shares- по $0.52 (4005139) = $3.50 на 🔴 (Step 2)"
+      },
+      {
+        "timestamp": "2026-01-15T07:30:06.708Z",
+        "type": "market_lost",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768461300000",
+        "marketColor": "green",
+        "message": "Рынок закрылся 🟢 — проигрыш шага (потеряно $1.53)"
+      },
+      {
+        "timestamp": "2026-01-15T07:30:06.709Z",
+        "type": "waiting_market",
+        "step": 2,
+        "marketSlug": "binance-ethusdt-1768462200000",
+        "message": "Переход на Step 2 (хедж уже куплен)"
+      },
+      {
+        "timestamp": "2026-01-15T07:30:11.283Z",
+        "type": "market_active",
+        "step": 2,
+        "marketSlug": "binance-ethusdt-1768462200000",
+        "message": "Рынок активен"
+      },
+      {
+        "timestamp": "2026-01-15T07:30:11.557Z",
+        "type": "buy",
+        "step": 3,
+        "marketSlug": "binance-ethusdt-1768462200000",
+        "amount": 5.57482299625655,
+        "message": "⚡ Хедж: 10.77 shares- по $0.51 (2931429) = $5.57 на 🔴 (Step 3 break-even)"
+      },
+      {
+        "timestamp": "2026-01-15T07:45:06.871Z",
+        "type": "market_lost",
+        "step": 2,
+        "marketSlug": "binance-ethusdt-1768462200000",
+        "marketColor": "green",
+        "message": "Рынок закрылся 🟢 — проигрыш шага (потеряно $3.50)"
+      },
+      {
+        "timestamp": "2026-01-15T07:45:06.873Z",
+        "type": "waiting_market",
+        "step": 3,
+        "marketSlug": "binance-ethusdt-1768463100000",
+        "message": "Переход на Step 3 (хедж уже куплен)"
+      },
+      {
+        "timestamp": "2026-01-15T07:45:11.317Z",
+        "type": "market_active",
+        "step": 3,
+        "marketSlug": "binance-ethusdt-1768463100000",
+        "message": "Рынок активен"
+      },
+      {
+        "timestamp": "2026-01-15T08:00:06.945Z",
+        "type": "market_won",
+        "step": 3,
+        "marketSlug": "binance-ethusdt-1768463100000",
+        "marketColor": "red",
+        "pnl": 5.030731202847392,
+        "message": "Рынок закрылся 🔴 — ПРОФИТ! Получил $10.61 (+$5.03)"
+      },
+      {
+        "timestamp": "2026-01-15T08:00:06.945Z",
+        "type": "series_won",
+        "step": 3,
+        "marketSlug": "binance-ethusdt-1768463100000",
+        "pnl": -1.7763568394002505e-15,
+        "message": "Серия завершена победой на Step 3! P&L: $-0.00"
+      }
+    ],
+    "startedAt": "2026-01-15T07:00:40.925Z",
+    "__v": 8,
+    "nextMarketSlug": null,
+    "endedAt": "2026-01-15T08:00:06.945Z"
+  },
+  {
+    "_id": "69688d00e7109691c4f7a5a3",
+    "botId": "bot2",
+    "asset": "eth",
+    "signalMarketSlug": "binance-ethusdt-1768459500000",
+    "signalColor": "red",
+    "betColor": "green",
+    "status": "cancelled",
+    "currentStep": 1,
+    "currentMarketSlug": "binance-ethusdt-1768460400000",
+    "marketState": "waiting",
+    "nextStepBought": false,
+    "totalInvested": 1.594981126056675,
+    "totalCommission": 0.048433196873837,
+    "totalPnL": 0.014409059492796139,
+    "positions": [
+      {
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768460400000",
+        "tokenId": "36275381583969815717722015552841147266766900529874914510512505653970481216919",
+        "amount": 1.594981126056675,
+        "price": 0.5,
+        "shares": 3.14211281833165,
+        "commission": 0.023924716890850125,
+        "status": "sold",
+        "_id": "69688d01e7109691c4f7a5a8"
+      }
+    ],
+    "events": [
+      {
+        "timestamp": "2026-01-15T06:45:20.900Z",
+        "type": "series_opened",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768460400000",
+        "message": "Сигнал 2🔴 → ставим на 🟢"
+      },
+      {
+        "timestamp": "2026-01-15T06:45:21.165Z",
+        "type": "buy",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768460400000",
+        "amount": 1.594981126056675,
+        "message": "Купил 3.14 shares по $0.50 (3627538) = $1.59 на 🟢 (Step 1)"
+      },
+      {
+        "timestamp": "2026-01-15T06:45:21.166Z",
+        "type": "waiting_market",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768460400000",
+        "message": "Жду начало рынка..."
+      },
+      {
+        "timestamp": "2026-01-15T06:59:41.673Z",
+        "type": "sell",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768460400000",
+        "amount": 1.6093901855494712,
+        "message": "📤 Продал Step 1: 3.14 shares- по $0.52 (3627538) = $1.61"
+      },
+      {
+        "timestamp": "2026-01-15T06:59:41.809Z",
+        "type": "order_book",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768460400000",
+        "message": "📊 Order Book: Bids 24495 (39 levels) | Asks 21718 (36 levels)"
+      },
+      {
+        "timestamp": "2026-01-15T06:59:41.819Z",
+        "type": "signal_cancelled",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768460400000",
+        "marketColor": "green",
+        "pnl": 0.014409059492796139,
+        "message": "⚠️ Сигнал отменён: рынок 🟢 (был 🔴) → вернул $1.61 (P&L: $0.01)"
+      }
+    ],
+    "startedAt": "2026-01-15T06:45:20.900Z",
+    "__v": 1,
+    "endedAt": "2026-01-15T06:59:41.819Z",
+    "nextMarketSlug": null
+  },
+  {
+    "_id": "696885efe7109691c4f79e97",
+    "botId": "bot2",
+    "asset": "eth",
+    "signalMarketSlug": "binance-ethusdt-1768457700000",
+    "signalColor": "green",
+    "betColor": "red",
+    "status": "won",
+    "currentStep": 1,
+    "currentMarketSlug": "binance-ethusdt-1768458600000",
+    "marketState": "closed",
+    "nextStepBought": false,
+    "totalInvested": 1.530532562861159,
+    "totalCommission": 0.1741141897165322,
+    "totalPnL": 1.1345523373805126,
+    "positions": [
+      {
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768458600000",
+        "tokenId": "93618533135754075995200861707039113181367448431196592949908078811973967328870",
+        "amount": 1.5305325628611586,
+        "price": 0.49,
+        "shares": 3.076682804935186,
+        "commission": 0.02295798844291738,
+        "status": "won",
+        "_id": "696885efe7109691c4f79e9a"
+      },
+      {
+        "step": 2,
+        "marketSlug": "binance-ethusdt-1768459500000",
+        "tokenId": "91343038064434568225968263960510843481990345431204429113832253884434024726049",
+        "amount": 3.5001986399862344,
+        "price": 0.52,
+        "shares": 6.630183962281617,
+        "commission": 0.05250297959979351,
+        "status": "sold",
+        "_id": "6968896ee7109691c4f7a1e3"
+      }
+    ],
+    "events": [
+      {
+        "timestamp": "2026-01-15T06:15:11.435Z",
+        "type": "series_opened",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768458600000",
+        "message": "Сигнал 2🟢 → ставим на 🔴"
+      },
+      {
+        "timestamp": "2026-01-15T06:15:11.702Z",
+        "type": "buy",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768458600000",
+        "amount": 1.5305325628611586,
+        "message": "Купил 3.08 shares по $0.49 (9361853) = $1.53 на 🔴 (Step 1)"
+      },
+      {
+        "timestamp": "2026-01-15T06:15:11.702Z",
+        "type": "waiting_market",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768458600000",
+        "message": "Жду начало рынка..."
+      },
+      {
+        "timestamp": "2026-01-15T06:30:06.282Z",
+        "type": "market_active",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768458600000",
+        "message": "Рынок активен"
+      },
+      {
+        "timestamp": "2026-01-15T06:30:06.573Z",
+        "type": "buy",
+        "step": 2,
+        "marketSlug": "binance-ethusdt-1768458600000",
+        "amount": 3.5001986399862344,
+        "message": "⚡ Хедж: 6.63 shares- по $0.52 (9134303) = $3.50 на 🔴 (Step 2)"
+      },
+      {
+        "timestamp": "2026-01-15T06:44:41.637Z",
+        "type": "sell_hedge",
+        "step": 2,
+        "marketSlug": "binance-ethusdt-1768458600000",
+        "amount": 3.134750977366748,
+        "message": "📤 Продал хедж Step 2 по $0.48 (9134303): вернул $3.13 ($0.37)"
+      },
+      {
+        "timestamp": "2026-01-15T06:44:41.637Z",
+        "type": "order_book",
+        "step": 2,
+        "marketSlug": "binance-ethusdt-1768458600000",
+        "message": "📊 Order Book: Bids 21480 (34 levels) | Asks 21224 (41 levels)"
+      },
+      {
+        "timestamp": "2026-01-15T06:45:06.326Z",
+        "type": "market_won",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768458600000",
+        "marketColor": "red",
+        "pnl": 1.4999999999999996,
+        "message": "Рынок закрылся 🔴 — ПРОФИТ! Получил $3.03 (+$1.50)"
+      },
+      {
+        "timestamp": "2026-01-15T06:45:06.326Z",
+        "type": "series_won",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768458600000",
+        "pnl": 1.1345523373805126,
+        "message": "Серия завершена победой на Step 1! P&L: $1.13 (вкл. -$0.37 хедж)"
+      }
+    ],
+    "startedAt": "2026-01-15T06:15:11.435Z",
+    "__v": 4,
+    "nextMarketSlug": null,
+    "endedAt": "2026-01-15T06:45:06.326Z"
+  },
+  {
+    "_id": "69687efbe7109691c4f797f7",
+    "botId": "bot2",
+    "asset": "eth",
+    "signalMarketSlug": "binance-ethusdt-1768455900000",
+    "signalColor": "green",
+    "betColor": "red",
+    "status": "cancelled",
+    "currentStep": 1,
+    "currentMarketSlug": "binance-ethusdt-1768456800000",
+    "marketState": "waiting",
+    "nextStepBought": false,
+    "totalInvested": 1.5305325628611586,
+    "totalCommission": 0.04834062158363266,
+    "totalPnL": 0.13626034671247855,
+    "positions": [
+      {
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768456800000",
+        "tokenId": "65396684497559309572214687833559871276798373827131864336258989205486624985527",
+        "amount": 1.5305325628611586,
+        "price": 0.49,
+        "shares": 3.076682804935186,
+        "commission": 0.02295798844291738,
+        "status": "sold",
+        "_id": "69687efbe7109691c4f797fc"
+      }
+    ],
+    "events": [
+      {
+        "timestamp": "2026-01-15T05:45:31.036Z",
+        "type": "series_opened",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768456800000",
+        "message": "Сигнал 2🟢 → ставим на 🔴"
+      },
+      {
+        "timestamp": "2026-01-15T05:45:31.312Z",
+        "type": "buy",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768456800000",
+        "amount": 1.5305325628611586,
+        "message": "Купил 3.08 shares по $0.49 (6539668) = $1.53 на 🔴 (Step 1)"
+      },
+      {
+        "timestamp": "2026-01-15T05:45:31.312Z",
+        "type": "waiting_market",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768456800000",
+        "message": "Жду начало рынка..."
+      },
+      {
+        "timestamp": "2026-01-15T06:00:01.533Z",
+        "type": "sell",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768456800000",
+        "amount": 1.6667929095736371,
+        "message": "📤 Продал Step 1: 3.08 shares- по $0.55 (6539668) = $1.67"
+      },
+      {
+        "timestamp": "2026-01-15T06:00:01.674Z",
+        "type": "order_book",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768456800000",
+        "message": "📊 Order Book: Bids 11547 (31 levels) | Asks 7027 (24 levels)"
+      },
+      {
+        "timestamp": "2026-01-15T06:00:01.678Z",
+        "type": "signal_cancelled",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768456800000",
+        "marketColor": "red",
+        "pnl": 0.13626034671247855,
+        "message": "⚠️ Сигнал отменён: рынок 🔴 (был 🟢) → вернул $1.67 (P&L: $0.14)"
+      }
+    ],
+    "startedAt": "2026-01-15T05:45:31.036Z",
+    "__v": 1,
+    "endedAt": "2026-01-15T06:00:01.678Z",
+    "nextMarketSlug": null
+  },
+  {
+    "_id": "69687bbde7109691c4f794a7",
+    "botId": "bot2",
+    "asset": "eth",
+    "signalMarketSlug": "binance-ethusdt-1768455000000",
+    "signalColor": "red",
+    "betColor": "green",
+    "status": "cancelled",
+    "currentStep": 1,
+    "currentMarketSlug": "binance-ethusdt-1768455900000",
+    "marketState": "waiting",
+    "nextStepBought": false,
+    "totalInvested": 1.594981126056675,
+    "totalCommission": 0.04701924610558775,
+    "totalPnL": -0.07844037428890416,
+    "positions": [
+      {
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768455900000",
+        "tokenId": "109743906455004346655399300338875867933392821814767681975051563191701570473311",
+        "amount": 1.594981126056675,
+        "price": 0.5,
+        "shares": 3.14211281833165,
+        "commission": 0.023924716890850125,
+        "status": "sold",
+        "_id": "69687bbde7109691c4f794aa"
+      }
+    ],
+    "events": [
+      {
+        "timestamp": "2026-01-15T05:31:41.378Z",
+        "type": "series_opened",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768455900000",
+        "message": "Сигнал 2🔴 → ставим на 🟢"
+      },
+      {
+        "timestamp": "2026-01-15T05:31:41.663Z",
+        "type": "buy",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768455900000",
+        "amount": 1.594981126056675,
+        "message": "Купил 3.14 shares по $0.50 (1097439) = $1.59 на 🟢 (Step 1)"
+      },
+      {
+        "timestamp": "2026-01-15T05:31:41.664Z",
+        "type": "waiting_market",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768455900000",
+        "message": "Жду начало рынка..."
+      },
+      {
+        "timestamp": "2026-01-15T05:44:41.328Z",
+        "type": "sell",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768455900000",
+        "amount": 1.516540751767771,
+        "message": "📤 Продал Step 1: 3.14 shares- по $0.49 (1097439) = $1.52"
+      },
+      {
+        "timestamp": "2026-01-15T05:44:41.456Z",
+        "type": "order_book",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768455900000",
+        "message": "📊 Order Book: Bids 24298 (35 levels) | Asks 27302 (38 levels)"
+      },
+      {
+        "timestamp": "2026-01-15T05:44:41.460Z",
+        "type": "signal_cancelled",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768455900000",
+        "marketColor": "green",
+        "pnl": -0.07844037428890416,
+        "message": "⚠️ Сигнал отменён: рынок 🟢 (был 🔴) → вернул $1.52 (P&L: $-0.08)"
+      }
+    ],
+    "startedAt": "2026-01-15T05:31:41.378Z",
+    "__v": 1,
+    "endedAt": "2026-01-15T05:44:41.460Z",
+    "nextMarketSlug": null
+  },
+  {
+    "_id": "696877fde7109691c4f7910b",
+    "botId": "bot2",
+    "asset": "eth",
+    "signalMarketSlug": "binance-ethusdt-1768454100000",
+    "signalColor": "green",
+    "betColor": "red",
+    "status": "cancelled",
+    "currentStep": 1,
+    "currentMarketSlug": "binance-ethusdt-1768455000000",
+    "marketState": "waiting",
+    "nextStepBought": false,
+    "totalInvested": 1.594981126056675,
+    "totalCommission": 0.04796187995108725,
+    "totalPnL": -0.0165407517677707,
+    "positions": [
+      {
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768455000000",
+        "tokenId": "79000791526723012907216018255593571482164567909327910174689806183460808549506",
+        "amount": 1.594981126056675,
+        "price": 0.5,
+        "shares": 3.14211281833165,
+        "commission": 0.023924716890850125,
+        "status": "sold",
+        "_id": "696877fde7109691c4f79110"
+      }
+    ],
+    "events": [
+      {
+        "timestamp": "2026-01-15T05:15:41.003Z",
+        "type": "series_opened",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768455000000",
+        "message": "Сигнал 2🟢 → ставим на 🔴"
+      },
+      {
+        "timestamp": "2026-01-15T05:15:41.284Z",
+        "type": "buy",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768455000000",
+        "amount": 1.594981126056675,
+        "message": "Купил 3.14 shares по $0.50 (7900079) = $1.59 на 🔴 (Step 1)"
+      },
+      {
+        "timestamp": "2026-01-15T05:15:41.285Z",
+        "type": "waiting_market",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768455000000",
+        "message": "Жду начало рынка..."
+      },
+      {
+        "timestamp": "2026-01-15T05:29:41.900Z",
+        "type": "sell",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768455000000",
+        "amount": 1.5784403742889044,
+        "message": "📤 Продал Step 1: 3.14 shares- по $0.51 (7900079) = $1.58"
+      },
+      {
+        "timestamp": "2026-01-15T05:29:42.031Z",
+        "type": "order_book",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768455000000",
+        "message": "📊 Order Book: Bids 22706 (35 levels) | Asks 20367 (36 levels)"
+      },
+      {
+        "timestamp": "2026-01-15T05:29:42.038Z",
+        "type": "signal_cancelled",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768455000000",
+        "marketColor": "red",
+        "pnl": -0.0165407517677707,
+        "message": "⚠️ Сигнал отменён: рынок 🔴 (был 🟢) → вернул $1.58 (P&L: $-0.02)"
+      }
+    ],
+    "startedAt": "2026-01-15T05:15:41.003Z",
+    "__v": 1,
+    "endedAt": "2026-01-15T05:29:42.037Z",
+    "nextMarketSlug": null
+  },
+  {
+    "_id": "69687465e7109691c4f78d88",
+    "botId": "bot2",
+    "asset": "eth",
+    "signalMarketSlug": "binance-ethusdt-1768453200000",
+    "signalColor": "red",
+    "betColor": "green",
+    "status": "cancelled",
+    "currentStep": 1,
+    "currentMarketSlug": "binance-ethusdt-1768454100000",
+    "marketState": "waiting",
+    "nextStepBought": false,
+    "totalInvested": 1.5305325628611586,
+    "totalCommission": 0.044648602217710436,
+    "totalPnL": -0.10618225831641426,
+    "positions": [
+      {
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768454100000",
+        "tokenId": "8943938903556375643057447571540124780204306513102449289666066304359823585663",
+        "amount": 1.5305325628611586,
+        "price": 0.49,
+        "shares": 3.076682804935186,
+        "commission": 0.02295798844291738,
+        "status": "sold",
+        "_id": "69687465e7109691c4f78d8b"
+      }
+    ],
+    "events": [
+      {
+        "timestamp": "2026-01-15T05:00:21.345Z",
+        "type": "series_opened",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768454100000",
+        "message": "Сигнал 2🔴 → ставим на 🟢"
+      },
+      {
+        "timestamp": "2026-01-15T05:00:21.616Z",
+        "type": "buy",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768454100000",
+        "amount": 1.5305325628611586,
+        "message": "Купил 3.08 shares по $0.49 (8943938) = $1.53 на 🟢 (Step 1)"
+      },
+      {
+        "timestamp": "2026-01-15T05:00:21.616Z",
+        "type": "waiting_market",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768454100000",
+        "message": "Жду начало рынка..."
+      },
+      {
+        "timestamp": "2026-01-15T05:14:41.260Z",
+        "type": "sell",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768454100000",
+        "amount": 1.4243503045447443,
+        "message": "📤 Продал Step 1: 3.08 shares- по $0.47 (8943938) = $1.42"
+      },
+      {
+        "timestamp": "2026-01-15T05:14:41.397Z",
+        "type": "order_book",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768454100000",
+        "message": "📊 Order Book: Bids 22620 (32 levels) | Asks 24872 (40 levels)"
+      },
+      {
+        "timestamp": "2026-01-15T05:14:41.402Z",
+        "type": "signal_cancelled",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768454100000",
+        "marketColor": "green",
+        "pnl": -0.10618225831641426,
+        "message": "⚠️ Сигнал отменён: рынок 🟢 (был 🔴) → вернул $1.42 (P&L: $-0.11)"
+      }
+    ],
+    "startedAt": "2026-01-15T05:00:21.345Z",
+    "__v": 1,
+    "endedAt": "2026-01-15T05:14:41.402Z",
+    "nextMarketSlug": null
+  },
+  {
+    "_id": "696866d6e7109691c4f78054",
+    "botId": "bot2",
+    "asset": "eth",
+    "signalMarketSlug": "binance-ethusdt-1768449600000",
+    "signalColor": "green",
+    "betColor": "red",
+    "status": "won",
+    "currentStep": 3,
+    "currentMarketSlug": "binance-ethusdt-1768452300000",
+    "marketState": "closed",
+    "nextStepBought": false,
+    "totalInvested": 9.543699996374901,
+    "totalCommission": 0.2884910328853428,
+    "totalPnL": -1.7763568394002505e-15,
+    "positions": [
+      {
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768450500000",
+        "tokenId": "104515266276034037553235783144738315372680135269083819955718929538792597260704",
+        "amount": 1.468713345912591,
+        "price": 0.48,
+        "shares": 3.013922178591463,
+        "commission": 0.022030700188688863,
+        "status": "lost",
+        "_id": "696866d7e7109691c4f78057"
+      },
+      {
+        "step": 2,
+        "marketSlug": "binance-ethusdt-1768451400000",
+        "tokenId": "61709774813577728527839854716233048801460003245637522622319099028454771222726",
+        "amount": 3.156694503602096,
+        "price": 0.5,
+        "shares": 6.218688172096129,
+        "commission": 0.04735041755403144,
+        "status": "lost",
+        "_id": "696869cae7109691c4f7831b"
+      },
+      {
+        "step": 3,
+        "marketSlug": "binance-ethusdt-1768452300000",
+        "tokenId": "37884301601191306417973988755186735883530895996204623375832518386146525349160",
+        "amount": 4.918292146860213,
+        "price": 0.5,
+        "shares": 9.68903552931462,
+        "commission": 0.0737743822029032,
+        "status": "won",
+        "_id": "69686d8fe7109691c4f786c2"
+      }
+    ],
+    "events": [
+      {
+        "timestamp": "2026-01-15T04:02:30.822Z",
+        "type": "series_opened",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768450500000",
+        "message": "Сигнал 2🟢 → ставим на 🔴"
+      },
+      {
+        "timestamp": "2026-01-15T04:02:31.089Z",
+        "type": "buy",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768450500000",
+        "amount": 1.468713345912591,
+        "message": "Купил 3.01 shares по $0.48 (1045152) = $1.47 на 🔴 (Step 1)"
+      },
+      {
+        "timestamp": "2026-01-15T04:02:31.091Z",
+        "type": "waiting_market",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768450500000",
+        "message": "Жду начало рынка..."
+      },
+      {
+        "timestamp": "2026-01-15T04:15:06.074Z",
+        "type": "market_active",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768450500000",
+        "message": "Рынок активен"
+      },
+      {
+        "timestamp": "2026-01-15T04:15:06.388Z",
+        "type": "buy",
+        "step": 2,
+        "marketSlug": "binance-ethusdt-1768450500000",
+        "amount": 3.156694503602096,
+        "message": "⚡ Хедж: 6.22 shares- по $0.50 (6170977) = $3.16 на 🔴 (Step 2)"
+      },
+      {
+        "timestamp": "2026-01-15T04:30:06.245Z",
+        "type": "market_lost",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768450500000",
+        "marketColor": "green",
+        "message": "Рынок закрылся 🟢 — проигрыш шага (потеряно $1.47)"
+      },
+      {
+        "timestamp": "2026-01-15T04:30:06.246Z",
+        "type": "waiting_market",
+        "step": 2,
+        "marketSlug": "binance-ethusdt-1768451400000",
+        "message": "Переход на Step 2 (хедж уже куплен)"
+      },
+      {
+        "timestamp": "2026-01-15T04:30:10.833Z",
+        "type": "market_active",
+        "step": 2,
+        "marketSlug": "binance-ethusdt-1768451400000",
+        "message": "Рынок активен"
+      },
+      {
+        "timestamp": "2026-01-15T04:31:11.132Z",
+        "type": "buy",
+        "step": 3,
+        "marketSlug": "binance-ethusdt-1768451400000",
+        "amount": 4.918292146860213,
+        "message": "⚡ Хедж: 9.69 shares- по $0.50 (3788430) = $4.92 на 🔴 (Step 3 break-even)"
+      },
+      {
+        "timestamp": "2026-01-15T04:45:06.425Z",
+        "type": "market_lost",
+        "step": 2,
+        "marketSlug": "binance-ethusdt-1768451400000",
+        "marketColor": "green",
+        "message": "Рынок закрылся 🟢 — проигрыш шага (потеряно $3.16)"
+      },
+      {
+        "timestamp": "2026-01-15T04:45:06.428Z",
+        "type": "waiting_market",
+        "step": 3,
+        "marketSlug": "binance-ethusdt-1768452300000",
+        "message": "Переход на Step 3 (хедж уже куплен)"
+      },
+      {
+        "timestamp": "2026-01-15T04:45:10.869Z",
+        "type": "market_active",
+        "step": 3,
+        "marketSlug": "binance-ethusdt-1768452300000",
+        "message": "Рынок активен"
+      },
+      {
+        "timestamp": "2026-01-15T05:00:06.462Z",
+        "type": "market_won",
+        "step": 3,
+        "marketSlug": "binance-ethusdt-1768452300000",
+        "marketColor": "red",
+        "pnl": 4.625407849514686,
+        "message": "Рынок закрылся 🔴 — ПРОФИТ! Получил $9.54 (+$4.63)"
+      },
+      {
+        "timestamp": "2026-01-15T05:00:06.463Z",
+        "type": "series_won",
+        "step": 3,
+        "marketSlug": "binance-ethusdt-1768452300000",
+        "pnl": -1.7763568394002505e-15,
+        "message": "Серия завершена победой на Step 3! P&L: $-0.00"
+      }
+    ],
+    "startedAt": "2026-01-15T04:02:30.822Z",
+    "__v": 8,
+    "nextMarketSlug": null,
+    "endedAt": "2026-01-15T05:00:06.463Z"
+  },
+  {
+    "_id": "69686137e7109691c4f77a86",
+    "botId": "bot2",
+    "asset": "eth",
+    "signalMarketSlug": "binance-ethusdt-1768447800000",
+    "signalColor": "red",
+    "betColor": "green",
+    "status": "won",
+    "currentStep": 1,
+    "currentMarketSlug": "binance-ethusdt-1768448700000",
+    "marketState": "closed",
+    "nextStepBought": false,
+    "totalInvested": 1.7324670997834417,
+    "totalCommission": 0.19693002298897042,
+    "totalPnL": 1.4520924670928137,
+    "positions": [
+      {
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768448700000",
+        "tokenId": "20957112748913728216273000067869311450888995517748242367374765479902079377525",
+        "amount": 1.7324670997834417,
+        "price": 0.52,
+        "shares": 3.2816924870897886,
+        "commission": 0.025987006496751626,
+        "status": "won",
+        "_id": "69686137e7109691c4f77a89"
+      },
+      {
+        "step": 2,
+        "marketSlug": "binance-ethusdt-1768449600000",
+        "tokenId": "88656862810828700377856385500469876965943081405865179221522923734122621209623",
+        "amount": 4.057254306195732,
+        "price": 0.54,
+        "shares": 7.40073239185703,
+        "commission": 0.06085881459293598,
+        "status": "sold",
+        "_id": "696862c6e7109691c4f77c2c"
+      }
+    ],
+    "events": [
+      {
+        "timestamp": "2026-01-15T03:38:31.265Z",
+        "type": "series_opened",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768448700000",
+        "message": "Сигнал 2🔴 → ставим на 🟢"
+      },
+      {
+        "timestamp": "2026-01-15T03:38:31.536Z",
+        "type": "buy",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768448700000",
+        "amount": 1.7324670997834417,
+        "message": "Купил 3.28 shares по $0.52 (2095711) = $1.73 на 🟢 (Step 1)"
+      },
+      {
+        "timestamp": "2026-01-15T03:38:31.536Z",
+        "type": "waiting_market",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768448700000",
+        "message": "Жду начало рынка..."
+      },
+      {
+        "timestamp": "2026-01-15T03:45:06.100Z",
+        "type": "market_active",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768448700000",
+        "message": "Рынок активен"
+      },
+      {
+        "timestamp": "2026-01-15T03:45:10.999Z",
+        "type": "buy",
+        "step": 2,
+        "marketSlug": "binance-ethusdt-1768448700000",
+        "amount": 4.057254306195732,
+        "message": "⚡ Хедж: 7.40 shares- по $0.54 (8865686) = $4.06 на 🟢 (Step 2)"
+      },
+      {
+        "timestamp": "2026-01-15T03:59:41.197Z",
+        "type": "sell_hedge",
+        "step": 2,
+        "marketSlug": "binance-ethusdt-1768448700000",
+        "amount": 4.009346773288546,
+        "message": "📤 Продал хедж Step 2 по $0.55 (8865686): вернул $4.01 ($0.05)"
+      },
+      {
+        "timestamp": "2026-01-15T03:59:41.197Z",
+        "type": "order_book",
+        "step": 2,
+        "marketSlug": "binance-ethusdt-1768448700000",
+        "message": "📊 Order Book: Bids 26345 (41 levels) | Asks 21052 (31 levels)"
+      },
+      {
+        "timestamp": "2026-01-15T04:00:05.892Z",
+        "type": "market_won",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768448700000",
+        "marketColor": "green",
+        "pnl": 1.5,
+        "message": "Рынок закрылся 🟢 — ПРОФИТ! Получил $3.23 (+$1.50)"
+      },
+      {
+        "timestamp": "2026-01-15T04:00:05.893Z",
+        "type": "series_won",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768448700000",
+        "pnl": 1.4520924670928137,
+        "message": "Серия завершена победой на Step 1! P&L: $1.45 (вкл. -$0.05 хедж)"
+      }
+    ],
+    "startedAt": "2026-01-15T03:38:31.265Z",
+    "__v": 4,
+    "nextMarketSlug": null,
+    "endedAt": "2026-01-15T04:00:05.893Z"
+  },
+  {
+    "_id": "69685bc9e7109691c4f7754f",
+    "botId": "bot2",
+    "asset": "eth",
+    "signalMarketSlug": "binance-ethusdt-1768446900000",
+    "signalColor": "green",
+    "betColor": "red",
+    "status": "cancelled",
+    "currentStep": 1,
+    "currentMarketSlug": "binance-ethusdt-1768447800000",
+    "marketState": "waiting",
+    "nextStepBought": false,
+    "totalInvested": 1.5305325628611586,
+    "totalCommission": 0.044187099796970164,
+    "totalPnL": -0.1364875839450257,
+    "positions": [
+      {
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768447800000",
+        "tokenId": "111047674226742251363651220747143191912340733127945194147157494251529874096277",
+        "amount": 1.5305325628611586,
+        "price": 0.49,
+        "shares": 3.076682804935186,
+        "commission": 0.02295798844291738,
+        "status": "sold",
+        "_id": "69685bc9e7109691c4f77552"
+      }
+    ],
+    "events": [
+      {
+        "timestamp": "2026-01-15T03:15:21.130Z",
+        "type": "series_opened",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768447800000",
+        "message": "Сигнал 2🟢 → ставим на 🔴"
+      },
+      {
+        "timestamp": "2026-01-15T03:15:21.420Z",
+        "type": "buy",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768447800000",
+        "amount": 1.5305325628611586,
+        "message": "Купил 3.08 shares по $0.49 (1110476) = $1.53 на 🔴 (Step 1)"
+      },
+      {
+        "timestamp": "2026-01-15T03:15:21.420Z",
+        "type": "waiting_market",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768447800000",
+        "message": "Жду начало рынка..."
+      },
+      {
+        "timestamp": "2026-01-15T03:29:41.563Z",
+        "type": "sell",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768447800000",
+        "amount": 1.3940449789161329,
+        "message": "📤 Продал Step 1: 3.08 shares- по $0.46 (1110476) = $1.39"
+      },
+      {
+        "timestamp": "2026-01-15T03:29:41.699Z",
+        "type": "order_book",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768447800000",
+        "message": "📊 Order Book: Bids 19495 (32 levels) | Asks 30731 (43 levels)"
+      },
+      {
+        "timestamp": "2026-01-15T03:29:41.702Z",
+        "type": "signal_cancelled",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768447800000",
+        "marketColor": "red",
+        "pnl": -0.1364875839450257,
+        "message": "⚠️ Сигнал отменён: рынок 🔴 (был 🟢) → вернул $1.39 (P&L: $-0.14)"
+      }
+    ],
+    "startedAt": "2026-01-15T03:15:21.130Z",
+    "__v": 1,
+    "endedAt": "2026-01-15T03:29:41.702Z",
+    "nextMarketSlug": null
+  },
+  {
+    "_id": "696854c1e7109691c4f76e79",
+    "botId": "bot2",
+    "asset": "eth",
+    "signalMarketSlug": "binance-ethusdt-1768445100000",
+    "signalColor": "red",
+    "betColor": "green",
+    "status": "won",
+    "currentStep": 1,
+    "currentMarketSlug": "binance-ethusdt-1768446000000",
+    "marketState": "closed",
+    "nextStepBought": false,
+    "totalInvested": 1.5949811260566746,
+    "totalCommission": 0.18759704311810135,
+    "totalPnL": 1.384333420802366,
+    "positions": [
+      {
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768446000000",
+        "tokenId": "71749087421685083640413516158723287461395338243409487115029885905229706326835",
+        "amount": 1.594981126056675,
+        "price": 0.5,
+        "shares": 3.14211281833165,
+        "commission": 0.023924716890850125,
+        "status": "won",
+        "_id": "696854c1e7109691c4f76e83"
+      },
+      {
+        "step": 2,
+        "marketSlug": "binance-ethusdt-1768446900000",
+        "tokenId": "102845403903045960390963901786754661692923999404652582464757217631953037653628",
+        "amount": 3.884687798409216,
+        "price": 0.54,
+        "shares": 7.085958298950144,
+        "commission": 0.05827031697613824,
+        "status": "sold",
+        "_id": "69685935e7109691c4f772af"
+      }
+    ],
+    "events": [
+      {
+        "timestamp": "2026-01-15T02:45:21.165Z",
+        "type": "series_opened",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768446000000",
+        "message": "Сигнал 2🔴 → ставим на 🟢"
+      },
+      {
+        "timestamp": "2026-01-15T02:45:21.463Z",
+        "type": "buy",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768446000000",
+        "amount": 1.594981126056675,
+        "message": "Купил 3.14 shares по $0.50 (7174908) = $1.59 на 🟢 (Step 1)"
+      },
+      {
+        "timestamp": "2026-01-15T02:45:21.463Z",
+        "type": "waiting_market",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768446000000",
+        "message": "Жду начало рынка..."
+      },
+      {
+        "timestamp": "2026-01-15T03:00:05.723Z",
+        "type": "market_active",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768446000000",
+        "message": "Рынок активен"
+      },
+      {
+        "timestamp": "2026-01-15T03:04:21.459Z",
+        "type": "buy",
+        "step": 2,
+        "marketSlug": "binance-ethusdt-1768446000000",
+        "amount": 3.884687798409216,
+        "message": "⚡ Хедж: 7.09 shares- по $0.54 (1028454) = $3.88 на 🟢 (Step 2)"
+      },
+      {
+        "timestamp": "2026-01-15T03:14:41.097Z",
+        "type": "sell_hedge",
+        "step": 2,
+        "marketSlug": "binance-ethusdt-1768446000000",
+        "amount": 3.7690212192115817,
+        "message": "📤 Продал хедж Step 2 по $0.54 (1028454): вернул $3.77 ($0.12)"
+      },
+      {
+        "timestamp": "2026-01-15T03:14:41.103Z",
+        "type": "order_book",
+        "step": 2,
+        "marketSlug": "binance-ethusdt-1768446000000",
+        "message": "📊 Order Book: Bids 23725 (41 levels) | Asks 20152 (32 levels)"
+      },
+      {
+        "timestamp": "2026-01-15T03:15:05.770Z",
+        "type": "market_won",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768446000000",
+        "marketColor": "green",
+        "pnl": 1.5,
+        "message": "Рынок закрылся 🟢 — ПРОФИТ! Получил $3.09 (+$1.50)"
+      },
+      {
+        "timestamp": "2026-01-15T03:15:05.771Z",
+        "type": "series_won",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768446000000",
+        "pnl": 1.384333420802366,
+        "message": "Серия завершена победой на Step 1! P&L: $1.38 (вкл. -$0.12 хедж)"
+      }
+    ],
+    "startedAt": "2026-01-15T02:45:21.165Z",
+    "__v": 4,
+    "nextMarketSlug": null,
+    "endedAt": "2026-01-15T03:15:05.771Z"
+  },
+  {
+    "_id": "6968513de7109691c4f76b05",
+    "botId": "bot2",
+    "asset": "eth",
+    "signalMarketSlug": "binance-ethusdt-1768444200000",
+    "signalColor": "green",
+    "betColor": "red",
+    "status": "cancelled",
+    "currentStep": 1,
+    "currentMarketSlug": "binance-ethusdt-1768445100000",
+    "marketState": "waiting",
+    "nextStepBought": false,
+    "totalInvested": 1.5305325628611586,
+    "totalCommission": 0.044648602217710436,
+    "totalPnL": -0.10618225831641426,
+    "positions": [
+      {
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768445100000",
+        "tokenId": "71951488801853795592757171913129023607833165831266784981633269116154944310690",
+        "amount": 1.5305325628611586,
+        "price": 0.49,
+        "shares": 3.076682804935186,
+        "commission": 0.02295798844291738,
+        "status": "sold",
+        "_id": "6968513de7109691c4f76b0b"
+      }
+    ],
+    "events": [
+      {
+        "timestamp": "2026-01-15T02:30:21.108Z",
+        "type": "series_opened",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768445100000",
+        "message": "Сигнал 2🟢 → ставим на 🔴"
+      },
+      {
+        "timestamp": "2026-01-15T02:30:21.394Z",
+        "type": "buy",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768445100000",
+        "amount": 1.5305325628611586,
+        "message": "Купил 3.08 shares по $0.49 (7195148) = $1.53 на 🔴 (Step 1)"
+      },
+      {
+        "timestamp": "2026-01-15T02:30:21.395Z",
+        "type": "waiting_market",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768445100000",
+        "message": "Жду начало рынка..."
+      },
+      {
+        "timestamp": "2026-01-15T02:44:40.823Z",
+        "type": "sell",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768445100000",
+        "amount": 1.4243503045447443,
+        "message": "📤 Продал Step 1: 3.08 shares- по $0.47 (7195148) = $1.42"
+      },
+      {
+        "timestamp": "2026-01-15T02:44:40.960Z",
+        "type": "order_book",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768445100000",
+        "message": "📊 Order Book: Bids 18723 (33 levels) | Asks 28716 (41 levels)"
+      },
+      {
+        "timestamp": "2026-01-15T02:44:40.966Z",
+        "type": "signal_cancelled",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768445100000",
+        "marketColor": "red",
+        "pnl": -0.10618225831641426,
+        "message": "⚠️ Сигнал отменён: рынок 🔴 (был 🟢) → вернул $1.42 (P&L: $-0.11)"
+      }
+    ],
+    "startedAt": "2026-01-15T02:30:21.108Z",
+    "__v": 1,
+    "endedAt": "2026-01-15T02:44:40.966Z",
+    "nextMarketSlug": null
+  },
+  {
+    "_id": "69684a35e7109691c4f7642d",
+    "botId": "bot2",
+    "asset": "eth",
+    "signalMarketSlug": "binance-ethusdt-1768442400000",
+    "signalColor": "red",
+    "betColor": "green",
+    "status": "won",
+    "currentStep": 1,
+    "currentMarketSlug": "binance-ethusdt-1768443300000",
+    "marketState": "closed",
+    "nextStepBought": false,
+    "totalInvested": 1.594981126056675,
+    "totalCommission": 0.18284061020915757,
+    "totalPnL": 1.3890541804644925,
+    "positions": [
+      {
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768443300000",
+        "tokenId": "103545177333667005915697687196102033711308690235989782364982799359186370875346",
+        "amount": 1.594981126056675,
+        "price": 0.5,
+        "shares": 3.14211281833165,
+        "commission": 0.023924716890850125,
+        "status": "won",
+        "_id": "69684a35e7109691c4f76436"
+      },
+      {
+        "step": 2,
+        "marketSlug": "binance-ethusdt-1768444200000",
+        "tokenId": "24889891595275692647211002913651447487346593194206920638082058325372005317478",
+        "amount": 3.7261400347777567,
+        "price": 0.53,
+        "shares": 6.924996102369982,
+        "commission": 0.05589210052166635,
+        "status": "sold",
+        "_id": "69684daee7109691c4f7677d"
+      }
+    ],
+    "events": [
+      {
+        "timestamp": "2026-01-15T02:00:21.138Z",
+        "type": "series_opened",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768443300000",
+        "message": "Сигнал 2🔴 → ставим на 🟢"
+      },
+      {
+        "timestamp": "2026-01-15T02:00:21.439Z",
+        "type": "buy",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768443300000",
+        "amount": 1.594981126056675,
+        "message": "Купил 3.14 shares по $0.50 (1035451) = $1.59 на 🟢 (Step 1)"
+      },
+      {
+        "timestamp": "2026-01-15T02:00:21.439Z",
+        "type": "waiting_market",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768443300000",
+        "message": "Жду начало рынка..."
+      },
+      {
+        "timestamp": "2026-01-15T02:15:05.729Z",
+        "type": "market_active",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768443300000",
+        "message": "Рынок активен"
+      },
+      {
+        "timestamp": "2026-01-15T02:15:10.913Z",
+        "type": "buy",
+        "step": 2,
+        "marketSlug": "binance-ethusdt-1768443300000",
+        "amount": 3.7261400347777567,
+        "message": "⚡ Хедж: 6.92 shares- по $0.53 (2488989) = $3.73 на 🟢 (Step 2)"
+      },
+      {
+        "timestamp": "2026-01-15T02:29:40.935Z",
+        "type": "sell_hedge",
+        "step": 2,
+        "marketSlug": "binance-ethusdt-1768443300000",
+        "amount": 3.615194215242249,
+        "message": "📤 Продал хедж Step 2 по $0.53 (2488989): вернул $3.62 ($0.11)"
+      },
+      {
+        "timestamp": "2026-01-15T02:29:40.935Z",
+        "type": "order_book",
+        "step": 2,
+        "marketSlug": "binance-ethusdt-1768443300000",
+        "message": "📊 Order Book: Bids 25936 (39 levels) | Asks 21435 (33 levels)"
+      },
+      {
+        "timestamp": "2026-01-15T02:30:05.790Z",
+        "type": "market_won",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768443300000",
+        "marketColor": "green",
+        "pnl": 1.5,
+        "message": "Рынок закрылся 🟢 — ПРОФИТ! Получил $3.09 (+$1.50)"
+      },
+      {
+        "timestamp": "2026-01-15T02:30:05.791Z",
+        "type": "series_won",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768443300000",
+        "pnl": 1.3890541804644925,
+        "message": "Серия завершена победой на Step 1! P&L: $1.39 (вкл. -$0.11 хедж)"
+      }
+    ],
+    "startedAt": "2026-01-15T02:00:21.138Z",
+    "__v": 4,
+    "nextMarketSlug": null,
+    "endedAt": "2026-01-15T02:30:05.790Z"
+  },
+  {
+    "_id": "696846a7e7109691c4f760b0",
+    "botId": "bot2",
+    "asset": "eth",
+    "signalMarketSlug": "binance-ethusdt-1768441500000",
+    "signalColor": "green",
+    "betColor": "red",
+    "status": "cancelled",
+    "currentStep": 1,
+    "currentMarketSlug": "binance-ethusdt-1768442400000",
+    "marketState": "waiting",
+    "nextStepBought": false,
+    "totalInvested": 1.5305325628611586,
+    "totalCommission": 0.045110104638450714,
+    "totalPnL": -0.07587693268780282,
+    "positions": [
+      {
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768442400000",
+        "tokenId": "109321647352634548683469136153813825462096177112025923749358994848077944015795",
+        "amount": 1.5305325628611586,
+        "price": 0.49,
+        "shares": 3.076682804935186,
+        "commission": 0.02295798844291738,
+        "status": "sold",
+        "_id": "696846a7e7109691c4f760b9"
+      }
+    ],
+    "events": [
+      {
+        "timestamp": "2026-01-15T01:45:11.106Z",
+        "type": "series_opened",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768442400000",
+        "message": "Сигнал 2🟢 → ставим на 🔴"
+      },
+      {
+        "timestamp": "2026-01-15T01:45:11.404Z",
+        "type": "buy",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768442400000",
+        "amount": 1.5305325628611586,
+        "message": "Купил 3.08 shares по $0.49 (1093216) = $1.53 на 🔴 (Step 1)"
+      },
+      {
+        "timestamp": "2026-01-15T01:45:11.404Z",
+        "type": "waiting_market",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768442400000",
+        "message": "Жду начало рынка..."
+      },
+      {
+        "timestamp": "2026-01-15T01:59:41.295Z",
+        "type": "sell",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768442400000",
+        "amount": 1.4546556301733558,
+        "message": "📤 Продал Step 1: 3.08 shares- по $0.48 (1093216) = $1.45"
+      },
+      {
+        "timestamp": "2026-01-15T01:59:41.426Z",
+        "type": "order_book",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768442400000",
+        "message": "📊 Order Book: Bids 15131 (33 levels) | Asks 27045 (39 levels)"
+      },
+      {
+        "timestamp": "2026-01-15T01:59:41.430Z",
+        "type": "signal_cancelled",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768442400000",
+        "marketColor": "red",
+        "pnl": -0.07587693268780282,
+        "message": "⚠️ Сигнал отменён: рынок 🔴 (был 🟢) → вернул $1.45 (P&L: $-0.08)"
+      }
+    ],
+    "startedAt": "2026-01-15T01:45:11.106Z",
+    "__v": 1,
+    "endedAt": "2026-01-15T01:59:41.430Z",
+    "nextMarketSlug": null
+  },
+  {
+    "_id": "69684386e7109691c4f75db8",
+    "botId": "bot2",
+    "asset": "eth",
+    "signalMarketSlug": "binance-ethusdt-1768440600000",
+    "signalColor": "red",
+    "betColor": "green",
+    "status": "cancelled",
+    "currentStep": 1,
+    "currentMarketSlug": "binance-ethusdt-1768441500000",
+    "marketState": "waiting",
+    "nextStepBought": false,
+    "totalInvested": 1.8058947129308878,
+    "totalCommission": 0.0542739508206031,
+    "totalPnL": -0.020711567948208165,
+    "positions": [
+      {
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768441500000",
+        "tokenId": "55803959456337921570941545907387946016329654592752840357478697825113073992862",
+        "amount": 1.8058947129308878,
+        "price": 0.53,
+        "shares": 3.35623828723948,
+        "commission": 0.027088420693963316,
+        "status": "sold",
+        "_id": "69684387e7109691c4f75dbd"
+      }
+    ],
+    "events": [
+      {
+        "timestamp": "2026-01-15T01:31:50.977Z",
+        "type": "series_opened",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768441500000",
+        "message": "Сигнал 2🔴 → ставим на 🟢"
+      },
+      {
+        "timestamp": "2026-01-15T01:31:51.245Z",
+        "type": "buy",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768441500000",
+        "amount": 1.8058947129308878,
+        "message": "Купил 3.36 shares по $0.53 (5580395) = $1.81 на 🟢 (Step 1)"
+      },
+      {
+        "timestamp": "2026-01-15T01:31:51.245Z",
+        "type": "waiting_market",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768441500000",
+        "message": "Жду начало рынка..."
+      },
+      {
+        "timestamp": "2026-01-15T01:44:40.873Z",
+        "type": "sell",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768441500000",
+        "amount": 1.7851831449826796,
+        "message": "📤 Продал Step 1: 3.36 shares- по $0.54 (5580395) = $1.79"
+      },
+      {
+        "timestamp": "2026-01-15T01:44:41.007Z",
+        "type": "order_book",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768441500000",
+        "message": "📊 Order Book: Bids 23408 (39 levels) | Asks 19516 (31 levels)"
+      },
+      {
+        "timestamp": "2026-01-15T01:44:41.013Z",
+        "type": "signal_cancelled",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768441500000",
+        "marketColor": "green",
+        "pnl": -0.020711567948208165,
+        "message": "⚠️ Сигнал отменён: рынок 🟢 (был 🔴) → вернул $1.79 (P&L: $-0.02)"
+      }
+    ],
+    "startedAt": "2026-01-15T01:31:50.977Z",
+    "__v": 1,
+    "endedAt": "2026-01-15T01:44:41.013Z",
+    "nextMarketSlug": null
+  },
+  {
+    "_id": "69683fb2e7109691c4f75995",
+    "botId": "bot2",
+    "asset": "eth",
+    "signalMarketSlug": "binance-ethusdt-1768439700000",
+    "signalColor": "green",
+    "betColor": "red",
+    "status": "cancelled",
+    "currentStep": 1,
+    "currentMarketSlug": "binance-ethusdt-1768440600000",
+    "marketState": "waiting",
+    "nextStepBought": false,
+    "totalInvested": 1.468713345912591,
+    "totalCommission": 0.04327885154775868,
+    "totalPnL": -0.07341807333367334,
+    "positions": [
+      {
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768440600000",
+        "tokenId": "61973531640767890775267413236719852714438902633739058374743377822874040017836",
+        "amount": 1.468713345912591,
+        "price": 0.48,
+        "shares": 3.013922178591463,
+        "commission": 0.022030700188688863,
+        "status": "sold",
+        "_id": "69683fb2e7109691c4f7599b"
+      }
+    ],
+    "events": [
+      {
+        "timestamp": "2026-01-15T01:15:30.505Z",
+        "type": "series_opened",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768440600000",
+        "message": "Сигнал 2🟢 → ставим на 🔴"
+      },
+      {
+        "timestamp": "2026-01-15T01:15:30.805Z",
+        "type": "buy",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768440600000",
+        "amount": 1.468713345912591,
+        "message": "Купил 3.01 shares по $0.48 (6197353) = $1.47 на 🔴 (Step 1)"
+      },
+      {
+        "timestamp": "2026-01-15T01:15:30.808Z",
+        "type": "waiting_market",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768440600000",
+        "message": "Жду начало рынка..."
+      },
+      {
+        "timestamp": "2026-01-15T01:29:42.248Z",
+        "type": "sell",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768440600000",
+        "amount": 1.3952952725789176,
+        "message": "📤 Продал Step 1: 3.01 shares- по $0.47 (6197353) = $1.40"
+      },
+      {
+        "timestamp": "2026-01-15T01:29:42.379Z",
+        "type": "order_book",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768440600000",
+        "message": "📊 Order Book: Bids 18840 (30 levels) | Asks 25279 (39 levels)"
+      },
+      {
+        "timestamp": "2026-01-15T01:29:42.385Z",
+        "type": "signal_cancelled",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768440600000",
+        "marketColor": "red",
+        "pnl": -0.07341807333367334,
+        "message": "⚠️ Сигнал отменён: рынок 🔴 (был 🟢) → вернул $1.40 (P&L: $-0.07)"
+      }
+    ],
+    "startedAt": "2026-01-15T01:15:30.505Z",
+    "__v": 1,
+    "endedAt": "2026-01-15T01:29:42.384Z",
+    "nextMarketSlug": null
+  },
+  {
+    "_id": "696831ace7109691c4f7489f",
+    "botId": "bot2",
+    "asset": "eth",
+    "signalMarketSlug": "binance-ethusdt-1768436100000",
+    "signalColor": "red",
+    "betColor": "green",
+    "status": "won",
+    "currentStep": 3,
+    "currentMarketSlug": "binance-ethusdt-1768438800000",
+    "marketState": "closed",
+    "nextStepBought": false,
+    "totalInvested": 11.140410046895871,
+    "totalCommission": 0.33675706512317216,
+    "totalPnL": 0,
+    "positions": [
+      {
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768437000000",
+        "tokenId": "16974729849708256988188381534188145093558235021406010064130040954783546706056",
+        "amount": 1.594981126056675,
+        "price": 0.5,
+        "shares": 3.14211281833165,
+        "commission": 0.023924716890850125,
+        "status": "lost",
+        "_id": "696831ace7109691c4f748a4"
+      },
+      {
+        "step": 2,
+        "marketSlug": "binance-ethusdt-1768437900000",
+        "tokenId": "39080356033779984750853533381039603650692015499241999482448473858505950861216",
+        "amount": 3.574635316895932,
+        "price": 0.52,
+        "shares": 6.771184206043255,
+        "commission": 0.05361952975343898,
+        "status": "lost",
+        "_id": "69683517e7109691c4f74ce2"
+      },
+      {
+        "step": 3,
+        "marketSlug": "binance-ethusdt-1768438800000",
+        "tokenId": "12849203747177243116364742838128683621338355853199703916637343601222707353729",
+        "amount": 5.970793603943264,
+        "price": 0.52,
+        "shares": 11.310060961315605,
+        "commission": 0.08956190405914896,
+        "status": "won",
+        "_id": "696838abe7109691c4f750f5"
+      }
+    ],
+    "events": [
+      {
+        "timestamp": "2026-01-15T00:15:40.488Z",
+        "type": "series_opened",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768437000000",
+        "message": "Сигнал 2🔴 → ставим на 🟢"
+      },
+      {
+        "timestamp": "2026-01-15T00:15:40.797Z",
+        "type": "buy",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768437000000",
+        "amount": 1.594981126056675,
+        "message": "Купил 3.14 shares по $0.50 (1697472) = $1.59 на 🟢 (Step 1)"
+      },
+      {
+        "timestamp": "2026-01-15T00:15:40.798Z",
+        "type": "waiting_market",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768437000000",
+        "message": "Жду начало рынка..."
+      },
+      {
+        "timestamp": "2026-01-15T00:30:05.164Z",
+        "type": "market_active",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768437000000",
+        "message": "Рынок активен"
+      },
+      {
+        "timestamp": "2026-01-15T00:30:15.975Z",
+        "type": "buy",
+        "step": 2,
+        "marketSlug": "binance-ethusdt-1768437000000",
+        "amount": 3.574635316895932,
+        "message": "⚡ Хедж: 6.77 shares- по $0.52 (3908035) = $3.57 на 🟢 (Step 2)"
+      },
+      {
+        "timestamp": "2026-01-15T00:45:05.339Z",
+        "type": "market_lost",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768437000000",
+        "marketColor": "red",
+        "message": "Рынок закрылся 🔴 — проигрыш шага (потеряно $1.59)"
+      },
+      {
+        "timestamp": "2026-01-15T00:45:05.341Z",
+        "type": "waiting_market",
+        "step": 2,
+        "marketSlug": "binance-ethusdt-1768437900000",
+        "message": "Переход на Step 2 (хедж уже куплен)"
+      },
+      {
+        "timestamp": "2026-01-15T00:45:10.749Z",
+        "type": "market_active",
+        "step": 2,
+        "marketSlug": "binance-ethusdt-1768437900000",
+        "message": "Рынок активен"
+      },
+      {
+        "timestamp": "2026-01-15T00:45:31.075Z",
+        "type": "buy",
+        "step": 3,
+        "marketSlug": "binance-ethusdt-1768437900000",
+        "amount": 5.970793603943264,
+        "message": "⚡ Хедж: 11.31 shares- по $0.52 (1284920) = $5.97 на 🟢 (Step 3 break-even)"
+      },
+      {
+        "timestamp": "2026-01-15T01:00:05.395Z",
+        "type": "market_lost",
+        "step": 2,
+        "marketSlug": "binance-ethusdt-1768437900000",
+        "marketColor": "red",
+        "message": "Рынок закрылся 🔴 — проигрыш шага (потеряно $3.57)"
+      },
+      {
+        "timestamp": "2026-01-15T01:00:05.396Z",
+        "type": "waiting_market",
+        "step": 3,
+        "marketSlug": "binance-ethusdt-1768438800000",
+        "message": "Переход на Step 3 (хедж уже куплен)"
+      },
+      {
+        "timestamp": "2026-01-15T01:00:10.840Z",
+        "type": "market_active",
+        "step": 3,
+        "marketSlug": "binance-ethusdt-1768438800000",
+        "message": "Рынок активен"
+      },
+      {
+        "timestamp": "2026-01-15T01:15:05.268Z",
+        "type": "market_won",
+        "step": 3,
+        "marketSlug": "binance-ethusdt-1768438800000",
+        "marketColor": "green",
+        "pnl": 5.1696164429526075,
+        "message": "Рынок закрылся 🟢 — ПРОФИТ! Получил $11.14 (+$5.17)"
+      },
+      {
+        "timestamp": "2026-01-15T01:15:05.269Z",
+        "type": "series_won",
+        "step": 3,
+        "marketSlug": "binance-ethusdt-1768438800000",
+        "pnl": 0,
+        "message": "Серия завершена победой на Step 3! P&L: $0.00"
+      }
+    ],
+    "startedAt": "2026-01-15T00:15:40.488Z",
+    "__v": 8,
+    "nextMarketSlug": null,
+    "endedAt": "2026-01-15T01:15:05.269Z"
+  },
+  {
+    "_id": "69682e2283a79f7e707e94e8",
+    "botId": "bot2",
+    "asset": "eth",
+    "signalMarketSlug": "binance-ethusdt-1768435200000",
+    "signalColor": "green",
+    "betColor": "red",
+    "status": "cancelled",
+    "currentStep": 1,
+    "currentMarketSlug": "binance-ethusdt-1768436100000",
+    "marketState": "waiting",
+    "nextStepBought": false,
+    "totalInvested": 1.5305325628611586,
+    "totalCommission": 0.044648602217710436,
+    "totalPnL": -0.10618225831641426,
+    "positions": [
+      {
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768436100000",
+        "tokenId": "112288853062943736678413153187203155494601643105043911584371209561466380668451",
+        "amount": 1.5305325628611586,
+        "price": 0.49,
+        "shares": 3.076682804935186,
+        "commission": 0.02295798844291738,
+        "status": "sold",
+        "_id": "69682e2283a79f7e707e94ed"
+      }
+    ],
+    "events": [
+      {
+        "timestamp": "2026-01-15T00:00:34.439Z",
+        "type": "series_opened",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768436100000",
+        "message": "Сигнал 2🟢 → ставим на 🔴"
+      },
+      {
+        "timestamp": "2026-01-15T00:00:34.755Z",
+        "type": "buy",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768436100000",
+        "amount": 1.5305325628611586,
+        "message": "Купил 3.08 shares по $0.49 (1122888) = $1.53 на 🔴 (Step 1)"
+      },
+      {
+        "timestamp": "2026-01-15T00:00:34.755Z",
+        "type": "waiting_market",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768436100000",
+        "message": "Жду начало рынка..."
+      },
+      {
+        "timestamp": "2026-01-15T00:14:41.026Z",
+        "type": "sell",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768436100000",
+        "amount": 1.4243503045447443,
+        "message": "📤 Продал Step 1: 3.08 shares- по $0.47 (1122888) = $1.42"
+      },
+      {
+        "timestamp": "2026-01-15T00:14:41.181Z",
+        "type": "order_book",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768436100000",
+        "message": "📊 Order Book: Bids 19327 (31 levels) | Asks 25011 (41 levels)"
+      },
+      {
+        "timestamp": "2026-01-15T00:14:41.193Z",
+        "type": "signal_cancelled",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768436100000",
+        "marketColor": "red",
+        "pnl": -0.10618225831641426,
+        "message": "⚠️ Сигнал отменён: рынок 🔴 (был 🟢) → вернул $1.42 (P&L: $-0.11)"
+      }
+    ],
+    "startedAt": "2026-01-15T00:00:34.439Z",
+    "__v": 1,
+    "endedAt": "2026-01-15T00:14:41.193Z",
+    "nextMarketSlug": null
+  },
+  {
+    "_id": "6968270683a79f7e707e83e5",
+    "botId": "bot2",
+    "asset": "eth",
+    "signalMarketSlug": "binance-ethusdt-1768433400000",
+    "signalColor": "red",
+    "betColor": "green",
+    "status": "won",
+    "currentStep": 1,
+    "currentMarketSlug": "binance-ethusdt-1768434300000",
+    "marketState": "closed",
+    "nextStepBought": false,
+    "totalInvested": 1.530532562861159,
+    "totalCommission": 0.1741141897165322,
+    "totalPnL": 1.4610888975228828,
+    "positions": [
+      {
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768434300000",
+        "tokenId": "78414863322771976091290536945713312024443638393384460902625570682180007623167",
+        "amount": 1.5305325628611586,
+        "price": 0.49,
+        "shares": 3.076682804935186,
+        "commission": 0.02295798844291738,
+        "status": "won",
+        "_id": "6968270683a79f7e707e83e8"
+      },
+      {
+        "step": 2,
+        "marketSlug": "binance-ethusdt-1768435200000",
+        "tokenId": "12842013031506976379961438024538660043779563268459468909200700590567490281667",
+        "amount": 3.5001986399862344,
+        "price": 0.52,
+        "shares": 6.630183962281617,
+        "commission": 0.05250297959979351,
+        "status": "sold",
+        "_id": "69682a8083a79f7e707e8b34"
+      }
+    ],
+    "events": [
+      {
+        "timestamp": "2026-01-14T23:30:14.263Z",
+        "type": "series_opened",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768434300000",
+        "message": "Сигнал 2🔴 → ставим на 🟢"
+      },
+      {
+        "timestamp": "2026-01-14T23:30:14.551Z",
+        "type": "buy",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768434300000",
+        "amount": 1.5305325628611586,
+        "message": "Купил 3.08 shares по $0.49 (7841486) = $1.53 на 🟢 (Step 1)"
+      },
+      {
+        "timestamp": "2026-01-14T23:30:14.552Z",
+        "type": "waiting_market",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768434300000",
+        "message": "Жду начало рынка..."
+      },
+      {
+        "timestamp": "2026-01-14T23:45:03.942Z",
+        "type": "market_active",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768434300000",
+        "message": "Рынок активен"
+      },
+      {
+        "timestamp": "2026-01-14T23:45:04.269Z",
+        "type": "buy",
+        "step": 2,
+        "marketSlug": "binance-ethusdt-1768434300000",
+        "amount": 3.5001986399862344,
+        "message": "⚡ Хедж: 6.63 shares- по $0.52 (1284201) = $3.50 на 🟢 (Step 2)"
+      },
+      {
+        "timestamp": "2026-01-14T23:59:45.016Z",
+        "type": "sell_hedge",
+        "step": 2,
+        "marketSlug": "binance-ethusdt-1768434300000",
+        "amount": 3.461287537509118,
+        "message": "📤 Продал хедж Step 2 по $0.53 (1284201): вернул $3.46 ($0.04)"
+      },
+      {
+        "timestamp": "2026-01-14T23:59:45.017Z",
+        "type": "order_book",
+        "step": 2,
+        "marketSlug": "binance-ethusdt-1768434300000",
+        "message": "📊 Order Book: Bids 20668 (36 levels) | Asks 19743 (32 levels)"
+      },
+      {
+        "timestamp": "2026-01-15T00:00:04.598Z",
+        "type": "market_won",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768434300000",
+        "marketColor": "green",
+        "pnl": 1.4999999999999996,
+        "message": "Рынок закрылся 🟢 — ПРОФИТ! Получил $3.03 (+$1.50)"
+      },
+      {
+        "timestamp": "2026-01-15T00:00:04.599Z",
+        "type": "series_won",
+        "step": 1,
+        "marketSlug": "binance-ethusdt-1768434300000",
+        "pnl": 1.4610888975228828,
+        "message": "Серия завершена победой на Step 1! P&L: $1.46 (вкл. -$0.04 хедж)"
+      }
+    ],
+    "startedAt": "2026-01-14T23:30:14.263Z",
+    "__v": 4,
+    "nextMarketSlug": null,
+    "endedAt": "2026-01-15T00:00:04.598Z"
+  }
+]
