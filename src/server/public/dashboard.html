@@ -680,6 +680,7 @@
           <div class="series-info">
             <span>💰 $${s.totalInvested?.toFixed(2) || '0'}</span>
             ${pnlText ? `<span style="color: ${s.totalPnL >= 0 ? 'var(--green)' : 'var(--red)'}">${pnlText}</span>` : ''}
+            ${s.totalCommission ? `<span style="color: var(--text2); font-size: 0.9em;">💸 $${s.totalCommission.toFixed(2)}</span>` : ''}
             <span>🕐 ${fmtTime(s.startedAt)}</span>
           </div>
           <div class="timeline">${timeline}</div>
