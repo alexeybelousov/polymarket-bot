@@ -115,10 +115,20 @@ class TradingEmulator {
     
     // Загружаем активные cooldown серии
     const cooldownSeries = await TradeSeries.find({ botId: this.botId, status: 'cooldown' });
-    console.log(`💰 [${this.botId}] Found ${cooldownSeries.length} active cooldown series`);
+    console.log(`💰 [${this.botId}] Found ${cooldownSeries.length} cooldown series in DB`);
+    const now = new Date();
     for (const s of cooldownSeries) {
-      this.activeSeries.set(s.asset, s);
-      console.log(`💰 [${this.botId}] Resumed ${s.asset.toUpperCase()} cooldown until ${s.endedAt}`);
+      // Проверяем, не истек ли cooldown
+      if (s.endedAt && new Date(s.endedAt) > now) {
+        this.activeSeries.set(s.asset, s);
+        const remainingMs = new Date(s.endedAt) - now;
+        const remainingMin = Math.ceil(remainingMs / MS_PER_MINUTE);
+        console.log(`💰 [${this.botId}] Resumed ${s.asset.toUpperCase()} cooldown (${remainingMin} min remaining)`);
+      } else {
+        // Cooldown истек, закрываем его
+        await this.endCooldown(s);
+        console.log(`💰 [${this.botId}] ${s.asset.toUpperCase()} cooldown expired, ended`);
+      }
     }
     
     console.log(`💰 [${this.botId}] Trading emulator started`);
@@ -171,7 +181,23 @@ class TradingEmulator {
    * Создать cooldown серию для валюты
    */
   async createCooldown(asset) {
-    // Проверяем, нет ли уже активной cooldown серии
+    // Проверяем, нет ли уже активной cooldown серии в activeSeries
+    if (this.activeSeries.has(asset)) {
+      const existingSeries = this.activeSeries.get(asset);
+      if (existingSeries.status === 'cooldown') {
+        // Проверяем, не истек ли cooldown
+        if (existingSeries.endedAt && new Date(existingSeries.endedAt) > new Date()) {
+          console.log(`[TRADE] [${this.botId}] ${asset.toUpperCase()}: Cooldown already exists in activeSeries`);
+          return existingSeries;
+        } else {
+          // Cooldown истек, закрываем его
+          await this.endCooldown(existingSeries);
+          this.activeSeries.delete(asset);
+        }
+      }
+    }
+    
+    // Проверяем, нет ли активной cooldown серии в БД
     const existingCooldown = await TradeSeries.findOne({
       botId: this.botId,
       asset,
@@ -179,12 +205,21 @@ class TradingEmulator {
     });
     
     if (existingCooldown) {
-      console.log(`[TRADE] [${this.botId}] ${asset.toUpperCase()}: Cooldown already exists`);
-      return existingCooldown;
+      // Проверяем, не истек ли cooldown
+      if (existingCooldown.endedAt && new Date(existingCooldown.endedAt) > new Date()) {
+        // Cooldown активен, добавляем в activeSeries
+        this.activeSeries.set(asset, existingCooldown);
+        console.log(`[TRADE] [${this.botId}] ${asset.toUpperCase()}: Cooldown already exists in DB, added to activeSeries`);
+        return existingCooldown;
+      } else {
+        // Cooldown истек, закрываем его
+        await this.endCooldown(existingCooldown);
+      }
     }
     
     const cooldownDuration = this.config.cooldownAfterFullLoss || 0;
     if (!cooldownDuration || cooldownDuration <= 0) {
+      console.log(`[TRADE] [${this.botId}] ${asset.toUpperCase()}: Cooldown not configured (cooldownAfterFullLoss: ${cooldownDuration})`);
       return null; // Cooldown не настроен
     }
     
@@ -257,7 +292,7 @@ class TradingEmulator {
     
     console.log(`[TRADE] [${this.botId}] ${type.toUpperCase()}: Signal type matches, proceeding...`);
     
-    // Проверяем нет ли активной серии
+    // Проверяем нет ли активной серии в activeSeries
     if (this.activeSeries.has(type)) {
       const existingSeries = this.activeSeries.get(type);
       // Если это cooldown серия, проверяем не истекла ли она
@@ -275,6 +310,28 @@ class TradingEmulator {
       } else {
         console.log(`[TRADE] [${this.botId}] ${type.toUpperCase()}: Already active series, skipping`);
         return;
+      }
+    } else {
+      // Проверяем, нет ли активной cooldown серии в БД (на случай если бот перезапустился)
+      const existingCooldown = await TradeSeries.findOne({
+        botId: this.botId,
+        asset: type,
+        status: 'cooldown',
+      });
+      
+      if (existingCooldown) {
+        // Проверяем, не истек ли cooldown
+        if (existingCooldown.endedAt && new Date(existingCooldown.endedAt) > new Date()) {
+          // Cooldown активен, добавляем в activeSeries и пропускаем сигнал
+          this.activeSeries.set(type, existingCooldown);
+          const remainingMs = new Date(existingCooldown.endedAt) - new Date();
+          const remainingMin = Math.ceil(remainingMs / MS_PER_MINUTE);
+          console.log(`[TRADE] [${this.botId}] ${type.toUpperCase()}: Cooldown found in DB (${remainingMin} min remaining), skipping signal`);
+          return;
+        } else {
+          // Cooldown истек, закрываем его
+          await this.endCooldown(existingCooldown);
+        }
       }
     }
 
