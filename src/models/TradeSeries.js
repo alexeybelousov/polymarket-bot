@@ -55,6 +55,7 @@ const tradeSeriesSchema = new mongoose.Schema({
     price: Number,
     matches: Boolean,  // соответствует ли цена сигналу
     symbol: String,   // '+' или '-'
+    checkOutcome: String, // Какой исход проверяем: 'up' или 'down'
     orderBook: {     // Данные order book (опционально)
       imbalance: Number,  // imbalance из analyzeOrderBook
       bidsTotal: Number,
@@ -84,6 +85,7 @@ const tradeSeriesSchema = new mongoose.Schema({
     price: Number,
     matches: Boolean,  // соответствует ли цена сигналу
     symbol: String,     // '+' или '-'
+    checkOutcome: String, // Какой исход проверяем: 'up' или 'down'
     orderBook: {     // Данные order book (опционально)
       imbalance: Number,  // imbalance из analyzeOrderBook
       bidsTotal: Number,

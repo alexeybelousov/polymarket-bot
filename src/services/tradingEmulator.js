@@ -415,7 +415,7 @@ class TradingEmulator {
     // Событие: серия открыта
     const candleCount = signalType === '3candles' ? '3' : '2';
     series.addEvent('series_opened', {
-      message: `Сигнал ${candleCount}${signalEmoji} → ставим на ${betEmoji}`,
+      message: `Сигнал ${candleCount} ${signalEmoji} → ставим на ${betEmoji}`,
     });
     
     console.log(`[TRADE] [${this.botId}] ${type.toUpperCase()}: Series created, buyStrategy: ${this.config.buyStrategy || 'signal'}`);
@@ -1180,6 +1180,7 @@ class TradingEmulator {
       price: historyRecord.price,
       matches,
       symbol,
+      checkOutcome, // Сохраняем какой исход проверяем (up/down)
       orderBook: orderBookAnalysis ? {
         imbalance: orderBookAnalysis.imbalance,
         bidsTotal: orderBookAnalysis.bidsTotal,
@@ -1261,18 +1262,27 @@ class TradingEmulator {
       
       // Вычисляем изменение цены для финального сообщения
       let priceChangeInfo = '';
+      const checkOutcome = series.validationHistory.length > 0 && series.validationHistory[0].checkOutcome 
+        ? series.validationHistory[0].checkOutcome.toUpperCase() 
+        : (series.signalColor === 'red' ? 'UP' : 'DOWN');
+      
       if (series.validationHistory.length >= 2) {
         const firstPrice = series.validationHistory[0].price;
         const lastPrice = series.validationHistory[series.validationHistory.length - 1].price;
         const change = lastPrice - firstPrice;
         const changePercent = firstPrice > 0 ? (change / firstPrice) * 100 : 0;
-        priceChangeInfo = ` ($${firstPrice.toFixed(3)} → $${lastPrice.toFixed(3)}, ${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(2)}%)`;
+        priceChangeInfo = ` (Цена ${checkOutcome}: $${firstPrice.toFixed(3)} → $${lastPrice.toFixed(3)}, ${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(2)}%)`;
       }
       
       // Обновляем событие с причиной решения
       if (series.validationEventIndex !== undefined && series.validationEventIndex >= 0 && series.validationEventIndex < series.events.length) {
         const reasonText = finalStabilityResult.reason || 'Рынок стабилен';
-        series.events[series.validationEventIndex].message = `Валидирую рынок: ${displaySymbols} ✅ Покупка | Причина: ${reasonText}${priceChangeInfo}`;
+        // Заменяем "Цена" на "Цена UP" или "Цена DOWN" в reason, если там просто "Цена"
+        let enhancedReason = reasonText;
+        if (reasonText.includes('Цена упала') || reasonText.includes('Цена выросла') || reasonText.includes('Цена стабильна') || reasonText.includes('Цена низкая') || reasonText.includes('Цена очень низкая')) {
+          enhancedReason = reasonText.replace(/Цена/g, `Цена ${checkOutcome}`);
+        }
+        series.events[series.validationEventIndex].message = `Валидирую рынок: ${displaySymbols} ✅ Покупка | Причина: ${enhancedReason}${priceChangeInfo}`;
       }
       
       await series.save();
@@ -1304,18 +1314,27 @@ class TradingEmulator {
       
       // Вычисляем изменение цены для финального сообщения
       let priceChangeInfo = '';
+      const checkOutcome = series.validationHistory.length > 0 && series.validationHistory[0].checkOutcome 
+        ? series.validationHistory[0].checkOutcome.toUpperCase() 
+        : (series.signalColor === 'red' ? 'UP' : 'DOWN');
+      
       if (series.validationHistory.length >= 2) {
         const firstPrice = series.validationHistory[0].price;
         const lastPrice = series.validationHistory[series.validationHistory.length - 1].price;
         const change = lastPrice - firstPrice;
         const changePercent = firstPrice > 0 ? (change / firstPrice) * 100 : 0;
-        priceChangeInfo = ` ($${firstPrice.toFixed(3)} → $${lastPrice.toFixed(3)}, ${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(2)}%)`;
+        priceChangeInfo = ` (Цена ${checkOutcome}: $${firstPrice.toFixed(3)} → $${lastPrice.toFixed(3)}, ${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(2)}%)`;
       }
       
       // Обновляем событие с причиной отказа
       if (series.validationEventIndex !== undefined && series.validationEventIndex >= 0 && series.validationEventIndex < series.events.length) {
         const reasonText = finalStabilityResult.reason || 'Рынок нестабилен';
-        series.events[series.validationEventIndex].message = `Валидирую рынок: ${displaySymbols} ❌ Отменено | Причина: ${reasonText}${priceChangeInfo}`;
+        // Заменяем "Цена" на "Цена UP" или "Цена DOWN" в reason, если там просто "Цена"
+        let enhancedReason = reasonText;
+        if (reasonText.includes('Цена упала') || reasonText.includes('Цена выросла') || reasonText.includes('Цена стабильна') || reasonText.includes('Цена низкая') || reasonText.includes('Цена очень низкая')) {
+          enhancedReason = reasonText.replace(/Цена/g, `Цена ${checkOutcome}`);
+        }
+        series.events[series.validationEventIndex].message = `Валидирую рынок: ${displaySymbols} ❌ Отменено | Причина: ${enhancedReason}${priceChangeInfo}`;
       }
       
       series.addEvent('validation_rejected', {
@@ -1523,6 +1542,7 @@ class TradingEmulator {
       price: historyRecord.price,
       matches,
       symbol,
+      checkOutcome, // Сохраняем какой исход проверяем (up/down)
       orderBook: orderBookAnalysis ? {
         imbalance: orderBookAnalysis.imbalance,
         bidsTotal: orderBookAnalysis.bidsTotal,
@@ -1605,18 +1625,27 @@ class TradingEmulator {
       
       // Вычисляем изменение цены для финального сообщения
       let priceChangeInfo = '';
+      const checkOutcome = series.hedgeValidationHistory.length > 0 && series.hedgeValidationHistory[0].checkOutcome 
+        ? series.hedgeValidationHistory[0].checkOutcome.toUpperCase() 
+        : (series.betColor === 'red' ? 'DOWN' : 'UP');
+      
       if (series.hedgeValidationHistory.length >= 2) {
         const firstPrice = series.hedgeValidationHistory[0].price;
         const lastPrice = series.hedgeValidationHistory[series.hedgeValidationHistory.length - 1].price;
         const change = lastPrice - firstPrice;
         const changePercent = firstPrice > 0 ? (change / firstPrice) * 100 : 0;
-        priceChangeInfo = ` ($${firstPrice.toFixed(3)} → $${lastPrice.toFixed(3)}, ${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(2)}%)`;
+        priceChangeInfo = ` (Цена ${checkOutcome}: $${firstPrice.toFixed(3)} → $${lastPrice.toFixed(3)}, ${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(2)}%)`;
       }
       
       // Обновляем событие с причиной решения
       if (series.hedgeValidationEventIndex !== undefined && series.hedgeValidationEventIndex >= 0 && series.hedgeValidationEventIndex < series.events.length) {
         const reasonText = finalStabilityResult.reason || 'Рынок стабилен';
-        series.events[series.hedgeValidationEventIndex].message = `Валидирую рынок для хеджа Step ${nextStep}: ${displaySymbols} ✅ Покупка | Причина: ${reasonText}${priceChangeInfo}`;
+        // Заменяем "Цена" на "Цена UP" или "Цена DOWN" в reason, если там просто "Цена"
+        let enhancedReason = reasonText;
+        if (reasonText.includes('Цена упала') || reasonText.includes('Цена выросла') || reasonText.includes('Цена стабильна') || reasonText.includes('Цена низкая') || reasonText.includes('Цена очень низкая')) {
+          enhancedReason = reasonText.replace(/Цена/g, `Цена ${checkOutcome}`);
+        }
+        series.events[series.hedgeValidationEventIndex].message = `Валидирую рынок для хеджа Step ${nextStep}: ${displaySymbols} ✅ Покупка | Причина: ${enhancedReason}${priceChangeInfo}`;
       }
       
       await series.save();
@@ -1635,18 +1664,27 @@ class TradingEmulator {
       
       // Вычисляем изменение цены для финального сообщения
       let priceChangeInfo = '';
+      const checkOutcome = series.hedgeValidationHistory.length > 0 && series.hedgeValidationHistory[0].checkOutcome 
+        ? series.hedgeValidationHistory[0].checkOutcome.toUpperCase() 
+        : (series.betColor === 'red' ? 'DOWN' : 'UP');
+      
       if (series.hedgeValidationHistory.length >= 2) {
         const firstPrice = series.hedgeValidationHistory[0].price;
         const lastPrice = series.hedgeValidationHistory[series.hedgeValidationHistory.length - 1].price;
         const change = lastPrice - firstPrice;
         const changePercent = firstPrice > 0 ? (change / firstPrice) * 100 : 0;
-        priceChangeInfo = ` ($${firstPrice.toFixed(3)} → $${lastPrice.toFixed(3)}, ${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(2)}%)`;
+        priceChangeInfo = ` (Цена ${checkOutcome}: $${firstPrice.toFixed(3)} → $${lastPrice.toFixed(3)}, ${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(2)}%)`;
       }
       
       // Обновляем событие с причиной отказа
       if (series.hedgeValidationEventIndex !== undefined && series.hedgeValidationEventIndex >= 0 && series.hedgeValidationEventIndex < series.events.length) {
         const reasonText = finalStabilityResult.reason || 'Рынок нестабилен';
-        series.events[series.hedgeValidationEventIndex].message = `Валидирую рынок для хеджа Step ${nextStep}: ${displaySymbols} ❌ Отменено | Причина: ${reasonText}${priceChangeInfo}`;
+        // Заменяем "Цена" на "Цена UP" или "Цена DOWN" в reason, если там просто "Цена"
+        let enhancedReason = reasonText;
+        if (reasonText.includes('Цена упала') || reasonText.includes('Цена выросла') || reasonText.includes('Цена стабильна') || reasonText.includes('Цена низкая') || reasonText.includes('Цена очень низкая')) {
+          enhancedReason = reasonText.replace(/Цена/g, `Цена ${checkOutcome}`);
+        }
+        series.events[series.hedgeValidationEventIndex].message = `Валидирую рынок для хеджа Step ${nextStep}: ${displaySymbols} ❌ Отменено | Причина: ${enhancedReason}${priceChangeInfo}`;
       }
       
       series.addEvent('validation_rejected', {
