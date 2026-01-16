@@ -1429,52 +1429,35 @@ class TradingEmulator {
       last12Stable = stableCount === 12;
     }
     
-    // Проверка: за 1 минуту до конца принимаем решение
-    if (timeToEnd !== null && timeToEnd <= 60) {
-      // Принимаем решение на основе checkStability И проверки стабильности последних 12 записей
-      // checkStability требует минимум 12 записей для правильной оценки
-      if (stabilityResult.stable && series.validationHistory.length >= 12 && last12Stable) {
-        // Рынок стабилен - покупаем
-        await this.completeValidation(series, true, stabilityResult);
-      } else {
-        // Рынок нестабилен - не покупаем, отменяем серию
-        // Если checkStability вернул stable=true, но не все 12 записей стабильны, формируем правильный reason
-        let finalStabilityResult = stabilityResult;
-        if (stabilityResult.stable && !last12Stable && series.validationHistory.length >= 12) {
-          const last12 = series.validationHistory.slice(-12);
-          const stableCount = last12.filter(h => h.matches === true).length;
-          finalStabilityResult = {
-            stable: false,
-            reason: `Не все записи стабильны: ${stableCount} из 12 (требуется все 12 для 2 минут стабильности)`,
-            changePercent: stabilityResult.changePercent,
-          };
-        }
-        // Если checkStability вернул stable=false, используем его reason как есть (например, "сигнал отменяется")
-        await this.completeValidation(series, false, finalStabilityResult);
-      }
-      return;
-    }
-    
     // Проверка условий покупки: если рынок стабилен (по checkStability) и есть достаточно данных
+    // Продолжаем проверять до самого конца рынка - если все 12 стабильны, покупаем
     // checkStability требует минимум 12 записей (2 минуты при интервале 10 сек) для правильной оценки
     // Также проверяем, что последние 12 записей были стабильными
     if (series.validationHistory.length >= 12 && stabilityResult.stable && last12Stable) {
       // Рынок стабилен в течение 2 минут - покупаем
       await this.completeValidation(series, true, stabilityResult);
-    } else if (series.validationHistory.length >= 12 && stabilityResult.stable && !last12Stable) {
-      // checkStability вернул stable=true, но не все 12 записей стабильны - формируем правильный reason
-      const last12 = series.validationHistory.slice(-12);
-      const stableCount = last12.filter(h => h.matches === true).length;
-      const finalStabilityResult = {
-        stable: false,
-        reason: `Не все записи стабильны: ${stableCount} из 12 (требуется все 12 для 2 минут стабильности)`,
-        changePercent: stabilityResult.changePercent,
-      };
-      await this.completeValidation(series, false, finalStabilityResult);
-    } else if (series.validationHistory.length >= 12 && !stabilityResult.stable) {
-      // checkStability вернул stable=false - используем его reason как есть (например, "сигнал отменяется")
-      await this.completeValidation(series, false, stabilityResult);
+      return;
     }
+    
+    // Если рынок закрылся (timeToEnd <= 0) и мы не купили - отменяем
+    if (timeToEnd !== null && timeToEnd <= 0) {
+      // Рынок закрылся, но мы не купили - отменяем
+      let finalStabilityResult = stabilityResult;
+      if (stabilityResult.stable && !last12Stable && series.validationHistory.length >= 12) {
+        const last12 = series.validationHistory.slice(-12);
+        const stableCount = last12.filter(h => h.matches === true).length;
+        finalStabilityResult = {
+          stable: false,
+          reason: `Не все записи стабильны: ${stableCount} из 12 (требуется все 12 для 2 минут стабильности)`,
+          changePercent: stabilityResult.changePercent,
+        };
+      }
+      await this.completeValidation(series, false, finalStabilityResult);
+      return;
+    }
+    
+    // Рынок еще активен, но пока не все 12 стабильны - продолжаем проверять
+    // (функция вернется и будет вызвана снова через интервал)
   }
 
   // ==================== ВАЛИДАЦИЯ ХЕДЖА ====================
@@ -1805,52 +1788,35 @@ class TradingEmulator {
       last12Stable = stableCount === 12;
     }
     
-    // Проверка: за 1 минуту до начала/конца принимаем решение
-    if (timeToEnd !== null && timeToEnd <= 60) {
-      // Принимаем решение на основе checkStability И проверки стабильности последних 12 записей
-      // Если сигнал надежный (stable = true) → покупаем хедж (рынок закроется зеленым, нужна защита)
-      // Если сигнал ненадежный (stable = false) → не покупаем хедж (рынок закроется красным, мы выиграем)
-      if (stabilityResult.stable && series.hedgeValidationHistory.length >= 12 && last12Stable) {
-        // Сигнал надежный - покупаем хедж (рынок закроется зеленым)
-        await this.completeHedgeValidation(series, true, context, stabilityResult);
-      } else {
-        // Сигнал ненадежный - не покупаем хедж (рынок закроется красным, мы выиграем)
-        // Если checkStability вернул stable=true, но не все 12 записей стабильны, формируем правильный reason
-        let finalStabilityResult = stabilityResult;
-        if (stabilityResult.stable && !last12Stable && series.hedgeValidationHistory.length >= 12) {
-          const last12 = series.hedgeValidationHistory.slice(-12);
-          const stableCount = last12.filter(h => h.matches === true).length;
-          finalStabilityResult = {
-            stable: false,
-            reason: `Не все записи стабильны: ${stableCount} из 12 (требуется все 12 для 2 минут стабильности)`,
-            changePercent: stabilityResult.changePercent,
-          };
-        }
-        await this.completeHedgeValidation(series, false, context, finalStabilityResult);
-      }
-      return;
-    }
-    
     // Проверка условий покупки: если сигнал надежный (по checkStability) и есть достаточно данных
+    // Продолжаем проверять до самого конца рынка - если все 12 стабильны, покупаем хедж
     // checkStability требует минимум 12 записей (2 минуты при интервале 10 сек) для правильной оценки
     // Также проверяем, что последние 12 записей были стабильными
     if (series.hedgeValidationHistory.length >= 12 && stabilityResult.stable && last12Stable) {
       // Сигнал надежный - покупаем хедж (рынок закроется зеленым)
       await this.completeHedgeValidation(series, true, context, stabilityResult);
-    } else if (series.hedgeValidationHistory.length >= 12 && stabilityResult.stable && !last12Stable) {
-      // checkStability вернул stable=true, но не все 12 записей стабильны - формируем правильный reason
-      const last12 = series.hedgeValidationHistory.slice(-12);
-      const stableCount = last12.filter(h => h.matches === true).length;
-      const finalStabilityResult = {
-        stable: false,
-        reason: `Не все записи стабильны: ${stableCount} из 12 (требуется все 12 для 2 минут стабильности)`,
-        changePercent: stabilityResult.changePercent,
-      };
-      await this.completeHedgeValidation(series, false, context, finalStabilityResult);
-    } else if (series.hedgeValidationHistory.length >= 12 && !stabilityResult.stable) {
-      // checkStability вернул stable=false - используем его reason как есть (например, "сигнал отменяется")
-      await this.completeHedgeValidation(series, false, context, stabilityResult);
+      return;
     }
+    
+    // Если рынок закрылся (timeToEnd <= 0) и мы не купили хедж - отменяем валидацию
+    if (timeToEnd !== null && timeToEnd <= 0) {
+      // Рынок закрылся, но мы не купили хедж - отменяем валидацию
+      let finalStabilityResult = stabilityResult;
+      if (stabilityResult.stable && !last12Stable && series.hedgeValidationHistory.length >= 12) {
+        const last12 = series.hedgeValidationHistory.slice(-12);
+        const stableCount = last12.filter(h => h.matches === true).length;
+        finalStabilityResult = {
+          stable: false,
+          reason: `Не все записи стабильны: ${stableCount} из 12 (требуется все 12 для 2 минут стабильности)`,
+          changePercent: stabilityResult.changePercent,
+        };
+      }
+      await this.completeHedgeValidation(series, false, context, finalStabilityResult);
+      return;
+    }
+    
+    // Рынок еще активен, но пока не все 12 стабильны - продолжаем проверять
+    // (функция вернется и будет вызвана снова через интервал)
   }
 
   // ==================== ОТМЕНА СИГНАЛА ====================
