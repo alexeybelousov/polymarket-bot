@@ -37,7 +37,7 @@ const TRADING_CONFIGS = {
     firstBetPercent: 0.015,     // Первая ставка: 1,5% от депозита
     signalType: '2candles',     // На каком сигнале начинается торговля: 2 свечи
     maxSteps: 3,                // Количество шагов
-    baseDeposit: 1000,           // Базовый депозит: $1000
+    baseDeposit: 100,           // Базовый депозит: $1000
     maxPrice: 0.55,             // Верхний предел цены (не входим если цена выше)
     entryFee: 0.015,            // Комиссия на вход: 1.5%
     exitFee: 0.015,             // Комиссия на выход: 1.5%
@@ -1265,8 +1265,11 @@ class TradingEmulator {
     if (series.validationEventIndex !== undefined && series.validationEventIndex >= 0 && series.validationEventIndex < series.events.length) {
       const signalStatus = stabilityResult.stable ? 'Сигнал надежный' : 'Сигнал ненадежный';
       const signalEmoji = series.signalColor === 'red' ? '🔴' : '🟢';
-      const message = `Проверяю сигнал "${signalEmoji}": ${displaySymbols} | Цена: $${price.toFixed(3)}${priceChangeText ? ` (${priceChangeText})` : ''}${orderBookText} | ${stabilityEmoji} ${signalStatus}`;
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      const message = `${timeStr} Проверяю сигнал "${signalEmoji}": ${displaySymbols} | Цена: $${price.toFixed(3)}${priceChangeText ? ` (${priceChangeText})` : ''}${orderBookText} | ${stabilityEmoji} ${signalStatus}`;
       series.events[series.validationEventIndex].message = message;
+      series.events[series.validationEventIndex].timestamp = now; // Обновляем время события
     }
     
     // Сохраняем последний результат стабильности для использования в completeValidation
@@ -1324,7 +1327,10 @@ class TradingEmulator {
           enhancedReason = reasonText.replace(/Цена/g, `Цена ${checkOutcome}`);
         }
         const signalEmoji = series.signalColor === 'red' ? '🔴' : '🟢';
-        series.events[series.validationEventIndex].message = `Проверяю сигнал "${signalEmoji}": ${displaySymbols} Покупка: ${enhancedReason}${priceChangeInfo}`;
+        const now = new Date();
+        const timeStr = now.toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        series.events[series.validationEventIndex].message = `${timeStr} Проверяю сигнал "${signalEmoji}": ${displaySymbols} Покупка: ${enhancedReason}${priceChangeInfo}`;
+        series.events[series.validationEventIndex].timestamp = now; // Обновляем время события
       }
       
       await series.save();
@@ -1391,7 +1397,10 @@ class TradingEmulator {
           enhancedReason = reasonText.replace(/Цена/g, `Цена ${checkOutcome}`);
         }
         const signalEmoji = series.signalColor === 'red' ? '🔴' : '🟢';
-        series.events[series.validationEventIndex].message = `Проверяю сигнал "${signalEmoji}": ${displaySymbols} Отменено: ${enhancedReason}${priceChangeInfo}`;
+        const now = new Date();
+        const timeStr = now.toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        series.events[series.validationEventIndex].message = `${timeStr} Проверяю сигнал "${signalEmoji}": ${displaySymbols} Отменено: ${enhancedReason}${priceChangeInfo}`;
+        series.events[series.validationEventIndex].timestamp = now; // Обновляем время события
       }
       
       series.addEvent('validation_rejected', {
@@ -1668,8 +1677,11 @@ class TradingEmulator {
     if (series.hedgeValidationEventIndex !== undefined && series.hedgeValidationEventIndex >= 0 && series.hedgeValidationEventIndex < series.events.length) {
       const signalStatus = stabilityResult.stable ? 'Сигнал надежный' : 'Сигнал ненадежный';
       const signalEmoji = series.signalColor === 'red' ? '🔴' : '🟢';
-      const message = `Проверяю сигнал "${signalEmoji}": ${displaySymbols} | Цена: $${price.toFixed(3)}${priceChangeText ? ` (${priceChangeText})` : ''}${orderBookText} | ${stabilityEmoji} ${signalStatus}`;
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      const message = `${timeStr} Проверяю сигнал "${signalEmoji}": ${displaySymbols} | Цена: $${price.toFixed(3)}${priceChangeText ? ` (${priceChangeText})` : ''}${orderBookText} | ${stabilityEmoji} ${signalStatus}`;
       series.events[series.hedgeValidationEventIndex].message = message;
+      series.events[series.hedgeValidationEventIndex].timestamp = now; // Обновляем время события
     }
     
     // Сохраняем последний результат стабильности для использования в completeHedgeValidation
@@ -1728,7 +1740,10 @@ class TradingEmulator {
           enhancedReason = reasonText.replace(/Цена/g, `Цена ${checkOutcome}`);
         }
         const signalEmoji = series.signalColor === 'red' ? '🔴' : '🟢';
-        series.events[series.hedgeValidationEventIndex].message = `Проверяю сигнал "${signalEmoji}": ${displaySymbols} Сигнал надежный - Покупка хеджа: ${enhancedReason}${priceChangeInfo}`;
+        const now = new Date();
+        const timeStr = now.toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        series.events[series.hedgeValidationEventIndex].message = `${timeStr} Проверяю сигнал "${signalEmoji}": ${displaySymbols} Сигнал надежный - Покупка хеджа: ${enhancedReason}${priceChangeInfo}`;
+        series.events[series.hedgeValidationEventIndex].timestamp = now; // Обновляем время события
       }
       
       await series.save();
@@ -1768,7 +1783,10 @@ class TradingEmulator {
           enhancedReason = reasonText.replace(/Цена/g, `Цена ${checkOutcome}`);
         }
         const signalEmoji = series.signalColor === 'red' ? '🔴' : '🟢';
-        series.events[series.hedgeValidationEventIndex].message = `Проверяю сигнал "${signalEmoji}": ${displaySymbols} Сигнал ненадежный - Хедж не нужен: ${enhancedReason}${priceChangeInfo}`;
+        const now = new Date();
+        const timeStr = now.toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        series.events[series.hedgeValidationEventIndex].message = `${timeStr} Проверяю сигнал "${signalEmoji}": ${displaySymbols} Сигнал ненадежный - Хедж не нужен: ${enhancedReason}${priceChangeInfo}`;
+        series.events[series.hedgeValidationEventIndex].timestamp = now; // Обновляем время события
       }
       
       series.addEvent('validation_rejected', {
