@@ -1425,8 +1425,10 @@ class TradingEmulator {
     }
     
     // Проверка условий покупки: если рынок стабилен (по checkStability) и есть достаточно данных
-    if (series.validationHistory.length >= 3 && stabilityResult.stable) {
-      // Рынок стабилен - покупаем
+    // checkStability требует минимум 12 записей (2 минуты при интервале 10 сек) для правильной оценки
+    // Поэтому ждем минимум 12 проверок перед покупкой
+    if (series.validationHistory.length >= 12 && stabilityResult.stable) {
+      // Рынок стабилен в течение 2 минут - покупаем
       await this.completeValidation(series, true, stabilityResult);
     }
   }
