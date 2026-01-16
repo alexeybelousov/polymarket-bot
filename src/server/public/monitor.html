@@ -43,6 +43,35 @@
     a { color: var(--text2); text-decoration: none; }
     a:hover { color: var(--text); }
     
+    .filters {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-left: 24px;
+    }
+    .filter-btn {
+      padding: 6px 16px;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text2);
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .filter-btn:hover {
+      background: var(--bg);
+      border-color: var(--blue);
+      color: var(--text);
+    }
+    .filter-btn.active {
+      background: var(--blue);
+      border-color: var(--blue);
+      color: white;
+    }
+    
     
     .markets-wrapper {
       overflow: hidden;
@@ -237,7 +266,13 @@
 <body>
   <div class="monitor-container">
     <header>
-      <div class="logo">📊 <span>Polymarket</span> Monitor</div>
+      <div style="display: flex; align-items: center; gap: 24px;">
+        <div class="logo">📊 <span>Polymarket</span> Monitor</div>
+        <div class="filters">
+          <button class="filter-btn" data-asset="btc">BTC</button>
+          <button class="filter-btn active" data-asset="eth">ETH</button>
+        </div>
+      </div>
       <div class="meta">
         <div class="live"><div class="live-dot"></div><span id="time">—</span></div>
         <a href="/dashboard">dashboard</a>
@@ -264,6 +299,7 @@
     let allBots = [];
     let marketsStartTime = null; // Время начала движения столбцов
     let marketDuration = 15 * 60; // 15 минут в секундах
+    let selectedAsset = 'eth'; // Выбранный актив по умолчанию
     
     function getEventClass(type) {
       if (type === 'series_opened') return 'neutral';
@@ -334,16 +370,22 @@
         
         console.log('[MONITOR] Markets data:', data);
         
-        // Получаем текущий рынок ETH
-        const ethCurrent = data.eth?.current?.slug;
-        console.log('[MONITOR] ETH current slug:', ethCurrent);
-        
-        if (!ethCurrent) {
-          console.error('[MONITOR] No ETH current slug found');
+        // Получаем текущий рынок выбранного актива
+        const assetData = data[selectedAsset];
+        if (!assetData) {
+          console.error(`[MONITOR] No ${selectedAsset.toUpperCase()} data found`);
           return;
         }
         
-        const currentMarket = parseMarketSlug(ethCurrent);
+        const currentSlug = assetData.current?.slug;
+        console.log(`[MONITOR] ${selectedAsset.toUpperCase()} current slug:`, currentSlug);
+        
+        if (!currentSlug) {
+          console.error(`[MONITOR] No ${selectedAsset.toUpperCase()} current slug found`);
+          return;
+        }
+        
+        const currentMarket = parseMarketSlug(currentSlug);
         console.log('[MONITOR] Parsed market:', currentMarket);
         
         if (!currentMarket) {
@@ -355,11 +397,16 @@
         const marketInterval = 15 * 60; // 15 минут в секундах
         const newMarkets = [];
         
+        // Определяем формат slug и базовый префикс
+        const isBinance = currentSlug.startsWith('binance-');
+        const assetUpper = selectedAsset.toUpperCase();
+        const assetPair = selectedAsset === 'btc' ? 'btcusdt' : 'ethusdt';
+        
         // Будущий рынок (справа)
         const futureTs = currentMarket.timestamp + marketInterval;
-        const futureSlug = ethCurrent.startsWith('binance-')
-          ? `binance-ethusdt-${futureTs * 1000}` // Binance использует миллисекунды
-          : `eth-updown-15m-${futureTs}`;
+        const futureSlug = isBinance
+          ? `binance-${assetPair}-${futureTs * 1000}` // Binance использует миллисекунды
+          : `${selectedAsset}-updown-15m-${futureTs}`;
         newMarkets.push({
           timestamp: futureTs,
           slug: futureSlug,
@@ -369,25 +416,25 @@
         // Текущий рынок
         newMarkets.push({
           timestamp: currentMarket.timestamp,
-          slug: ethCurrent,
+          slug: currentSlug,
           isCurrent: true,
-          color: data.eth?.current?.color || 'unknown',
+          color: assetData.current?.color || 'unknown',
         });
         
         // Предыдущие 4 рынка
         for (let i = 1; i <= 4; i++) {
           const ts = currentMarket.timestamp - (marketInterval * i);
           // Формируем slug в зависимости от формата исходного
-          const slug = ethCurrent.startsWith('binance-') 
-            ? `binance-ethusdt-${ts * 1000}` // Binance использует миллисекунды
-            : `eth-updown-15m-${ts}`;
+          const slug = isBinance 
+            ? `binance-${assetPair}-${ts * 1000}` // Binance использует миллисекунды
+            : `${selectedAsset}-updown-15m-${ts}`;
           
           // Получаем цвет из API данных для предыдущих рынков
           let pastColor = null;
-          if (i === 1 && data.eth?.prev1) {
-            pastColor = data.eth.prev1.color;
-          } else if (i === 2 && data.eth?.prev2) {
-            pastColor = data.eth.prev2.color;
+          if (i === 1 && assetData.prev1) {
+            pastColor = assetData.prev1.color;
+          } else if (i === 2 && assetData.prev2) {
+            pastColor = assetData.prev2.color;
           }
           
           newMarkets.push({
@@ -449,14 +496,14 @@
         const timeInfo = getMarketTime(market.timestamp);
         
         // Формируем slug для отображения
-        // Для binance формата: binance-ethusdt-1768412700000 -> eth-updown-15m-1768412700
-        // Для polymarket формата: eth-updown-15m-1768412700 -> eth-updown-15m-1768412700
+        // Для binance формата: binance-btcusdt-1768412700000 -> btc-updown-15m-1768412700
+        // Для polymarket формата: btc-updown-15m-1768412700 -> btc-updown-15m-1768412700
         let displaySlug = market.slug;
-        if (displaySlug.startsWith('binance-ethusdt-')) {
+        if (displaySlug.startsWith('binance-')) {
           // Извлекаем timestamp (миллисекунды) и конвертируем в секунды
           const ms = parseInt(displaySlug.split('-').pop());
           const seconds = Math.floor(ms / 1000);
-          displaySlug = `eth-updown-15m-${seconds}`;
+          displaySlug = `${selectedAsset}-updown-15m-${seconds}`;
         }
         
         col.innerHTML = `
@@ -503,9 +550,9 @@
       [series.bot2, series.bot3].forEach((botSeries, botIndex) => {
         const botId = botIndex === 0 ? 'bot2' : 'bot3';
         
-        // Фильтруем только серии ETH (монитор для ETH)
+        // Фильтруем только серии выбранного актива
         const visibleSeries = botSeries.filter(s => {
-          if (s.asset !== 'eth') return false;
+          if (s.asset !== selectedAsset) return false;
           if (!s.startedAt) return false;
           const startTime = new Date(s.startedAt).getTime() / 1000;
           const endTime = s.endedAt ? new Date(s.endedAt).getTime() / 1000 : Date.now() / 1000;
@@ -614,7 +661,7 @@
         let signalColor = null;
         [series.bot2, series.bot3].forEach(botSeries => {
           botSeries.forEach(s => {
-            if (s.asset !== 'eth' || !s.events) return;
+            if (s.asset !== selectedAsset || !s.events) return;
             const marketStart = market.timestamp;
             const marketEnd = market.timestamp + (15 * 60);
             
@@ -694,6 +741,20 @@
       document.getElementById('time').textContent = fmtTime(new Date());
       updateMarketsPosition();
     }
+    
+    // Обработчики кнопок фильтров
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        // Убираем активный класс со всех кнопок
+        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        // Добавляем активный класс к нажатой кнопке
+        btn.classList.add('active');
+        // Обновляем выбранный актив
+        selectedAsset = btn.dataset.asset;
+        // Перезагружаем данные
+        update();
+      });
+    });
     
     loadBots();
     update();
