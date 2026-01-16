@@ -1665,7 +1665,7 @@ class TradingEmulator {
       let priceChangeInfo = '';
       const checkOutcome = series.hedgeValidationHistory.length > 0 && series.hedgeValidationHistory[0].checkOutcome 
         ? series.hedgeValidationHistory[0].checkOutcome.toUpperCase() 
-        : (series.betColor === 'red' ? 'DOWN' : 'UP');
+        : (series.signalColor === 'green' ? 'UP' : 'DOWN');
       
       if (series.hedgeValidationHistory.length >= 2) {
         const firstPrice = series.hedgeValidationHistory[0].price;
