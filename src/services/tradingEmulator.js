@@ -1412,7 +1412,8 @@ class TradingEmulator {
     
     // Начинаем валидацию хеджа
     series.hedgeValidationState = 'validating';
-    series.hedgeValidationMarketSlug = nextMarketSlug; // Валидируем следующий рынок
+    // Валидируем текущий рынок (где мы проиграли), чтобы понять нужно ли покупать следующий шаг
+    series.hedgeValidationMarketSlug = context.slugs.current;
     series.hedgeValidationHistory = [];
     series.hedgeLastValidationCheck = null;
     
@@ -1437,10 +1438,12 @@ class TradingEmulator {
     const nextStep = series.currentStep + 1;
     
     // Определяем какую цену проверяем
-    // Для хеджа мы ставим на betColor, поэтому проверяем цену того исхода, на который ставим
-    // Если ставим на GREEN (down) - проверяем цену DOWN
-    // Если ставим на RED (up) - проверяем цену UP
-    const checkOutcome = series.betColor === 'green' ? 'down' : 'up';
+    // Для хеджа логика такая же как для первой валидации:
+    // - Если ставим на RED (down) - проверяем цену DOWN (чтобы понять не ушел ли рынок в GREEN)
+    // - Если ставим на GREEN (up) - проверяем цену UP (чтобы понять не ушел ли рынок в RED)
+    // betColor = 'red' означает ставим на RED (down), проверяем DOWN
+    // betColor = 'green' означает ставим на GREEN (up), проверяем UP
+    const checkOutcome = series.betColor === 'red' ? 'down' : 'up';
     const polySlug = this.convertToPolymarketSlug(marketSlug);
     
     let price = null;
