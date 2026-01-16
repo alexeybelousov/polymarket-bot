@@ -1527,10 +1527,10 @@ class TradingEmulator {
     historyForStability.push(historyRecord);
     
     // Используем checkStability для определения стабильности
-    // Для хеджа мы ставим на betColor, поэтому проверяем стабильность betColor
-    // Если ставим на GREEN, проверяем стабильность GREEN (передаем 'green')
-    // Если ставим на RED, проверяем стабильность RED (передаем 'red')
-    const stabilityResult = this.checkStability(historyForStability, series.betColor);
+    // Для хеджа логика такая же как для первой валидации (используем исходный signalColor):
+    // - Если исходный сигнал был GREEN → проверяем стабильность GREEN (передаем 'green')
+    // - Если исходный сигнал был RED → проверяем стабильность RED (передаем 'red')
+    const stabilityResult = this.checkStability(historyForStability, series.signalColor);
     const matches = stabilityResult.stable;
     const symbol = matches ? '+' : '-';
     
