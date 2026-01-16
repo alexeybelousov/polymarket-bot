@@ -103,23 +103,53 @@ class TradingEmulator {
     const stats = await TradingStats.getStats(this.botId);
     const baseDeposit = this.config.baseDeposit || 100;
     
-    // Если нет торгов (база была очищена или это новый бот), всегда устанавливаем депозит из конфига
-    // Это важно после очистки базы, когда статистика создается заново с дефолтными значениями (100)
-    if (stats.totalTrades === 0 && stats.totalPnL === 0) {
-      // Если депозит не соответствует конфигу, обновляем
-      if (stats.initialDeposit !== baseDeposit || stats.currentBalance !== baseDeposit) {
-        stats.initialDeposit = baseDeposit;
+    // Всегда проверяем и обновляем депозит, если он не соответствует конфигу
+    // Это критично после очистки базы, когда статистика создается с дефолтными значениями (100)
+    let needsUpdate = false;
+    
+    // Проверяем, является ли это новым ботом (нет торгов)
+    const isNewBot = stats.totalTrades === 0 && stats.totalPnL === 0 && stats.totalCommissions === 0;
+    
+    // КРИТИЧНО: Если депозит равен дефолтному 100, а конфиг требует другой - это признак очистки базы
+    // Всегда обновляем в этом случае, независимо от других условий
+    if (stats.initialDeposit === 100 && baseDeposit !== 100) {
+      stats.initialDeposit = baseDeposit;
+      needsUpdate = true;
+      console.log(`💰 [${this.botId}] Detected default initialDeposit ($100), updating to config: $${baseDeposit}`);
+    }
+    
+    // КРИТИЧНО: Если currentBalance равен дефолтному 100, а конфиг требует другой - обновляем
+    // Это может произойти после очистки базы
+    if (stats.currentBalance === 100 && baseDeposit !== 100) {
+      stats.currentBalance = baseDeposit;
+      needsUpdate = true;
+      console.log(`💰 [${this.botId}] Detected default currentBalance ($100), updating to config: $${baseDeposit}`);
+    }
+    
+    if (isNewBot) {
+      // Для нового бота всегда устанавливаем правильный депозит
+      if (stats.currentBalance !== baseDeposit) {
         stats.currentBalance = baseDeposit;
-        await stats.save();
-        console.log(`💰 [${this.botId}] Initialized stats after reset: initialDeposit=$${baseDeposit}, currentBalance=$${baseDeposit}`);
+        needsUpdate = true;
+        console.log(`💰 [${this.botId}] New bot: setting currentBalance=$${baseDeposit}`);
       }
-    } else {
-      // Если есть торговля, обновляем только initialDeposit если он не соответствует (конфиг изменился)
+      // Также обновляем initialDeposit если не совпадает
       if (stats.initialDeposit !== baseDeposit) {
         stats.initialDeposit = baseDeposit;
-        await stats.save();
+        needsUpdate = true;
+      }
+    } else {
+      // Для существующего бота обновляем только initialDeposit если конфиг изменился
+      if (stats.initialDeposit !== baseDeposit) {
+        stats.initialDeposit = baseDeposit;
+        needsUpdate = true;
         console.log(`💰 [${this.botId}] Updated initialDeposit to match config: $${baseDeposit}`);
       }
+    }
+    
+    if (needsUpdate) {
+      await stats.save();
+      console.log(`💰 [${this.botId}] Stats updated: initialDeposit=$${stats.initialDeposit}, currentBalance=$${stats.currentBalance}`);
     }
     
     // Загружаем активные серии из БД для этого бота
@@ -1257,7 +1287,7 @@ class TradingEmulator {
   /**
    * Завершает валидацию (покупает или отменяет)
    */
-  async completeValidation(series, success, stabilityResult = null) {
+  async completeValidation(series, success, stabilityResult = null, timeToEnd = null) {
     const asset = series.asset.toUpperCase();
     
     // Используем переданный stabilityResult или последний сохраненный
@@ -1302,20 +1332,34 @@ class TradingEmulator {
       // Покупаем
       const bought = await this.buyStep(series);
       if (!bought) {
-        // Не удалось купить - отменяем серию
-        series.status = 'cancelled';
-        series.endedAt = new Date();
-        series.addEvent('series_cancelled', {
-          message: '⛔ Серия отменена: не удалось купить после валидации',
-        });
-        await series.save();
-        this.activeSeries.delete(series.asset);
-        return;
+        // Не удалось купить - проверяем, активен ли еще рынок
+        if (timeToEnd !== null && timeToEnd > 0) {
+          // Рынок еще активен - продолжаем валидировать и пытаться купить
+          console.log(`[TRADE] [${this.botId}] ${asset}: Покупка не удалась, но рынок еще активен (${timeToEnd}s). Продолжаем валидацию...`);
+          series.addEvent('buy_failed_continue_validation', {
+            message: `⛔ Не удалось купить: цена превысила лимит. Продолжаю валидацию (осталось ${Math.floor(timeToEnd)}s)`,
+          });
+          await series.save();
+          // Сбрасываем validationState, чтобы продолжить валидацию
+          series.validationState = 'validating';
+          return { continueValidation: true }; // Возвращаем флаг, что нужно продолжить валидацию
+        } else {
+          // Рынок закрылся или не передан timeToEnd - отменяем серию
+          series.status = 'cancelled';
+          series.endedAt = new Date();
+          series.addEvent('series_cancelled', {
+            message: '⛔ Серия отменена: не удалось купить после валидации',
+          });
+          await series.save();
+          this.activeSeries.delete(series.asset);
+          return { continueValidation: false };
+        }
       }
       
       await series.save();
       console.log(`[TRADE] [${this.botId}] ${asset}: Validation successful, bought Step 1`);
       await this.notifyUsers(series, '✅ Валидация пройдена, покупка выполнена');
+      return { continueValidation: false };
     } else {
       // Валидация не пройдена - отменяем серию
       series.validationState = 'rejected';
@@ -1362,6 +1406,7 @@ class TradingEmulator {
       
       console.log(`[TRADE] [${this.botId}] ${asset}: Validation failed, series cancelled`);
       await this.notifyUsers(series, '❌ Валидация не пройдена, серия отменена');
+      return { continueValidation: false };
     }
   }
   
@@ -1420,23 +1465,30 @@ class TradingEmulator {
     const stabilityResult = series.lastStabilityResult || { stable: false, reason: 'Проверка еще не выполнена' };
     
     // Проверяем, что последние 12 записей были стабильными (символ '+')
-    // Это гарантирует, что рынок был стабилен в течение 2 минут (12 записей × 10 сек = 120 сек)
+    // Это гарантирует, что рынок был стабилен в течение ~2 минут (12 записей × 10 сек = 120 сек)
     let last12Stable = false;
     if (series.validationHistory.length >= 12) {
       const last12 = series.validationHistory.slice(-12);
       const stableCount = last12.filter(h => h.matches === true).length;
-      // Требуем все 12 записей стабильными (100%) - полные 2 минуты стабильности
-      last12Stable = stableCount === 12;
+      // Требуем минимум 10 из 12 записей стабильными (83%) - около 2 минут стабильности
+      last12Stable = stableCount >= 10;
     }
     
     // Проверка условий покупки: если рынок стабилен (по checkStability) и есть достаточно данных
-    // Продолжаем проверять до самого конца рынка - если все 12 стабильны, покупаем
+    // Продолжаем проверять до самого конца рынка - если минимум 10 из 12 стабильны, покупаем
     // checkStability требует минимум 12 записей (2 минуты при интервале 10 сек) для правильной оценки
     // Также проверяем, что последние 12 записей были стабильными
     if (series.validationHistory.length >= 12 && stabilityResult.stable && last12Stable) {
       // Рынок стабилен в течение 2 минут - покупаем
-      await this.completeValidation(series, true, stabilityResult);
-      return;
+      const result = await this.completeValidation(series, true, stabilityResult, timeToEnd);
+      // Если покупка не удалась, но рынок активен - продолжаем валидацию
+      if (result && result.continueValidation) {
+        // Продолжаем проверки в текущем цикле (не возвращаемся, продолжаем ниже)
+        console.log(`[TRADE] [${this.botId}] ${asset}: Продолжаю валидацию после неудачной покупки...`);
+      } else {
+        // Покупка успешна или серия отменена - завершаем
+        return;
+      }
     }
     
     // Если рынок закрылся (timeToEnd <= 0) и мы не купили - отменяем
@@ -1448,11 +1500,11 @@ class TradingEmulator {
         const stableCount = last12.filter(h => h.matches === true).length;
         finalStabilityResult = {
           stable: false,
-          reason: `Не все записи стабильны: ${stableCount} из 12 (требуется все 12 для 2 минут стабильности)`,
+          reason: `Не все записи стабильны: ${stableCount} из 12 (требуется минимум 10 из 12 для стабильности)`,
           changePercent: stabilityResult.changePercent,
         };
       }
-      await this.completeValidation(series, false, finalStabilityResult);
+      await this.completeValidation(series, false, finalStabilityResult, timeToEnd);
       return;
     }
     
@@ -1779,17 +1831,17 @@ class TradingEmulator {
     const stabilityResult = series.lastHedgeStabilityResult || { stable: false, reason: 'Проверка еще не выполнена' };
     
     // Проверяем, что последние 12 записей были стабильными (символ '+')
-    // Это гарантирует, что рынок был стабилен в течение 2 минут (12 записей × 10 сек = 120 сек)
+    // Это гарантирует, что рынок был стабилен в течение ~2 минут (12 записей × 10 сек = 120 сек)
     let last12Stable = false;
     if (series.hedgeValidationHistory.length >= 12) {
       const last12 = series.hedgeValidationHistory.slice(-12);
       const stableCount = last12.filter(h => h.matches === true).length;
-      // Требуем все 12 записей стабильными (100%) - полные 2 минуты стабильности
-      last12Stable = stableCount === 12;
+      // Требуем минимум 10 из 12 записей стабильными (83%) - около 2 минут стабильности
+      last12Stable = stableCount >= 10;
     }
     
     // Проверка условий покупки: если сигнал надежный (по checkStability) и есть достаточно данных
-    // Продолжаем проверять до самого конца рынка - если все 12 стабильны, покупаем хедж
+    // Продолжаем проверять до самого конца рынка - если минимум 10 из 12 стабильны, покупаем хедж
     // checkStability требует минимум 12 записей (2 минуты при интервале 10 сек) для правильной оценки
     // Также проверяем, что последние 12 записей были стабильными
     if (series.hedgeValidationHistory.length >= 12 && stabilityResult.stable && last12Stable) {
@@ -1807,7 +1859,7 @@ class TradingEmulator {
         const stableCount = last12.filter(h => h.matches === true).length;
         finalStabilityResult = {
           stable: false,
-          reason: `Не все записи стабильны: ${stableCount} из 12 (требуется все 12 для 2 минут стабильности)`,
+          reason: `Не все записи стабильны: ${stableCount} из 12 (требуется минимум 10 из 12 для стабильности)`,
           changePercent: stabilityResult.changePercent,
         };
       }
