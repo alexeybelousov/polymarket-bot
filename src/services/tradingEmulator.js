@@ -2261,11 +2261,14 @@ class TradingEmulator {
     series.totalPnL = pnl;
     
     // Обновляем статистику
+    const balanceBefore = stats.currentBalance;
     stats.currentBalance += totalReturn;
     stats.totalPnL += pnl;
     stats.totalCommissions += series.totalCommission; // Учитываем все комиссии (вход + выход)
     stats.cancelledTrades++;
     await stats.save();
+    
+    console.log(`[TRADE] [${this.botId}] ${asset}: Balance update: $${balanceBefore.toFixed(2)} + $${totalReturn.toFixed(2)} (from ${series.positions.filter(p => p.status === 'sold').length} sold positions) = $${stats.currentBalance.toFixed(2)}`);
     series.status = 'cancelled';
     series.endedAt = new Date();
     series.nextStepBought = false;
