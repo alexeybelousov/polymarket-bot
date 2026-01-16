@@ -746,17 +746,22 @@ class TradingEmulator {
         // Step 1 или нет инвестиций - отменяем серию
         console.log(`[TRADE] [${this.botId}] ${series.asset.toUpperCase()}: Price too high on Step ${series.currentStep} - $${price.toFixed(3)} > $${this.config.maxPrice}, cancelling`);
         
+        // Рассчитываем P&L (убыток = потерянные инвестиции)
+        const pnl = -(series.totalInvested || 0);
+        series.totalPnL = pnl;
+        
         // Добавляем событие в таймлайн
         series.addEvent('series_cancelled', {
           message: `⛔ Не удалось купить: цена превысила лимит ($${price.toFixed(3)} > $${this.config.maxPrice}) на Step ${series.currentStep}`,
           marketColor: null,
-          pnl: -(series.totalInvested || 0),
+          pnl,
         });
         
         series.status = 'cancelled';
         series.endedAt = new Date();
         
         const stats = await TradingStats.getStats(this.botId);
+        stats.totalPnL += pnl;
         stats.cancelledTrades++;
         await stats.save();
         
@@ -890,6 +895,10 @@ class TradingEmulator {
         return false;
       } else {
         // Step 1 или нет инвестиций - отменяем серию
+        // Рассчитываем P&L (убыток = потерянные инвестиции)
+        const pnl = -(series.totalInvested || 0);
+        series.totalPnL = pnl;
+        
         series.addEvent('insufficient_balance', {
           amount,
           message: `Недостаточно средств: нужно $${amount.toFixed(2)}, есть $${stats.currentBalance.toFixed(2)}`,
@@ -898,6 +907,7 @@ class TradingEmulator {
         series.endedAt = new Date();
         
         const cancelStats = await TradingStats.getStats(this.botId);
+        cancelStats.totalPnL += pnl;
         cancelStats.cancelledTrades++;
         await cancelStats.save();
         
@@ -1603,11 +1613,22 @@ class TradingEmulator {
           return { continueValidation: true }; // Возвращаем флаг, что нужно продолжить валидацию
         } else {
           // Рынок закрылся или не передан timeToEnd - отменяем серию
+          // Рассчитываем P&L (убыток = потерянные инвестиции)
+          const pnl = -(series.totalInvested || 0);
+          series.totalPnL = pnl;
+          
           series.status = 'cancelled';
           series.endedAt = new Date();
           series.addEvent('series_cancelled', {
             message: '⛔ Серия отменена: не удалось купить после валидации',
+            pnl,
           });
+          
+          const stats = await TradingStats.getStats(this.botId);
+          stats.totalPnL += pnl;
+          stats.cancelledTrades++;
+          await stats.save();
+          
           await series.save();
           this.activeSeries.delete(series.asset);
           return { continueValidation: false };
@@ -2229,13 +2250,15 @@ class TradingEmulator {
       }
     }
     
-    stats.currentBalance += totalReturn;
-    stats.cancelledTrades++;
-    await stats.save();
-    
     // Рассчитываем P&L
     const pnl = totalReturn - series.totalInvested;
     series.totalPnL = pnl;
+    
+    // Обновляем статистику
+    stats.currentBalance += totalReturn;
+    stats.totalPnL += pnl;
+    stats.cancelledTrades++;
+    await stats.save();
     series.status = 'cancelled';
     series.endedAt = new Date();
     series.nextStepBought = false;
@@ -2792,14 +2815,20 @@ class TradingEmulator {
             return;
           } else {
             // Step 1 или нет инвестиций - отменяем серию
+            // Рассчитываем P&L (убыток = потерянные инвестиции)
+            const pnl = -(series.totalInvested || 0);
+            series.totalPnL = pnl;
+            
             series.status = 'cancelled';
             series.endedAt = new Date();
             series.addEvent('series_cancelled', {
               message: `⛔ Серия отменена на Step ${series.currentStep}: не удалось купить`,
+              pnl,
             });
             
             // Обновляем статистику
             const cancelStats = await TradingStats.getStats(this.botId);
+            cancelStats.totalPnL += pnl;
             cancelStats.cancelledTrades++;
             await cancelStats.save();
             
