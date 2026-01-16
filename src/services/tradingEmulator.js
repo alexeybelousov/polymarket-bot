@@ -1177,10 +1177,10 @@ class TradingEmulator {
     historyForStability.push(historyRecord);
     
     // Используем checkStability для определения стабильности
-    // Для хеджа мы ставим на betColor, поэтому проверяем стабильность betColor
-    // Если ставим на GREEN, проверяем стабильность GREEN (передаем 'green')
-    // Если ставим на RED, проверяем стабильность RED (передаем 'red')
-    const stabilityResult = this.checkStability(historyForStability, series.betColor);
+    // Передаем signalColor, так как checkStability использует его для определения логики проверки
+    // Для GREEN сигнала проверяем стабильность цены DOWN (ставим на RED)
+    // Для RED сигнала проверяем стабильность цены UP (ставим на GREEN)
+    const stabilityResult = this.checkStability(historyForStability, series.signalColor);
     const matches = stabilityResult.stable;
     const symbol = matches ? '+' : '-';
     
@@ -1413,19 +1413,15 @@ class TradingEmulator {
       }
     }
     
-    // Создаем историю для checkStability
-    const historyForStability = series.validationHistory.map(h => ({
-      price: h.price,
-      orderBook: h.orderBook,
-    }));
-    
-    // Используем checkStability для принятия решения
-    const stabilityResult = this.checkStability(historyForStability, series.signalColor);
+    // Используем уже вычисленный результат стабильности из performValidationCheck
+    // Если проверка еще не выполнялась, используем дефолтное значение
+    const stabilityResult = series.lastStabilityResult || { stable: false, reason: 'Проверка еще не выполнена' };
     
     // Проверка: за 1 минуту до конца принимаем решение
     if (timeToEnd !== null && timeToEnd <= 60) {
       // Принимаем решение на основе checkStability
-      if (stabilityResult.stable && series.validationHistory.length >= 3) {
+      // checkStability требует минимум 12 записей для правильной оценки
+      if (stabilityResult.stable && series.validationHistory.length >= 12) {
         // Рынок стабилен - покупаем
         await this.completeValidation(series, true, stabilityResult);
       } else {
