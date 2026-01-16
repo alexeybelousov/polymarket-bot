@@ -101,18 +101,28 @@ class TradingEmulator {
   async start() {
     // Инициализируем статистику с правильным baseDeposit
     const stats = await TradingStats.getStats(this.botId);
+    const baseDeposit = this.config.baseDeposit || 100;
+    
+    // Если статистика не инициализирована или имеет дефолтное значение, обновляем
     if (!stats.initialDeposit || stats.initialDeposit === 100) {
-      // Если статистика не инициализирована или имеет дефолтное значение, обновляем
-      const baseDeposit = this.config.baseDeposit || 100;
-      if (stats.initialDeposit !== baseDeposit || stats.currentBalance === 100) {
+      // Если это новый бот или база была сброшена, устанавливаем правильный депозит
+      if (stats.initialDeposit !== baseDeposit) {
         stats.initialDeposit = baseDeposit;
-        // Если баланс равен дефолтному 100, обновляем его тоже
-        if (stats.currentBalance === 100 && stats.totalPnL === 0 && stats.totalTrades === 0) {
+        // Если баланс равен дефолтному 100 и нет торгов, обновляем баланс тоже
+        if (stats.currentBalance === 100 && stats.totalTrades === 0 && stats.totalPnL === 0) {
           stats.currentBalance = baseDeposit;
         }
         await stats.save();
         console.log(`💰 [${this.botId}] Initialized stats with baseDeposit: $${baseDeposit}`);
       }
+    }
+    
+    // Дополнительная проверка: если баланс все еще 100, а должен быть другой, обновляем
+    if (stats.currentBalance === 100 && baseDeposit !== 100 && stats.totalTrades === 0 && stats.totalPnL === 0) {
+      stats.currentBalance = baseDeposit;
+      stats.initialDeposit = baseDeposit;
+      await stats.save();
+      console.log(`💰 [${this.botId}] Fixed stats: updated balance from $100 to $${baseDeposit}`);
     }
     
     // Загружаем активные серии из БД для этого бота
