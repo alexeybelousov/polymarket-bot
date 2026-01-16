@@ -2141,9 +2141,25 @@ class TradingEmulator {
     const hedgeStep = series.currentStep + 1;
     const betEmoji = series.betColor === 'green' ? '🟢' : '🔴';
     
+    // Проверяем, не был ли хедж уже продан (проверяем события)
+    const alreadySold = series.events && series.events.some(e => 
+      e.type === 'sell_hedge' && e.step === hedgeStep
+    );
+    if (alreadySold) {
+      console.log(`[TRADE] [${this.botId}] ${asset}: Hedge Step ${hedgeStep} already sold, skipping...`);
+      return;
+    }
+    
     // Находим позицию хеджа
     const hedgePosition = series.positions.find(p => p.step === hedgeStep && p.status === 'active');
-    if (!hedgePosition) return;
+    if (!hedgePosition) {
+      // Проверяем, может быть статус уже 'sold', но события нет (старая запись)
+      const soldPosition = series.positions.find(p => p.step === hedgeStep && p.status === 'sold');
+      if (soldPosition) {
+        console.log(`[TRADE] [${this.botId}] ${asset}: Hedge Step ${hedgeStep} already sold (status=sold), skipping...`);
+      }
+      return;
+    }
     
     // Получаем реальную цену продажи с Polymarket
     const polymarket = require('./polymarket');
