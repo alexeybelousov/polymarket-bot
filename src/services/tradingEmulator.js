@@ -347,6 +347,87 @@ class TradingEmulator {
     return `${asset}-updown-15m-${timestampSec}`;
   }
 
+  /**
+   * Генерирует slug для следующего рынка (через N интервалов по 15 минут)
+   * @param {string} baseSlug - Базовый slug (binance-ethusdt-1768309200000 или eth-updown-15m-1768309200)
+   * @param {number} intervals - Количество интервалов по 15 минут (1 = +15 мин, 2 = +30 мин)
+   * @returns {string} Slug следующего рынка
+   */
+  getNextMarketSlug(baseSlug, intervals = 1) {
+    if (!baseSlug || typeof baseSlug !== 'string') {
+      return null;
+    }
+
+    const MS_PER_15MIN = 15 * 60 * 1000; // 15 минут в миллисекундах
+    
+    // Если это Binance slug
+    if (baseSlug.startsWith('binance-')) {
+      const match = baseSlug.match(/^binance-(ethusdt|btcusdt)-(\d+)$/);
+      if (!match) {
+        return null;
+      }
+      const [, symbol, timestampMs] = match;
+      const nextTimestamp = parseInt(timestampMs) + (intervals * MS_PER_15MIN);
+      return `binance-${symbol}-${nextTimestamp}`;
+    }
+    
+    // Если это Polymarket slug
+    const match = baseSlug.match(/^(eth|btc)-updown-15m-(\d+)$/);
+    if (!match) {
+      return null;
+    }
+    const [, asset, timestampSec] = match;
+    const nextTimestamp = parseInt(timestampSec) + (intervals * 15 * 60); // интервалы в секундах
+    return `${asset}-updown-15m-${nextTimestamp}`;
+  }
+
+  /**
+   * Проверяет существование трёх будущих рынков (Step 1, 2, 3)
+   * @param {string} nextMarketSlug - Slug первого рынка для торговли
+   * @param {string} betOutcome - 'up' или 'down'
+   * @returns {Promise<{allExist: boolean, missingMarkets: string[]}>}
+   */
+  async checkFutureMarketsExist(nextMarketSlug, betOutcome) {
+    const markets = [
+      { step: 1, slug: nextMarketSlug },
+      { step: 2, slug: this.getNextMarketSlug(nextMarketSlug, 1) },
+      { step: 3, slug: this.getNextMarketSlug(nextMarketSlug, 2) },
+    ];
+
+    const missingMarkets = [];
+    const polymarket = require('./polymarket');
+
+    for (const market of markets) {
+      if (!market.slug) {
+        missingMarkets.push(`Step ${market.step} (invalid slug)`);
+        continue;
+      }
+
+      const polySlug = this.convertToPolymarketSlug(market.slug);
+      
+      try {
+        const priceData = await polymarket.getBuyPrice(polySlug, betOutcome);
+        if (!priceData || !priceData.price) {
+          missingMarkets.push(`Step ${market.step} (${polySlug})`);
+        }
+      } catch (error) {
+        // Если рынок не найден (404) или другая ошибка - считаем что рынка нет
+        if (error.response?.status === 404) {
+          missingMarkets.push(`Step ${market.step} (${polySlug} - not found)`);
+        } else {
+          // Для других ошибок тоже считаем что рынка нет (на всякий случай)
+          console.warn(`[TRADE] [${this.botId}] Error checking market ${polySlug}:`, error.message);
+          missingMarkets.push(`Step ${market.step} (${polySlug} - error: ${error.message})`);
+        }
+      }
+    }
+
+    return {
+      allExist: missingMarkets.length === 0,
+      missingMarkets,
+    };
+  }
+
   // ==================== СИГНАЛ ====================
   
   async onSignal(type, signalColor, signalMarketSlug, nextMarketSlug, signalType = '3candles') {
@@ -461,7 +542,21 @@ class TradingEmulator {
       return;
     }
     
-    console.log(`[TRADE] [${this.botId}] ${type.toUpperCase()}: Price OK ($${buyPrice.toFixed(3)}), creating series...`);
+    console.log(`[TRADE] [${this.botId}] ${type.toUpperCase()}: Price OK ($${buyPrice.toFixed(3)}), checking future markets...`);
+    
+    // Проверяем существование трёх будущих рынков (Step 1, 2, 3)
+    const marketsCheck = await this.checkFutureMarketsExist(nextMarketSlug, betOutcome);
+    if (!marketsCheck.allExist) {
+      const missingList = marketsCheck.missingMarkets.join(', ');
+      console.log(`[TRADE] [${this.botId}] ${type.toUpperCase()}: Cannot start series - missing markets: ${missingList}`);
+      await this.log(type, polySlug, `MARKETS_MISSING: ${missingList}`, {
+        action: 'markets_check_failed',
+        missingMarkets: marketsCheck.missingMarkets,
+      });
+      return;
+    }
+    
+    console.log(`[TRADE] [${this.botId}] ${type.toUpperCase()}: All future markets exist, creating series...`);
     
     // Создаём серию
     const series = new TradeSeries({
