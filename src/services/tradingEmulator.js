@@ -580,34 +580,78 @@ class TradingEmulator {
     
     // Проверяем верхний предел цены (на каждом шаге)
     if (price > this.config.maxPrice) {
-      console.log(`[TRADE] [${this.botId}] ${series.asset.toUpperCase()}: Price too high on Step ${series.currentStep} - $${price.toFixed(3)} > $${this.config.maxPrice}, cancelling`);
+      // Если это Step 2 (хедж) и Step 1 уже куплен - фиксируем убыток, иначе отменяем
+      const isHedgeStep = series.currentStep === 2 && series.totalInvested > 0;
       
-      // Добавляем событие в таймлайн
-      series.addEvent('series_cancelled', {
-        message: `⛔ Не удалось купить: цена превысила лимит ($${price.toFixed(3)} > $${this.config.maxPrice}) на Step ${series.currentStep}`,
-        marketColor: null,
-        pnl: -(series.totalInvested || 0),
-      });
-      
-      series.status = 'cancelled';
-      series.endedAt = new Date();
-      
-      const stats = await TradingStats.getStats(this.botId);
-      stats.cancelledTrades++;
-      await stats.save();
-      
-      await series.save();
-      this.activeSeries.delete(series.asset);
-      
-      await this.log(series.asset, polySlug, `PRICE_TOO_HIGH: $${price.toFixed(3)} > $${this.config.maxPrice}`, {
-        step: series.currentStep,
-        price,
-        maxPrice: this.config.maxPrice,
-        totalInvested: series.totalInvested,
-      });
-      
-      await this.notifyUsers(series, '⛔ Серия отменена: цена превысила лимит');
-      return false;
+      if (isHedgeStep) {
+        // Step 2 (хедж) не удалось купить - фиксируем убыток
+        const pnl = -series.totalInvested - series.totalCommission;
+        series.totalPnL = pnl;
+        series.status = 'lost';
+        series.endedAt = new Date();
+        
+        series.addEvent('series_lost', {
+          pnl,
+          message: `⛔ Не удалось купить хедж: цена превысила лимит ($${price.toFixed(3)} > $${this.config.maxPrice}) на Step ${series.currentStep}. Убыток: $${pnl.toFixed(2)}`,
+        });
+        
+        // Обновляем статистику
+        const stats = await TradingStats.getStats(this.botId);
+        stats.totalTrades++;
+        stats.lostTrades++;
+        stats.totalPnL += pnl;
+        stats.totalCommissions += series.totalCommission;
+        stats.currentStreak = stats.currentStreak <= 0 ? stats.currentStreak - 1 : -1;
+        stats.maxLossStreak = Math.max(stats.maxLossStreak, Math.abs(stats.currentStreak));
+        await stats.save();
+        
+        await series.save();
+        this.activeSeries.delete(series.asset);
+        
+        console.log(`[TRADE] [${this.botId}] ${series.asset.toUpperCase()}: ❌ SERIES LOST - could not buy hedge on Step ${series.currentStep} (price too high). PnL: $${pnl.toFixed(2)}`);
+        await this.log(series.asset, polySlug, `HEDGE_PRICE_TOO_HIGH: $${price.toFixed(3)} > $${this.config.maxPrice} on Step ${series.currentStep}, P&L: $${pnl.toFixed(2)}`, {
+          step: series.currentStep,
+          price,
+          maxPrice: this.config.maxPrice,
+          totalInvested: series.totalInvested,
+          pnl,
+        });
+        await this.notifyUsers(series, `❌ УБЫТОК! Не удалось купить хедж на Step ${series.currentStep}, P&L: $${pnl.toFixed(2)}`);
+        
+        // Создаем cooldown после полного проигрыша
+        await this.createCooldown(series.asset);
+        return false;
+      } else {
+        // Step 1 или нет инвестиций - отменяем серию
+        console.log(`[TRADE] [${this.botId}] ${series.asset.toUpperCase()}: Price too high on Step ${series.currentStep} - $${price.toFixed(3)} > $${this.config.maxPrice}, cancelling`);
+        
+        // Добавляем событие в таймлайн
+        series.addEvent('series_cancelled', {
+          message: `⛔ Не удалось купить: цена превысила лимит ($${price.toFixed(3)} > $${this.config.maxPrice}) на Step ${series.currentStep}`,
+          marketColor: null,
+          pnl: -(series.totalInvested || 0),
+        });
+        
+        series.status = 'cancelled';
+        series.endedAt = new Date();
+        
+        const stats = await TradingStats.getStats(this.botId);
+        stats.cancelledTrades++;
+        await stats.save();
+        
+        await series.save();
+        this.activeSeries.delete(series.asset);
+        
+        await this.log(series.asset, polySlug, `PRICE_TOO_HIGH: $${price.toFixed(3)} > $${this.config.maxPrice}`, {
+          step: series.currentStep,
+          price,
+          maxPrice: this.config.maxPrice,
+          totalInvested: series.totalInvested,
+        });
+        
+        await this.notifyUsers(series, '⛔ Серия отменена: цена превысила лимит');
+        return false;
+      }
     }
     
     // Рассчитываем ставку динамически
@@ -630,29 +674,116 @@ class TradingEmulator {
     const amount = calculateDynamicBet(price, previousLosses, targetProfit, this.ENTRY_FEE_RATE, this.EXIT_FEE_RATE);
     
     if (!amount || amount <= 0) {
-      console.warn(`[TRADE] Cannot calculate bet amount at price $${price.toFixed(3)}`);
-      series.addEvent('price_error', {
-        message: `❌ Невозможно рассчитать ставку при цене $${price.toFixed(3)}`,
-      });
-      return false;
+      // Если это Step 2 (хедж) и Step 1 уже куплен - фиксируем убыток, иначе просто возвращаем false
+      const isHedgeStep = series.currentStep === 2 && series.totalInvested > 0;
+      
+      if (isHedgeStep) {
+        // Step 2 (хедж) не удалось рассчитать ставку - фиксируем убыток
+        const pnl = -series.totalInvested - series.totalCommission;
+        series.totalPnL = pnl;
+        series.status = 'lost';
+        series.endedAt = new Date();
+        
+        series.addEvent('series_lost', {
+          pnl,
+          message: `⛔ Не удалось купить хедж: невозможно рассчитать ставку при цене $${price.toFixed(3)} на Step ${series.currentStep}. Убыток: $${pnl.toFixed(2)}`,
+        });
+        
+        // Обновляем статистику
+        const lossStats = await TradingStats.getStats(this.botId);
+        lossStats.totalTrades++;
+        lossStats.lostTrades++;
+        lossStats.totalPnL += pnl;
+        lossStats.totalCommissions += series.totalCommission;
+        lossStats.currentStreak = lossStats.currentStreak <= 0 ? lossStats.currentStreak - 1 : -1;
+        lossStats.maxLossStreak = Math.max(lossStats.maxLossStreak, Math.abs(lossStats.currentStreak));
+        await lossStats.save();
+        
+        await series.save();
+        this.activeSeries.delete(series.asset);
+        
+        console.warn(`[TRADE] [${this.botId}] ${series.asset.toUpperCase()}: ❌ SERIES LOST - cannot calculate hedge bet at price $${price.toFixed(3)} on Step ${series.currentStep}. PnL: $${pnl.toFixed(2)}`);
+        await this.log(series.asset, polySlug, `HEDGE_CANNOT_CALCULATE_BET: price $${price.toFixed(3)} on Step ${series.currentStep}, P&L: $${pnl.toFixed(2)}`, {
+          step: series.currentStep,
+          price,
+          totalInvested: series.totalInvested,
+          pnl,
+        });
+        await this.notifyUsers(series, `❌ УБЫТОК! Не удалось рассчитать хедж на Step ${series.currentStep}, P&L: $${pnl.toFixed(2)}`);
+        
+        // Создаем cooldown после полного проигрыша
+        await this.createCooldown(series.asset);
+        return false;
+      } else {
+        // Step 1 или нет инвестиций - просто возвращаем false (будет обработано в общем месте)
+        console.warn(`[TRADE] Cannot calculate bet amount at price $${price.toFixed(3)}`);
+        series.addEvent('price_error', {
+          message: `❌ Невозможно рассчитать ставку при цене $${price.toFixed(3)}`,
+        });
+        return false;
+      }
     }
     
     // Проверяем баланс
     if (stats.currentBalance < amount) {
-      series.addEvent('insufficient_balance', {
-        amount,
-        message: `Недостаточно средств: нужно $${amount.toFixed(2)}, есть $${stats.currentBalance.toFixed(2)}`,
-      });
-      series.status = 'cancelled';
-      series.endedAt = new Date();
+      // Если это Step 2 (хедж) и Step 1 уже куплен - фиксируем убыток, иначе отменяем
+      const isHedgeStep = series.currentStep === 2 && series.totalInvested > 0;
       
-      const stats = await TradingStats.getStats(this.botId);
-      stats.cancelledTrades++;
-      await stats.save();
-      
-      await series.save();
-      this.activeSeries.delete(series.asset);
-      return false;
+      if (isHedgeStep) {
+        // Step 2 (хедж) не удалось купить из-за недостатка средств - фиксируем убыток
+        const pnl = -series.totalInvested - series.totalCommission;
+        series.totalPnL = pnl;
+        series.status = 'lost';
+        series.endedAt = new Date();
+        
+        series.addEvent('series_lost', {
+          pnl,
+          message: `⛔ Не удалось купить хедж: недостаточно средств (нужно $${amount.toFixed(2)}, есть $${stats.currentBalance.toFixed(2)}) на Step ${series.currentStep}. Убыток: $${pnl.toFixed(2)}`,
+        });
+        
+        // Обновляем статистику
+        const lossStats = await TradingStats.getStats(this.botId);
+        lossStats.totalTrades++;
+        lossStats.lostTrades++;
+        lossStats.totalPnL += pnl;
+        lossStats.totalCommissions += series.totalCommission;
+        lossStats.currentStreak = lossStats.currentStreak <= 0 ? lossStats.currentStreak - 1 : -1;
+        lossStats.maxLossStreak = Math.max(lossStats.maxLossStreak, Math.abs(lossStats.currentStreak));
+        await lossStats.save();
+        
+        await series.save();
+        this.activeSeries.delete(series.asset);
+        
+        console.log(`[TRADE] [${this.botId}] ${series.asset.toUpperCase()}: ❌ SERIES LOST - could not buy hedge on Step ${series.currentStep} (insufficient balance). PnL: $${pnl.toFixed(2)}`);
+        await this.log(series.asset, polySlug, `HEDGE_INSUFFICIENT_BALANCE: need $${amount.toFixed(2)}, have $${stats.currentBalance.toFixed(2)} on Step ${series.currentStep}, P&L: $${pnl.toFixed(2)}`, {
+          step: series.currentStep,
+          amount,
+          balance: stats.currentBalance,
+          totalInvested: series.totalInvested,
+          pnl,
+        });
+        await this.notifyUsers(series, `❌ УБЫТОК! Не удалось купить хедж на Step ${series.currentStep} (недостаточно средств), P&L: $${pnl.toFixed(2)}`);
+        
+        // Создаем cooldown после полного проигрыша
+        await this.createCooldown(series.asset);
+        return false;
+      } else {
+        // Step 1 или нет инвестиций - отменяем серию
+        series.addEvent('insufficient_balance', {
+          amount,
+          message: `Недостаточно средств: нужно $${amount.toFixed(2)}, есть $${stats.currentBalance.toFixed(2)}`,
+        });
+        series.status = 'cancelled';
+        series.endedAt = new Date();
+        
+        const cancelStats = await TradingStats.getStats(this.botId);
+        cancelStats.cancelledTrades++;
+        await cancelStats.save();
+        
+        await series.save();
+        this.activeSeries.delete(series.asset);
+        return false;
+      }
     }
     
     // Расчёты по формуле Polymarket
@@ -2487,23 +2618,60 @@ class TradingEmulator {
         
         const bought = await this.buyStep(series);
         if (!bought) {
-          // Не удалось купить следующий шаг — отменяем серию
-          series.status = 'cancelled';
-          series.endedAt = new Date();
-          series.addEvent('series_cancelled', {
-            message: `⛔ Серия отменена на Step ${series.currentStep}: не удалось купить`,
-          });
+          // Если это Step 2 (хедж) и Step 1 уже куплен - фиксируем убыток, иначе отменяем
+          const isHedgeStep = series.currentStep === 2 && series.totalInvested > 0;
           
-          // Обновляем статистику
-          const cancelStats = await TradingStats.getStats(this.botId);
-          cancelStats.cancelledTrades++;
-          await cancelStats.save();
-          
-          await series.save();
-          this.activeSeries.delete(series.asset);
-          console.log(`[TRADE] [${this.botId}] ${asset}: Series cancelled at Step ${series.currentStep} - could not buy`);
-          await this.notifyUsers(series, `⛔ Серия отменена на Step ${series.currentStep}`);
-          return;
+          if (isHedgeStep) {
+            // Step 2 (хедж) не удалось купить - фиксируем убыток
+            const pnl = -series.totalInvested - series.totalCommission;
+            series.totalPnL = pnl;
+            series.status = 'lost';
+            series.endedAt = new Date();
+            
+            series.addEvent('series_lost', {
+              pnl,
+              message: `⛔ Серия проиграна на Step ${series.currentStep}: не удалось купить хедж. Убыток: $${pnl.toFixed(2)}`,
+            });
+            
+            // Обновляем статистику
+            const stats = await TradingStats.getStats(this.botId);
+            stats.totalTrades++;
+            stats.lostTrades++;
+            stats.totalPnL += pnl;
+            stats.totalCommissions += series.totalCommission;
+            stats.currentStreak = stats.currentStreak <= 0 ? stats.currentStreak - 1 : -1;
+            stats.maxLossStreak = Math.max(stats.maxLossStreak, Math.abs(stats.currentStreak));
+            await stats.save();
+            
+            await series.save();
+            this.activeSeries.delete(series.asset);
+            
+            console.log(`[TRADE] [${this.botId}] ${asset}: ❌ SERIES LOST at Step ${series.currentStep} - could not buy hedge. PnL: $${pnl.toFixed(2)}`);
+            await this.log(series.asset, series.currentMarketSlug, `❌ SERIES LOST: could not buy hedge on Step ${series.currentStep}, P&L: $${pnl.toFixed(2)}`, { step: series.currentStep, pnl, totalInvested: series.totalInvested });
+            await this.notifyUsers(series, `❌ УБЫТОК! Не удалось купить хедж на Step ${series.currentStep}, P&L: $${pnl.toFixed(2)}`);
+            
+            // Создаем cooldown после полного проигрыша
+            await this.createCooldown(series.asset);
+            return;
+          } else {
+            // Step 1 или нет инвестиций - отменяем серию
+            series.status = 'cancelled';
+            series.endedAt = new Date();
+            series.addEvent('series_cancelled', {
+              message: `⛔ Серия отменена на Step ${series.currentStep}: не удалось купить`,
+            });
+            
+            // Обновляем статистику
+            const cancelStats = await TradingStats.getStats(this.botId);
+            cancelStats.cancelledTrades++;
+            await cancelStats.save();
+            
+            await series.save();
+            this.activeSeries.delete(series.asset);
+            console.log(`[TRADE] [${this.botId}] ${asset}: Series cancelled at Step ${series.currentStep} - could not buy`);
+            await this.notifyUsers(series, `⛔ Серия отменена на Step ${series.currentStep}`);
+            return;
+          }
         }
         
         await series.save();
