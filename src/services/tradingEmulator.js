@@ -1258,14 +1258,21 @@ class TradingEmulator {
       // Формируем финальное сообщение с причиной решения
       const symbols = series.validationHistory.map(h => h.symbol).join('');
       const displaySymbols = symbols.slice(-20);
-      const lastPrice = series.validationHistory.length > 0 
-        ? series.validationHistory[series.validationHistory.length - 1].price 
-        : 0;
+      
+      // Вычисляем изменение цены для финального сообщения
+      let priceChangeInfo = '';
+      if (series.validationHistory.length >= 2) {
+        const firstPrice = series.validationHistory[0].price;
+        const lastPrice = series.validationHistory[series.validationHistory.length - 1].price;
+        const change = lastPrice - firstPrice;
+        const changePercent = firstPrice > 0 ? (change / firstPrice) * 100 : 0;
+        priceChangeInfo = ` ($${firstPrice.toFixed(3)} → $${lastPrice.toFixed(3)}, ${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(2)}%)`;
+      }
       
       // Обновляем событие с причиной решения
       if (series.validationEventIndex !== undefined && series.validationEventIndex >= 0 && series.validationEventIndex < series.events.length) {
         const reasonText = finalStabilityResult.reason || 'Рынок стабилен';
-        series.events[series.validationEventIndex].message = `Валидирую рынок: ${displaySymbols} ✅ Покупка | Причина: ${reasonText}`;
+        series.events[series.validationEventIndex].message = `Валидирую рынок: ${displaySymbols} ✅ Покупка | Причина: ${reasonText}${priceChangeInfo}`;
       }
       
       await series.save();
@@ -1295,10 +1302,20 @@ class TradingEmulator {
       const symbols = series.validationHistory.map(h => h.symbol).join('');
       const displaySymbols = symbols.slice(-20);
       
+      // Вычисляем изменение цены для финального сообщения
+      let priceChangeInfo = '';
+      if (series.validationHistory.length >= 2) {
+        const firstPrice = series.validationHistory[0].price;
+        const lastPrice = series.validationHistory[series.validationHistory.length - 1].price;
+        const change = lastPrice - firstPrice;
+        const changePercent = firstPrice > 0 ? (change / firstPrice) * 100 : 0;
+        priceChangeInfo = ` ($${firstPrice.toFixed(3)} → $${lastPrice.toFixed(3)}, ${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(2)}%)`;
+      }
+      
       // Обновляем событие с причиной отказа
       if (series.validationEventIndex !== undefined && series.validationEventIndex >= 0 && series.validationEventIndex < series.events.length) {
         const reasonText = finalStabilityResult.reason || 'Рынок нестабилен';
-        series.events[series.validationEventIndex].message = `Валидирую рынок: ${displaySymbols} ❌ Отменено | Причина: ${reasonText}`;
+        series.events[series.validationEventIndex].message = `Валидирую рынок: ${displaySymbols} ❌ Отменено | Причина: ${reasonText}${priceChangeInfo}`;
       }
       
       series.addEvent('validation_rejected', {
@@ -1586,10 +1603,20 @@ class TradingEmulator {
       const symbols = series.hedgeValidationHistory.map(h => h.symbol).join('');
       const displaySymbols = symbols.slice(-20);
       
+      // Вычисляем изменение цены для финального сообщения
+      let priceChangeInfo = '';
+      if (series.hedgeValidationHistory.length >= 2) {
+        const firstPrice = series.hedgeValidationHistory[0].price;
+        const lastPrice = series.hedgeValidationHistory[series.hedgeValidationHistory.length - 1].price;
+        const change = lastPrice - firstPrice;
+        const changePercent = firstPrice > 0 ? (change / firstPrice) * 100 : 0;
+        priceChangeInfo = ` ($${firstPrice.toFixed(3)} → $${lastPrice.toFixed(3)}, ${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(2)}%)`;
+      }
+      
       // Обновляем событие с причиной решения
       if (series.hedgeValidationEventIndex !== undefined && series.hedgeValidationEventIndex >= 0 && series.hedgeValidationEventIndex < series.events.length) {
         const reasonText = finalStabilityResult.reason || 'Рынок стабилен';
-        series.events[series.hedgeValidationEventIndex].message = `Валидирую рынок для хеджа Step ${nextStep}: ${displaySymbols} ✅ Покупка | Причина: ${reasonText}`;
+        series.events[series.hedgeValidationEventIndex].message = `Валидирую рынок для хеджа Step ${nextStep}: ${displaySymbols} ✅ Покупка | Причина: ${reasonText}${priceChangeInfo}`;
       }
       
       await series.save();
@@ -1606,10 +1633,20 @@ class TradingEmulator {
       const symbols = series.hedgeValidationHistory.map(h => h.symbol).join('');
       const displaySymbols = symbols.slice(-20);
       
+      // Вычисляем изменение цены для финального сообщения
+      let priceChangeInfo = '';
+      if (series.hedgeValidationHistory.length >= 2) {
+        const firstPrice = series.hedgeValidationHistory[0].price;
+        const lastPrice = series.hedgeValidationHistory[series.hedgeValidationHistory.length - 1].price;
+        const change = lastPrice - firstPrice;
+        const changePercent = firstPrice > 0 ? (change / firstPrice) * 100 : 0;
+        priceChangeInfo = ` ($${firstPrice.toFixed(3)} → $${lastPrice.toFixed(3)}, ${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(2)}%)`;
+      }
+      
       // Обновляем событие с причиной отказа
       if (series.hedgeValidationEventIndex !== undefined && series.hedgeValidationEventIndex >= 0 && series.hedgeValidationEventIndex < series.events.length) {
         const reasonText = finalStabilityResult.reason || 'Рынок нестабилен';
-        series.events[series.hedgeValidationEventIndex].message = `Валидирую рынок для хеджа Step ${nextStep}: ${displaySymbols} ❌ Отменено | Причина: ${reasonText}`;
+        series.events[series.hedgeValidationEventIndex].message = `Валидирую рынок для хеджа Step ${nextStep}: ${displaySymbols} ❌ Отменено | Причина: ${reasonText}${priceChangeInfo}`;
       }
       
       series.addEvent('validation_rejected', {
