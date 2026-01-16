@@ -99,6 +99,22 @@ class TradingEmulator {
   }
 
   async start() {
+    // Инициализируем статистику с правильным baseDeposit
+    const stats = await TradingStats.getStats(this.botId);
+    if (!stats.initialDeposit || stats.initialDeposit === 100) {
+      // Если статистика не инициализирована или имеет дефолтное значение, обновляем
+      const baseDeposit = this.config.baseDeposit || 100;
+      if (stats.initialDeposit !== baseDeposit || stats.currentBalance === 100) {
+        stats.initialDeposit = baseDeposit;
+        // Если баланс равен дефолтному 100, обновляем его тоже
+        if (stats.currentBalance === 100 && stats.totalPnL === 0 && stats.totalTrades === 0) {
+          stats.currentBalance = baseDeposit;
+        }
+        await stats.save();
+        console.log(`💰 [${this.botId}] Initialized stats with baseDeposit: $${baseDeposit}`);
+      }
+    }
+    
     // Загружаем активные серии из БД для этого бота
     console.log(`💰 [${this.botId}] Loading active series from DB...`);
     const series = await TradeSeries.find({ botId: this.botId, status: 'active' });
