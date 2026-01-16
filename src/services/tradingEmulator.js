@@ -439,8 +439,9 @@ class TradingEmulator {
       series.lastValidationCheck = null;
       
       // Добавляем событие валидации
+      const signalEmoji = series.signalColor === 'red' ? '🔴' : '🟢';
       series.addEvent('validation_started', {
-        message: 'Валидирую рынок:',
+        message: `Проверяю сигнал "${signalEmoji}":`,
       });
       // Сохраняем индекс последнего события (validation_started)
       series.validationEventIndex = series.events.length - 1;
@@ -938,20 +939,21 @@ class TradingEmulator {
     const isVeryHighPrice = lastPrice > 0.95;
     
     // ПРИОРИТЕТНАЯ ПРОВЕРКА: абсолютное значение цены
-    // Для RED сигнала (ставим на GREEN): если цена UP > 0.5, это означает что рынок идет в GREEN → сигнал подтверждается (stable = true)
+    // Мониторим ТЕКУЩИЙ рынок (где был сигнал), а не следующий (где ставим)
+    // Для RED сигнала: если цена UP > 0.5 на текущем рынке, это означает что рынок уже ушел в GREEN → RED сигнал отменяется (stable = false)
     if (signalColor === 'red' && lastPrice > 0.5) {
       return {
-        stable: true,
-        reason: `Цена UP ($${lastPrice.toFixed(4)}) выше $0.50 - рынок идет в GREEN, сигнал RED подтверждается`,
+        stable: false,
+        reason: `Цена UP ($${lastPrice.toFixed(4)}) выше $0.50 - рынок ушел в GREEN, сигнал RED отменяется`,
         changePercent,
       };
     }
     
-    // Для GREEN сигнала (ставим на RED): если цена DOWN > 0.5, это означает что рынок идет в RED → сигнал подтверждается (stable = true)
+    // Для GREEN сигнала: если цена DOWN > 0.5 на текущем рынке, это означает что рынок уже ушел в RED → GREEN сигнал отменяется (stable = false)
     if (signalColor === 'green' && lastPrice > 0.5) {
       return {
-        stable: true,
-        reason: `Цена DOWN ($${lastPrice.toFixed(4)}) выше $0.50 - рынок идет в RED, сигнал GREEN подтверждается`,
+        stable: false,
+        reason: `Цена DOWN ($${lastPrice.toFixed(4)}) выше $0.50 - рынок ушел в RED, сигнал GREEN отменяется`,
         changePercent,
       };
     }
@@ -1235,7 +1237,8 @@ class TradingEmulator {
     // Обновляем событие по индексу
     if (series.validationEventIndex !== undefined && series.validationEventIndex >= 0 && series.validationEventIndex < series.events.length) {
       const signalStatus = stabilityResult.stable ? 'Сигнал надежный' : 'Сигнал ненадежный';
-      const message = `Валидирую рынок: ${displaySymbols} | Цена: $${price.toFixed(3)}${priceChangeText ? ` (${priceChangeText})` : ''}${orderBookText} | ${stabilityEmoji} ${signalStatus}`;
+      const signalEmoji = series.signalColor === 'red' ? '🔴' : '🟢';
+      const message = `Проверяю сигнал "${signalEmoji}": ${displaySymbols} | Цена: $${price.toFixed(3)}${priceChangeText ? ` (${priceChangeText})` : ''}${orderBookText} | ${stabilityEmoji} ${signalStatus}`;
       series.events[series.validationEventIndex].message = message;
     }
     
@@ -1293,7 +1296,8 @@ class TradingEmulator {
         if (reasonText.includes('Цена упала') || reasonText.includes('Цена выросла') || reasonText.includes('Цена стабильна') || reasonText.includes('Цена низкая') || reasonText.includes('Цена очень низкая')) {
           enhancedReason = reasonText.replace(/Цена/g, `Цена ${checkOutcome}`);
         }
-        series.events[series.validationEventIndex].message = `Валидирую рынок: ${displaySymbols} Покупка: ${enhancedReason}${priceChangeInfo}`;
+        const signalEmoji = series.signalColor === 'red' ? '🔴' : '🟢';
+        series.events[series.validationEventIndex].message = `Проверяю сигнал "${signalEmoji}": ${displaySymbols} Покупка: ${enhancedReason}${priceChangeInfo}`;
       }
       
       await series.save();
@@ -1345,7 +1349,8 @@ class TradingEmulator {
         if (reasonText.includes('Цена упала') || reasonText.includes('Цена выросла') || reasonText.includes('Цена стабильна') || reasonText.includes('Цена низкая') || reasonText.includes('Цена очень низкая')) {
           enhancedReason = reasonText.replace(/Цена/g, `Цена ${checkOutcome}`);
         }
-        series.events[series.validationEventIndex].message = `Валидирую рынок: ${displaySymbols} Отменено: ${enhancedReason}${priceChangeInfo}`;
+        const signalEmoji = series.signalColor === 'red' ? '🔴' : '🟢';
+        series.events[series.validationEventIndex].message = `Проверяю сигнал "${signalEmoji}": ${displaySymbols} Отменено: ${enhancedReason}${priceChangeInfo}`;
       }
       
       series.addEvent('validation_rejected', {
@@ -1436,7 +1441,19 @@ class TradingEmulator {
         await this.completeValidation(series, true, stabilityResult);
       } else {
         // Рынок нестабилен - не покупаем, отменяем серию
-        await this.completeValidation(series, false, stabilityResult);
+        // Если checkStability вернул stable=true, но не все 12 записей стабильны, формируем правильный reason
+        let finalStabilityResult = stabilityResult;
+        if (stabilityResult.stable && !last12Stable && series.validationHistory.length >= 12) {
+          const last12 = series.validationHistory.slice(-12);
+          const stableCount = last12.filter(h => h.matches === true).length;
+          finalStabilityResult = {
+            stable: false,
+            reason: `Не все записи стабильны: ${stableCount} из 12 (требуется все 12 для 2 минут стабильности)`,
+            changePercent: stabilityResult.changePercent,
+          };
+        }
+        // Если checkStability вернул stable=false, используем его reason как есть (например, "сигнал отменяется")
+        await this.completeValidation(series, false, finalStabilityResult);
       }
       return;
     }
@@ -1447,6 +1464,19 @@ class TradingEmulator {
     if (series.validationHistory.length >= 12 && stabilityResult.stable && last12Stable) {
       // Рынок стабилен в течение 2 минут - покупаем
       await this.completeValidation(series, true, stabilityResult);
+    } else if (series.validationHistory.length >= 12 && stabilityResult.stable && !last12Stable) {
+      // checkStability вернул stable=true, но не все 12 записей стабильны - формируем правильный reason
+      const last12 = series.validationHistory.slice(-12);
+      const stableCount = last12.filter(h => h.matches === true).length;
+      const finalStabilityResult = {
+        stable: false,
+        reason: `Не все записи стабильны: ${stableCount} из 12 (требуется все 12 для 2 минут стабильности)`,
+        changePercent: stabilityResult.changePercent,
+      };
+      await this.completeValidation(series, false, finalStabilityResult);
+    } else if (series.validationHistory.length >= 12 && !stabilityResult.stable) {
+      // checkStability вернул stable=false - используем его reason как есть (например, "сигнал отменяется")
+      await this.completeValidation(series, false, stabilityResult);
     }
   }
 
@@ -1473,8 +1503,9 @@ class TradingEmulator {
     series.hedgeLastValidationCheck = null;
     
     // Добавляем событие валидации хеджа
+    const signalEmoji = series.signalColor === 'red' ? '🔴' : '🟢';
     series.addEvent('validation_started', {
-      message: `Проверяю сигнал для хеджа Step ${nextStep}:`,
+      message: `Проверяю сигнал "${signalEmoji}":`,
     });
     // Сохраняем индекс последнего события
     series.hedgeValidationEventIndex = series.events.length - 1;
@@ -1604,7 +1635,8 @@ class TradingEmulator {
     // Обновляем событие по индексу
     if (series.hedgeValidationEventIndex !== undefined && series.hedgeValidationEventIndex >= 0 && series.hedgeValidationEventIndex < series.events.length) {
       const signalStatus = stabilityResult.stable ? 'Сигнал надежный' : 'Сигнал ненадежный';
-      const message = `Проверяю сигнал для хеджа Step ${nextStep}: ${displaySymbols} | Цена: $${price.toFixed(3)}${priceChangeText ? ` (${priceChangeText})` : ''}${orderBookText} | ${stabilityEmoji} ${signalStatus}`;
+      const signalEmoji = series.signalColor === 'red' ? '🔴' : '🟢';
+      const message = `Проверяю сигнал "${signalEmoji}": ${displaySymbols} | Цена: $${price.toFixed(3)}${priceChangeText ? ` (${priceChangeText})` : ''}${orderBookText} | ${stabilityEmoji} ${signalStatus}`;
       series.events[series.hedgeValidationEventIndex].message = message;
     }
     
@@ -1663,7 +1695,8 @@ class TradingEmulator {
         if (reasonText.includes('Цена упала') || reasonText.includes('Цена выросла') || reasonText.includes('Цена стабильна') || reasonText.includes('Цена низкая') || reasonText.includes('Цена очень низкая')) {
           enhancedReason = reasonText.replace(/Цена/g, `Цена ${checkOutcome}`);
         }
-        series.events[series.hedgeValidationEventIndex].message = `Проверяю сигнал для хеджа Step ${nextStep}: ${displaySymbols} Сигнал надежный - Покупка хеджа: ${enhancedReason}${priceChangeInfo}`;
+        const signalEmoji = series.signalColor === 'red' ? '🔴' : '🟢';
+        series.events[series.hedgeValidationEventIndex].message = `Проверяю сигнал "${signalEmoji}": ${displaySymbols} Сигнал надежный - Покупка хеджа: ${enhancedReason}${priceChangeInfo}`;
       }
       
       await series.save();
@@ -1702,7 +1735,8 @@ class TradingEmulator {
         if (reasonText.includes('Цена упала') || reasonText.includes('Цена выросла') || reasonText.includes('Цена стабильна') || reasonText.includes('Цена низкая') || reasonText.includes('Цена очень низкая')) {
           enhancedReason = reasonText.replace(/Цена/g, `Цена ${checkOutcome}`);
         }
-        series.events[series.hedgeValidationEventIndex].message = `Проверяю сигнал для хеджа Step ${nextStep}: ${displaySymbols} Сигнал ненадежный - Хедж не нужен: ${enhancedReason}${priceChangeInfo}`;
+        const signalEmoji = series.signalColor === 'red' ? '🔴' : '🟢';
+        series.events[series.hedgeValidationEventIndex].message = `Проверяю сигнал "${signalEmoji}": ${displaySymbols} Сигнал ненадежный - Хедж не нужен: ${enhancedReason}${priceChangeInfo}`;
       }
       
       series.addEvent('validation_rejected', {
@@ -1760,35 +1794,65 @@ class TradingEmulator {
       }
     }
     
-    // Создаем историю для checkStability
-    const historyForStability = series.hedgeValidationHistory.map(h => ({
-      price: h.price,
-      orderBook: h.orderBook,
-    }));
+    // Используем уже вычисленный результат стабильности из performHedgeValidationCheck
+    // Если проверка еще не выполнялась, используем дефолтное значение
+    const stabilityResult = series.lastHedgeStabilityResult || { stable: false, reason: 'Проверка еще не выполнена' };
     
-    // Используем checkStability для принятия решения
-    // Для хеджа логика такая же как для первой валидации (используем исходный signalColor)
-    const stabilityResult = this.checkStability(historyForStability, series.signalColor);
+    // Проверяем, что последние 12 записей были стабильными (символ '+')
+    // Это гарантирует, что рынок был стабилен в течение 2 минут (12 записей × 10 сек = 120 сек)
+    let last12Stable = false;
+    if (series.hedgeValidationHistory.length >= 12) {
+      const last12 = series.hedgeValidationHistory.slice(-12);
+      const stableCount = last12.filter(h => h.matches === true).length;
+      // Требуем все 12 записей стабильными (100%) - полные 2 минуты стабильности
+      last12Stable = stableCount === 12;
+    }
     
     // Проверка: за 1 минуту до начала/конца принимаем решение
     if (timeToEnd !== null && timeToEnd <= 60) {
-      // Принимаем решение на основе checkStability
+      // Принимаем решение на основе checkStability И проверки стабильности последних 12 записей
       // Если сигнал надежный (stable = true) → покупаем хедж (рынок закроется зеленым, нужна защита)
       // Если сигнал ненадежный (stable = false) → не покупаем хедж (рынок закроется красным, мы выиграем)
-      if (stabilityResult.stable && series.hedgeValidationHistory.length >= 3) {
+      if (stabilityResult.stable && series.hedgeValidationHistory.length >= 12 && last12Stable) {
         // Сигнал надежный - покупаем хедж (рынок закроется зеленым)
         await this.completeHedgeValidation(series, true, context, stabilityResult);
       } else {
         // Сигнал ненадежный - не покупаем хедж (рынок закроется красным, мы выиграем)
-        await this.completeHedgeValidation(series, false, context, stabilityResult);
+        // Если checkStability вернул stable=true, но не все 12 записей стабильны, формируем правильный reason
+        let finalStabilityResult = stabilityResult;
+        if (stabilityResult.stable && !last12Stable && series.hedgeValidationHistory.length >= 12) {
+          const last12 = series.hedgeValidationHistory.slice(-12);
+          const stableCount = last12.filter(h => h.matches === true).length;
+          finalStabilityResult = {
+            stable: false,
+            reason: `Не все записи стабильны: ${stableCount} из 12 (требуется все 12 для 2 минут стабильности)`,
+            changePercent: stabilityResult.changePercent,
+          };
+        }
+        await this.completeHedgeValidation(series, false, context, finalStabilityResult);
       }
       return;
     }
     
     // Проверка условий покупки: если сигнал надежный (по checkStability) и есть достаточно данных
-    if (series.hedgeValidationHistory.length >= 3 && stabilityResult.stable) {
+    // checkStability требует минимум 12 записей (2 минуты при интервале 10 сек) для правильной оценки
+    // Также проверяем, что последние 12 записей были стабильными
+    if (series.hedgeValidationHistory.length >= 12 && stabilityResult.stable && last12Stable) {
       // Сигнал надежный - покупаем хедж (рынок закроется зеленым)
       await this.completeHedgeValidation(series, true, context, stabilityResult);
+    } else if (series.hedgeValidationHistory.length >= 12 && stabilityResult.stable && !last12Stable) {
+      // checkStability вернул stable=true, но не все 12 записей стабильны - формируем правильный reason
+      const last12 = series.hedgeValidationHistory.slice(-12);
+      const stableCount = last12.filter(h => h.matches === true).length;
+      const finalStabilityResult = {
+        stable: false,
+        reason: `Не все записи стабильны: ${stableCount} из 12 (требуется все 12 для 2 минут стабильности)`,
+        changePercent: stabilityResult.changePercent,
+      };
+      await this.completeHedgeValidation(series, false, context, finalStabilityResult);
+    } else if (series.hedgeValidationHistory.length >= 12 && !stabilityResult.stable) {
+      // checkStability вернул stable=false - используем его reason как есть (например, "сигнал отменяется")
+      await this.completeHedgeValidation(series, false, context, stabilityResult);
     }
   }
 

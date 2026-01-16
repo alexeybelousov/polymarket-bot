@@ -139,7 +139,8 @@ function checkStability(history, signalColor) {
   // Цена стабильна (небольшие колебания)
   
   // ПРИОРИТЕТНАЯ ПРОВЕРКА: абсолютное значение цены
-  // Для RED сигнала, если цена UP > 0.5, это означает отмену сигнала (рынок уже ушел в GREEN)
+  // Мониторим ТЕКУЩИЙ рынок (где был сигнал), а не следующий (где ставим)
+  // Для RED сигнала: если цена UP > 0.5 на текущем рынке, это означает что рынок уже ушел в GREEN → RED сигнал отменяется (stable = false)
   if (signalColor === 'red' && lastPrice > 0.5) {
     return {
       stable: false,
@@ -148,7 +149,7 @@ function checkStability(history, signalColor) {
     };
   }
   
-  // Для GREEN сигнала, если цена DOWN > 0.5, это означает отмену сигнала (рынок уже ушел в RED)
+  // Для GREEN сигнала: если цена DOWN > 0.5 на текущем рынке, это означает что рынок уже ушел в RED → GREEN сигнал отменяется (stable = false)
   if (signalColor === 'green' && lastPrice > 0.5) {
     return {
       stable: false,
@@ -358,8 +359,9 @@ function estimateCancelProbability(priceData, orderBookData, history, signalColo
   const signals = [];
   
   // 1. Анализ абсолютного значения цены
-  // Для RED сигнала: если цена UP > 0.5, рынок ушел в GREEN → сигнал отменяется
-  // Для GREEN сигнала: если цена DOWN > 0.5, рынок ушел в RED → сигнал отменяется
+  // Мониторим ТЕКУЩИЙ рынок (где был сигнал), а не следующий (где ставим)
+  // Для RED сигнала: если цена UP > 0.5 на текущем рынке, рынок ушел в GREEN → сигнал отменяется
+  // Для GREEN сигнала: если цена DOWN > 0.5 на текущем рынке, рынок ушел в RED → сигнал отменяется
   if (signalColor === 'red' && priceData.price > 0.5) {
     signals.push({
       type: 'price_above_threshold',
