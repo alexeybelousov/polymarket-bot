@@ -804,7 +804,280 @@ class TradingEmulator {
   // ==================== ВАЛИДАЦИЯ РЫНКА ====================
   
   /**
-   * Проверяет соответствует ли цена сигналу
+   * Анализ order book
+   */
+  analyzeOrderBook(bids, asks) {
+    if (!bids || !asks || bids.length === 0 || asks.length === 0) {
+      return null;
+    }
+    
+    const bidsTotal = bids.reduce((sum, b) => sum + b.size, 0);
+    const asksTotal = asks.reduce((sum, a) => sum + a.size, 0);
+    const totalSize = bidsTotal + asksTotal;
+    
+    // Лучшие цены
+    const bestBid = bids[0]?.price || 0;
+    const bestAsk = asks[0]?.price || 0;
+    const spread = bestAsk - bestBid;
+    
+    // Баланс order book
+    const bidRatio = bidsTotal / totalSize;
+    const askRatio = asksTotal / totalSize;
+    
+    // Анализ ликвидности на ключевых уровнях
+    const nearBestBid = bids.slice(0, 5).reduce((sum, b) => sum + b.size, 0);
+    const nearBestAsk = asks.slice(0, 5).reduce((sum, a) => sum + a.size, 0);
+    
+    return {
+      bidsTotal,
+      asksTotal,
+      totalSize,
+      bestBid,
+      bestAsk,
+      spread,
+      bidRatio,
+      askRatio,
+      nearBestBid,
+      nearBestAsk,
+      imbalance: (asksTotal - bidsTotal) / totalSize, // Положительное = больше продавцов (asks > bids), отрицательное = больше покупателей (bids > asks)
+    };
+  }
+  
+  /**
+   * Проверка стабильности рынка (из monitor-signal-cancel.js)
+   */
+  checkStability(history, signalColor) {
+    if (history.length < 3) {
+      return { stable: false, reason: 'Недостаточно данных' };
+    }
+    
+    // Берем последние 12 записей (2 минуты при интервале 10 сек)
+    const recent = history.slice(-12);
+    if (recent.length < 3) {
+      return { stable: false, reason: 'Недостаточно данных' };
+    }
+    
+    const prices = recent.map(r => r.price).filter(p => p > 0);
+    if (prices.length < 3) {
+      return { stable: false, reason: 'Недостаточно цен' };
+    }
+    
+    // ЛОГИКА: для обоих сигналов рост цены мониторинга = отмена сигнала
+    // GREEN сигнал (ставим на RED/down): если цена DOWN растет → сигнал отменяется
+    // RED сигнал (ставим на GREEN/up): если цена UP растет → сигнал отменяется
+    // Для обоих: цена должна падать или быть стабильной на низком уровне → сигнал подтверждается
+    const firstPrice = prices[0];
+    const lastPrice = prices[prices.length - 1];
+    const change = lastPrice - firstPrice;
+    const changePercent = firstPrice > 0 ? (change / firstPrice) * 100 : 0;
+    
+    // Проверяем тренд (цена не должна расти)
+    let trendOk = true;
+    let hasGrowth = false;
+    for (let i = 1; i < prices.length; i++) {
+      if (prices[i] > prices[i - 1] + 0.001) { // Небольшой порог для учета колебаний
+        hasGrowth = true;
+        // Если цена выросла более чем на 5% от начальной - это плохо (отмена сигнала)
+        if (firstPrice > 0 && ((prices[i] - firstPrice) / firstPrice) * 100 > 5) {
+          trendOk = false;
+          break;
+        }
+      }
+    }
+    
+    // Проверяем order book
+    const lastOrderBook = recent[recent.length - 1]?.orderBook;
+    let orderBookOk = false;
+    let orderBookImbalance = 0;
+    if (lastOrderBook) {
+      // Используем imbalance из analyzeOrderBook: (asks - bids) / totalSize
+      // Положительный = больше продавцов (asks > bids) → цена падает → хорошо для обоих сигналов
+      // Отрицательный = больше покупателей (bids > asks) → цена растет → плохо для обоих сигналов
+      orderBookImbalance = lastOrderBook.imbalance || 0;
+      
+      // Для ОБОИХ сигналов: больше продавцов = хорошо (цена падает, сигнал подтверждается)
+      // imbalance > 0 означает больше продавцов
+      if (orderBookImbalance > 0.5) {
+        orderBookOk = true;
+      } else if (orderBookImbalance > 0.1) {
+        orderBookOk = true;
+      }
+    }
+    
+    // Если цена очень низкая (< $0.05) и стабильна - это может быть стабильно
+    const isVeryLowPrice = lastPrice < 0.05;
+    const isPriceStable = Math.abs(changePercent) < 5; // Изменение менее 5%
+    
+    // Если цена очень высокая (> $0.95) и стабильна - это тоже может быть стабильно
+    const isVeryHighPrice = lastPrice > 0.95;
+    
+    // ПРИОРИТЕТНАЯ ПРОВЕРКА: абсолютное значение цены
+    // Для RED сигнала, если цена UP > 0.5, это означает отмену сигнала (рынок уже ушел в GREEN)
+    if (signalColor === 'red' && lastPrice > 0.5) {
+      return {
+        stable: false,
+        reason: `Цена UP ($${lastPrice.toFixed(4)}) выше $0.50 - рынок ушел в GREEN, сигнал RED отменяется`,
+        changePercent,
+      };
+    }
+    
+    // Для GREEN сигнала, если цена DOWN > 0.5, это означает отмену сигнала (рынок уже ушел в RED)
+    if (signalColor === 'green' && lastPrice > 0.5) {
+      return {
+        stable: false,
+        reason: `Цена DOWN ($${lastPrice.toFixed(4)}) выше $0.50 - рынок ушел в RED, сигнал GREEN отменяется`,
+        changePercent,
+      };
+    }
+    
+    // ПРИОРИТЕТ: Для очень низких цен (< $0.1) используем абсолютное изменение, а не процентное
+    // Это должно быть ПЕРЕД проверкой на процентный рост, чтобы избежать ложных срабатываний
+    if (isVeryLowPrice) {
+      const absoluteChange = change;
+      // Если цена выросла более чем на $0.05 или стала > $0.1 - это отмена
+      if (absoluteChange > 0.05 || lastPrice > 0.1) {
+        return {
+          stable: false,
+          reason: `Цена выросла с $${firstPrice.toFixed(4)} до $${lastPrice.toFixed(4)} (${changePercent.toFixed(2)}%) - возможна отмена`,
+          changePercent,
+        };
+      }
+      // Если цена очень низкая (< $0.1) и order book подтверждает (больше продавцов) - стабильно
+      if (orderBookOk) {
+        return {
+          stable: true,
+          reason: `Цена очень низкая ($${lastPrice.toFixed(4)}), order book подтверждает (imbalance: ${(orderBookImbalance * 100).toFixed(1)}%) - сигнал подтверждается`,
+          changePercent,
+        };
+      }
+    }
+    
+    // ВАЖНО: Если текущая цена низкая (< $0.3) и order book подтверждает - стабильно,
+    // даже если был рост в середине окна (цена могла упасть обратно)
+    if (lastPrice < 0.3 && orderBookOk) {
+      return {
+        stable: true,
+        reason: `Цена низкая ($${lastPrice.toFixed(4)}), order book подтверждает (imbalance: ${(orderBookImbalance * 100).toFixed(1)}%) - сигнал подтверждается`,
+        changePercent,
+      };
+    }
+    
+    // ВАЖНО: Если цена очень низкая (< $0.3) и падает значительно (> 10%) - стабильно,
+    // даже если imbalance отрицательный (больше покупателей), т.к. падение цены - главный индикатор
+    if (lastPrice < 0.3 && changePercent < -10) {
+      return {
+        stable: true,
+        reason: `Цена низкая ($${lastPrice.toFixed(4)}) и падает на ${Math.abs(changePercent).toFixed(2)}% - сигнал подтверждается`,
+        changePercent,
+      };
+    }
+    
+    // ВАЖНО: Если цена очень низкая (< $0.15) и остается низкой - стабильно,
+    // даже если был небольшой рост (процентные изменения на низких ценах обманчивы)
+    // Это должно быть ПЕРЕД проверкой на рост > 2%, чтобы избежать ложных срабатываний
+    if (lastPrice < 0.15 && firstPrice < 0.15) {
+      // Если и первая, и последняя цена очень низкие - это стабильно (цена остается в очень низком диапазоне)
+      return {
+        stable: true,
+        reason: `Цена очень низкая ($${lastPrice.toFixed(4)}) и остается в низком диапазоне - сигнал подтверждается`,
+        changePercent,
+      };
+    }
+    
+    // ВАЖНО: Если цена низкая (< $0.3) - стабильно, даже если был большой процентный рост
+    // (процентные изменения на низких ценах обманчивы, главное - абсолютное значение цены)
+    // Это должно быть ПЕРЕД проверкой на процентный рост, чтобы избежать ложных срабатываний
+    if (lastPrice < 0.3) {
+      return {
+        stable: true,
+        reason: `Цена низкая ($${lastPrice.toFixed(4)}) - сигнал подтверждается (процентные изменения на низких ценах не критичны)`,
+        changePercent,
+      };
+    }
+    
+    // Если цена растет более чем на 10% - сигнал отменяется (только для цен > $0.3)
+    // Для низких цен (< $0.3) эта проверка не применяется, т.к. процентные изменения обманчивы
+    if (changePercent > 10 && lastPrice > 0.3) {
+      return {
+        stable: false,
+        reason: `Цена выросла на ${changePercent.toFixed(2)}% - сигнал отменяется`,
+        changePercent,
+      };
+    }
+    
+    // Если цена растет на 2-10% - возможна отмена (только для цен > $0.3, чтобы избежать ложных срабатываний на низких ценах)
+    if (changePercent > 2 && lastPrice > 0.3) {
+      return {
+        stable: false,
+        reason: `Цена выросла на ${changePercent.toFixed(2)}% - возможна отмена`,
+        changePercent,
+      };
+    }
+    
+    // Для ОБОИХ сигналов: низкая цена = хорошо, высокая = плохо (рост = отмена)
+    // Если цена очень низкая и стабильна, и order book подтверждает - стабильно
+    if (isVeryLowPrice && isPriceStable && orderBookOk) {
+      return {
+        stable: true,
+        reason: `Цена стабильна на низком уровне ($${lastPrice.toFixed(4)}), order book подтверждает (imbalance: ${(orderBookImbalance * 100).toFixed(1)}%)`,
+        changePercent,
+      };
+    }
+    
+    // Если цена падает и order book подтверждает - стабильно
+    if (changePercent < -1 && trendOk && orderBookOk) {
+      return {
+        stable: true,
+        reason: `Цена упала на ${Math.abs(changePercent).toFixed(2)}%, order book подтверждает (imbalance: ${(orderBookImbalance * 100).toFixed(1)}%)`,
+        changePercent,
+      };
+    }
+    
+    // Если цена падает значительно (> 10%) и order book подтверждает (больше продавцов) - стабильно
+    if (changePercent < -10 && orderBookImbalance > 0.05) {
+      return {
+        stable: true,
+        reason: `Цена упала на ${Math.abs(changePercent).toFixed(2)}%, order book подтверждает (imbalance: ${(orderBookImbalance * 100).toFixed(1)}%)`,
+        changePercent,
+      };
+    }
+    
+    // Если цена падает умеренно (> 5%) и order book сильно подтверждает (больше продавцов) - стабильно
+    if (changePercent < -5 && orderBookImbalance > 0.10) {
+      return {
+        stable: true,
+        reason: `Цена упала на ${Math.abs(changePercent).toFixed(2)}%, order book сильно подтверждает (imbalance: ${(orderBookImbalance * 100).toFixed(1)}%)`,
+        changePercent,
+      };
+    }
+    
+    // Если цена стабильна и order book сильно подтверждает (> 80% imbalance в пользу продавцов) - стабильно
+    if (isPriceStable && orderBookImbalance > 0.8) {
+      return {
+        stable: true,
+        reason: `Цена стабильна (изменение ${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(2)}%), order book сильно подтверждает (imbalance: ${(orderBookImbalance * 100).toFixed(1)}%)`,
+        changePercent,
+      };
+    }
+    
+    // Если цена стабильна и order book подтверждает (> 50% imbalance в пользу продавцов) - стабильно
+    if (isPriceStable && orderBookOk) {
+      return {
+        stable: true,
+        reason: `Цена стабильна (изменение ${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(2)}%), order book подтверждает (imbalance: ${(orderBookImbalance * 100).toFixed(1)}%)`,
+        changePercent,
+      };
+    }
+    
+    return {
+      stable: false,
+      reason: `Нестабильно: изменение ${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(2)}%, order book imbalance: ${(orderBookImbalance * 100).toFixed(1)}%`,
+      changePercent,
+    };
+  }
+  
+  /**
+   * Проверяет соответствует ли цена сигналу (старая простая логика, оставлена для совместимости)
    */
   checkPriceMatchesSignal(price, signalColor) {
     // Сигнал RED → проверяем цену UP
@@ -819,7 +1092,7 @@ class TradingEmulator {
   }
   
   /**
-   * Выполняет проверку цены для валидации
+   * Выполняет проверку цены для валидации (использует логику из monitor-signal-cancel.js)
    */
   async performValidationCheck(series, marketSlug) {
     const asset = series.asset.toUpperCase();
@@ -832,10 +1105,14 @@ class TradingEmulator {
     const polySlug = this.convertToPolymarketSlug(marketSlug);
     
     let price = null;
+    let tokenId = null;
+    let orderBookAnalysis = null;
+    
     try {
       const priceData = await polymarket.getBuyPrice(polySlug, checkOutcome);
       if (priceData && priceData.price) {
         price = priceData.price;
+        tokenId = priceData.tokenId;
       }
     } catch (error) {
       console.error(`[TRADE] [${this.botId}] Error getting price for validation:`, error.message);
@@ -846,16 +1123,49 @@ class TradingEmulator {
       return;
     }
     
-    // Проверяем соответствует ли цена сигналу
-    const matches = this.checkPriceMatchesSignal(price, series.signalColor);
-    const symbol = matches ? '+' : '-';
+    // Получаем order book данные
+    if (tokenId) {
+      try {
+        const orderBookData = await polymarket.getOrderBookDetails(tokenId);
+        if (orderBookData && orderBookData.bids && orderBookData.asks) {
+          orderBookAnalysis = this.analyzeOrderBook(orderBookData.bids, orderBookData.asks);
+        }
+      } catch (error) {
+        // Order book может быть недоступен, это не критично
+        console.warn(`[TRADE] [${this.botId}] Could not get order book for validation:`, error.message);
+      }
+    }
     
-    // Добавляем в историю
-    series.validationHistory.push({
+    // Добавляем в историю (с order book данными)
+    const historyRecord = {
       timestamp: new Date(),
       price,
+      orderBook: orderBookAnalysis,
+    };
+    
+    // Создаем историю для checkStability (нужны записи с price и orderBook)
+    const historyForStability = series.validationHistory.map(h => ({
+      price: h.price,
+      orderBook: h.orderBook,
+    }));
+    historyForStability.push(historyRecord);
+    
+    // Используем checkStability для определения стабильности
+    const stabilityResult = this.checkStability(historyForStability, series.signalColor);
+    const matches = stabilityResult.stable;
+    const symbol = matches ? '+' : '-';
+    
+    // Добавляем в историю валидации (сохраняем только нужные поля order book)
+    series.validationHistory.push({
+      timestamp: historyRecord.timestamp,
+      price: historyRecord.price,
       matches,
       symbol,
+      orderBook: orderBookAnalysis ? {
+        imbalance: orderBookAnalysis.imbalance,
+        bidsTotal: orderBookAnalysis.bidsTotal,
+        asksTotal: orderBookAnalysis.asksTotal,
+      } : null,
     });
     
     // Ограничиваем историю (храним последние 50 записей)
@@ -866,35 +1176,77 @@ class TradingEmulator {
     // Обновляем время последней проверки
     series.lastValidationCheck = new Date();
     
-    // Обновляем событие (показываем последние 20 символов)
+    // Формируем детальное сообщение для визуализации
     const symbols = series.validationHistory.map(h => h.symbol).join('');
     const displaySymbols = symbols.slice(-20); // Последние 20 символов
     
+    // Вычисляем изменение цены
+    let priceChangeText = '';
+    if (series.validationHistory.length >= 2) {
+      const firstPrice = series.validationHistory[0].price;
+      const lastPrice = price;
+      const change = lastPrice - firstPrice;
+      const changePercent = firstPrice > 0 ? (change / firstPrice) * 100 : 0;
+      priceChangeText = changePercent >= 0 
+        ? `+${changePercent.toFixed(1)}%` 
+        : `${changePercent.toFixed(1)}%`;
+    }
+    
+    // Информация об order book
+    let orderBookText = '';
+    if (orderBookAnalysis) {
+      const imbalancePercent = (orderBookAnalysis.imbalance * 100).toFixed(1);
+      orderBookText = ` | OB: ${imbalancePercent >= 0 ? '+' : ''}${imbalancePercent}%`;
+    }
+    
+    // Статус стабильности
+    const stabilityEmoji = stabilityResult.stable ? '✅' : '⚠️';
+    
     // Обновляем событие по индексу
     if (series.validationEventIndex !== undefined && series.validationEventIndex >= 0 && series.validationEventIndex < series.events.length) {
-      series.events[series.validationEventIndex].message = `Валидирую рынок: ${displaySymbols}`;
+      const message = `Валидирую рынок: ${displaySymbols} | Цена: $${price.toFixed(3)}${priceChangeText ? ` (${priceChangeText})` : ''}${orderBookText} | ${stabilityEmoji} ${stabilityResult.stable ? 'стабильно' : 'нестабильно'}`;
+      series.events[series.validationEventIndex].message = message;
     }
+    
+    // Сохраняем последний результат стабильности для использования в completeValidation
+    series.lastStabilityResult = {
+      stable: stabilityResult.stable,
+      reason: stabilityResult.reason,
+      changePercent: stabilityResult.changePercent,
+    };
     
     await series.save();
     
-    console.log(`[TRADE] [${this.botId}] ${asset}: Validation check: price $${price.toFixed(3)} → ${symbol} (${series.validationHistory.length} checks)`);
+    const stabilityInfo = stabilityResult.stable 
+      ? `✅ стабильно: ${stabilityResult.reason}`
+      : `⚠️ нестабильно: ${stabilityResult.reason}`;
+    console.log(`[TRADE] [${this.botId}] ${asset}: Validation check: price $${price.toFixed(3)} → ${symbol} (${series.validationHistory.length} checks) - ${stabilityInfo}`);
   }
   
   /**
    * Завершает валидацию (покупает или отменяет)
    */
-  async completeValidation(series, success) {
+  async completeValidation(series, success, stabilityResult = null) {
     const asset = series.asset.toUpperCase();
+    
+    // Используем переданный stabilityResult или последний сохраненный
+    const finalStabilityResult = stabilityResult || series.lastStabilityResult || { stable: success, reason: success ? 'Рынок стабилен' : 'Рынок нестабилен' };
     
     if (success) {
       // Валидация успешна - покупаем
       series.validationState = 'validated';
       
-      // Обновляем событие
+      // Формируем финальное сообщение с причиной решения
+      const symbols = series.validationHistory.map(h => h.symbol).join('');
+      const displaySymbols = symbols.slice(-20);
+      const lastPrice = series.validationHistory.length > 0 
+        ? series.validationHistory[series.validationHistory.length - 1].price 
+        : 0;
+      
+      // Обновляем событие с причиной решения
       if (series.validationEventIndex !== undefined && series.validationEventIndex >= 0 && series.validationEventIndex < series.events.length) {
-        const symbols = series.validationHistory.map(h => h.symbol).join('');
-        const displaySymbols = symbols.slice(-20);
-        series.events[series.validationEventIndex].message = `Валидирую рынок: ${displaySymbols} ✅ Покупка`;
+        const reasonText = finalStabilityResult.reason || 'Рынок стабилен';
+        series.events[series.validationEventIndex].message = `Валидирую рынок: ${displaySymbols} ✅ Покупка | Причина: ${reasonText}`;
       }
       
       await series.save();
@@ -920,15 +1272,18 @@ class TradingEmulator {
       // Валидация не пройдена - отменяем серию
       series.validationState = 'rejected';
       
-      // Обновляем событие
+      // Формируем финальное сообщение с причиной отказа
+      const symbols = series.validationHistory.map(h => h.symbol).join('');
+      const displaySymbols = symbols.slice(-20);
+      
+      // Обновляем событие с причиной отказа
       if (series.validationEventIndex !== undefined && series.validationEventIndex >= 0 && series.validationEventIndex < series.events.length) {
-        const symbols = series.validationHistory.map(h => h.symbol).join('');
-        const displaySymbols = symbols.slice(-20);
-        series.events[series.validationEventIndex].message = `Валидирую рынок: ${displaySymbols} ❌ Отменено`;
+        const reasonText = finalStabilityResult.reason || 'Рынок нестабилен';
+        series.events[series.validationEventIndex].message = `Валидирую рынок: ${displaySymbols} ❌ Отменено | Причина: ${reasonText}`;
       }
       
       series.addEvent('validation_rejected', {
-        message: 'Валидация не пройдена, покупка отменена',
+        message: `Валидация не пройдена, покупка отменена. Причина: ${finalStabilityResult.reason || 'Рынок нестабилен'}`,
       });
       
       series.status = 'cancelled';
@@ -980,22 +1335,6 @@ class TradingEmulator {
       return;
     }
     
-    // Проверка: за 1 минуту до конца принимаем решение
-    if (timeToEnd !== null && timeToEnd <= 60) {
-      // Принимаем решение
-      const last10 = series.validationHistory.slice(-10);
-      const allMatch = last10.length === 10 && last10.every(h => h.matches === true);
-      
-      if (allMatch) {
-        // 10 подряд '+' - покупаем
-        await this.completeValidation(series, true);
-      } else {
-        // Нет 10 подряд '+' - не покупаем, отменяем серию
-        await this.completeValidation(series, false);
-      }
-      return;
-    }
-    
     // Проверка интервала (каждые 30 сек)
     const now = new Date();
     if (series.lastValidationCheck === null) {
@@ -1008,14 +1347,32 @@ class TradingEmulator {
       }
     }
     
-    // Проверка условий покупки (10 подряд '+')
-    const last10 = series.validationHistory.slice(-10);
-    if (last10.length === 10) {
-      const allMatch = last10.every(h => h.matches === true);
-      if (allMatch) {
-        // 10 подряд '+' - покупаем
-        await this.completeValidation(series, true);
+    // Создаем историю для checkStability
+    const historyForStability = series.validationHistory.map(h => ({
+      price: h.price,
+      orderBook: h.orderBook,
+    }));
+    
+    // Используем checkStability для принятия решения
+    const stabilityResult = this.checkStability(historyForStability, series.signalColor);
+    
+    // Проверка: за 1 минуту до конца принимаем решение
+    if (timeToEnd !== null && timeToEnd <= 60) {
+      // Принимаем решение на основе checkStability
+      if (stabilityResult.stable && series.validationHistory.length >= 3) {
+        // Рынок стабилен - покупаем
+        await this.completeValidation(series, true, stabilityResult);
+      } else {
+        // Рынок нестабилен - не покупаем, отменяем серию
+        await this.completeValidation(series, false, stabilityResult);
       }
+      return;
+    }
+    
+    // Проверка условий покупки: если рынок стабилен (по checkStability) и есть достаточно данных
+    if (series.validationHistory.length >= 3 && stabilityResult.stable) {
+      // Рынок стабилен - покупаем
+      await this.completeValidation(series, true, stabilityResult);
     }
   }
 

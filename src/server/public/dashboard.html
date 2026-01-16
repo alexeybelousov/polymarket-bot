@@ -605,7 +605,7 @@
       if (type.includes('won') || type === 'series_won') return 'win';
       if (type.includes('lost') || type === 'series_lost') return 'loss';
       if (type === 'cooldown_started' || type === 'cooldown_ended') return 'neutral';
-      if (type === 'waiting_market' || type === 'market_active' || type === 'signal_cancelled' || type === 'series_cancelled') return 'neutral';
+      if (type === 'waiting_market' || type === 'market_active' || type === 'signal_cancelled' || type === 'series_cancelled' || type === 'validation_started') return 'neutral';
       return '';
     }
 
