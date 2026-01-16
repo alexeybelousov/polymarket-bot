@@ -1399,7 +1399,7 @@ class TradingEmulator {
     
     // Добавляем событие валидации хеджа
     series.addEvent('validation_started', {
-      message: `Валидирую хедж Step ${nextStep}:`,
+      message: `Валидирую рынок для хеджа Step ${nextStep}:`,
     });
     // Сохраняем индекс последнего события
     series.hedgeValidationEventIndex = series.events.length - 1;
@@ -1410,7 +1410,7 @@ class TradingEmulator {
   }
   
   /**
-   * Выполняет проверку цены для валидации хеджа
+   * Выполняет проверку цены для валидации хеджа (использует логику из monitor-signal-cancel.js)
    */
   async performHedgeValidationCheck(series, marketSlug) {
     const asset = series.asset.toUpperCase();
@@ -1422,10 +1422,14 @@ class TradingEmulator {
     const polySlug = this.convertToPolymarketSlug(marketSlug);
     
     let price = null;
+    let tokenId = null;
+    let orderBookAnalysis = null;
+    
     try {
       const priceData = await polymarket.getBuyPrice(polySlug, checkOutcome);
       if (priceData && priceData.price) {
         price = priceData.price;
+        tokenId = priceData.tokenId;
       }
     } catch (error) {
       console.error(`[TRADE] [${this.botId}] Error getting price for hedge validation:`, error.message);
@@ -1436,16 +1440,49 @@ class TradingEmulator {
       return;
     }
     
-    // Проверяем соответствует ли цена сигналу
-    const matches = this.checkPriceMatchesSignal(price, series.signalColor);
-    const symbol = matches ? '+' : '-';
+    // Получаем order book данные
+    if (tokenId) {
+      try {
+        const orderBookData = await polymarket.getOrderBookDetails(tokenId);
+        if (orderBookData && orderBookData.bids && orderBookData.asks) {
+          orderBookAnalysis = this.analyzeOrderBook(orderBookData.bids, orderBookData.asks);
+        }
+      } catch (error) {
+        // Order book может быть недоступен, это не критично
+        console.warn(`[TRADE] [${this.botId}] Could not get order book for hedge validation:`, error.message);
+      }
+    }
     
-    // Добавляем в историю
-    series.hedgeValidationHistory.push({
+    // Добавляем в историю (с order book данными)
+    const historyRecord = {
       timestamp: new Date(),
       price,
+      orderBook: orderBookAnalysis,
+    };
+    
+    // Создаем историю для checkStability (нужны записи с price и orderBook)
+    const historyForStability = series.hedgeValidationHistory.map(h => ({
+      price: h.price,
+      orderBook: h.orderBook,
+    }));
+    historyForStability.push(historyRecord);
+    
+    // Используем checkStability для определения стабильности
+    const stabilityResult = this.checkStability(historyForStability, series.signalColor);
+    const matches = stabilityResult.stable;
+    const symbol = matches ? '+' : '-';
+    
+    // Добавляем в историю валидации
+    series.hedgeValidationHistory.push({
+      timestamp: historyRecord.timestamp,
+      price: historyRecord.price,
       matches,
       symbol,
+      orderBook: orderBookAnalysis ? {
+        imbalance: orderBookAnalysis.imbalance,
+        bidsTotal: orderBookAnalysis.bidsTotal,
+        asksTotal: orderBookAnalysis.asksTotal,
+      } : null,
     });
     
     // Ограничиваем историю (храним последние 50 записей)
@@ -1456,36 +1493,75 @@ class TradingEmulator {
     // Обновляем время последней проверки
     series.hedgeLastValidationCheck = new Date();
     
-    // Обновляем событие (показываем последние 20 символов)
+    // Формируем детальное сообщение для визуализации
     const symbols = series.hedgeValidationHistory.map(h => h.symbol).join('');
-    const displaySymbols = symbols.slice(-20);
+    const displaySymbols = symbols.slice(-20); // Последние 20 символов
+    
+    // Вычисляем изменение цены
+    let priceChangeText = '';
+    if (series.hedgeValidationHistory.length >= 2) {
+      const firstPrice = series.hedgeValidationHistory[0].price;
+      const lastPrice = price;
+      const change = lastPrice - firstPrice;
+      const changePercent = firstPrice > 0 ? (change / firstPrice) * 100 : 0;
+      priceChangeText = changePercent >= 0 
+        ? `+${changePercent.toFixed(1)}%` 
+        : `${changePercent.toFixed(1)}%`;
+    }
+    
+    // Информация об order book
+    let orderBookText = '';
+    if (orderBookAnalysis) {
+      const imbalancePercent = (orderBookAnalysis.imbalance * 100).toFixed(1);
+      orderBookText = ` | OB: ${imbalancePercent >= 0 ? '+' : ''}${imbalancePercent}%`;
+    }
+    
+    // Статус стабильности
+    const stabilityEmoji = stabilityResult.stable ? '✅' : '⚠️';
     
     // Обновляем событие по индексу
     if (series.hedgeValidationEventIndex !== undefined && series.hedgeValidationEventIndex >= 0 && series.hedgeValidationEventIndex < series.events.length) {
-      series.events[series.hedgeValidationEventIndex].message = `Валидирую хедж Step ${nextStep}: ${displaySymbols}`;
+      const message = `Валидирую рынок для хеджа Step ${nextStep}: ${displaySymbols} | Цена: $${price.toFixed(3)}${priceChangeText ? ` (${priceChangeText})` : ''}${orderBookText} | ${stabilityEmoji} ${stabilityResult.stable ? 'стабильно' : 'нестабильно'}`;
+      series.events[series.hedgeValidationEventIndex].message = message;
     }
+    
+    // Сохраняем последний результат стабильности для использования в completeHedgeValidation
+    series.lastHedgeStabilityResult = {
+      stable: stabilityResult.stable,
+      reason: stabilityResult.reason,
+      changePercent: stabilityResult.changePercent,
+    };
     
     await series.save();
     
-    console.log(`[TRADE] [${this.botId}] ${asset}: Hedge validation check: price $${price.toFixed(3)} → ${symbol} (${series.hedgeValidationHistory.length} checks)`);
+    const stabilityInfo = stabilityResult.stable 
+      ? `✅ стабильно: ${stabilityResult.reason}`
+      : `⚠️ нестабильно: ${stabilityResult.reason}`;
+    console.log(`[TRADE] [${this.botId}] ${asset}: Hedge validation check: price $${price.toFixed(3)} → ${symbol} (${series.hedgeValidationHistory.length} checks) - ${stabilityInfo}`);
   }
   
   /**
    * Завершает валидацию хеджа (покупает или отменяет)
    */
-  async completeHedgeValidation(series, success, context) {
+  async completeHedgeValidation(series, success, context, stabilityResult = null) {
     const asset = series.asset.toUpperCase();
     const nextStep = series.currentStep + 1;
+    
+    // Используем переданный stabilityResult или последний сохраненный
+    const finalStabilityResult = stabilityResult || series.lastHedgeStabilityResult || { stable: success, reason: success ? 'Рынок стабилен' : 'Рынок нестабилен' };
     
     if (success) {
       // Валидация успешна - покупаем хедж
       series.hedgeValidationState = 'validated';
       
-      // Обновляем событие
+      // Формируем финальное сообщение с причиной решения
+      const symbols = series.hedgeValidationHistory.map(h => h.symbol).join('');
+      const displaySymbols = symbols.slice(-20);
+      
+      // Обновляем событие с причиной решения
       if (series.hedgeValidationEventIndex !== undefined && series.hedgeValidationEventIndex >= 0 && series.hedgeValidationEventIndex < series.events.length) {
-        const symbols = series.hedgeValidationHistory.map(h => h.symbol).join('');
-        const displaySymbols = symbols.slice(-20);
-        series.events[series.hedgeValidationEventIndex].message = `Валидирую хедж Step ${nextStep}: ${displaySymbols} ✅ Покупка`;
+        const reasonText = finalStabilityResult.reason || 'Рынок стабилен';
+        series.events[series.hedgeValidationEventIndex].message = `Валидирую рынок для хеджа Step ${nextStep}: ${displaySymbols} ✅ Покупка | Причина: ${reasonText}`;
       }
       
       await series.save();
@@ -1498,15 +1574,18 @@ class TradingEmulator {
       // Валидация не пройдена - просто не покупаем хедж
       series.hedgeValidationState = 'rejected';
       
-      // Обновляем событие
+      // Формируем финальное сообщение с причиной отказа
+      const symbols = series.hedgeValidationHistory.map(h => h.symbol).join('');
+      const displaySymbols = symbols.slice(-20);
+      
+      // Обновляем событие с причиной отказа
       if (series.hedgeValidationEventIndex !== undefined && series.hedgeValidationEventIndex >= 0 && series.hedgeValidationEventIndex < series.events.length) {
-        const symbols = series.hedgeValidationHistory.map(h => h.symbol).join('');
-        const displaySymbols = symbols.slice(-20);
-        series.events[series.hedgeValidationEventIndex].message = `Валидирую хедж Step ${nextStep}: ${displaySymbols} ❌ Отменено`;
+        const reasonText = finalStabilityResult.reason || 'Рынок нестабилен';
+        series.events[series.hedgeValidationEventIndex].message = `Валидирую рынок для хеджа Step ${nextStep}: ${displaySymbols} ❌ Отменено | Причина: ${reasonText}`;
       }
       
       series.addEvent('validation_rejected', {
-        message: `Валидация хеджа Step ${nextStep} не пройдена, хедж не покупаем`,
+        message: `Валидация хеджа Step ${nextStep} не пройдена, хедж не покупаем. Причина: ${finalStabilityResult.reason || 'Рынок нестабилен'}`,
       });
       
       await series.save();
@@ -1548,22 +1627,6 @@ class TradingEmulator {
       return;
     }
     
-    // Проверка: за 1 минуту до начала/конца принимаем решение
-    if (timeToEnd !== null && timeToEnd <= 60) {
-      // Принимаем решение
-      const last10 = series.hedgeValidationHistory.slice(-10);
-      const allMatch = last10.length === 10 && last10.every(h => h.matches === true);
-      
-      if (allMatch) {
-        // 10 подряд '+' - покупаем хедж
-        await this.completeHedgeValidation(series, true, context);
-      } else {
-        // Нет 10 подряд '+' - не покупаем хедж
-        await this.completeHedgeValidation(series, false, context);
-      }
-      return;
-    }
-    
     // Проверка интервала (каждые 30 сек)
     const now = new Date();
     if (series.hedgeLastValidationCheck === null) {
@@ -1576,14 +1639,32 @@ class TradingEmulator {
       }
     }
     
-    // Проверка условий покупки (10 подряд '+')
-    const last10 = series.hedgeValidationHistory.slice(-10);
-    if (last10.length === 10) {
-      const allMatch = last10.every(h => h.matches === true);
-      if (allMatch) {
-        // 10 подряд '+' - покупаем хедж
-        await this.completeHedgeValidation(series, true, context);
+    // Создаем историю для checkStability
+    const historyForStability = series.hedgeValidationHistory.map(h => ({
+      price: h.price,
+      orderBook: h.orderBook,
+    }));
+    
+    // Используем checkStability для принятия решения
+    const stabilityResult = this.checkStability(historyForStability, series.signalColor);
+    
+    // Проверка: за 1 минуту до начала/конца принимаем решение
+    if (timeToEnd !== null && timeToEnd <= 60) {
+      // Принимаем решение на основе checkStability
+      if (stabilityResult.stable && series.hedgeValidationHistory.length >= 3) {
+        // Рынок стабилен - покупаем хедж
+        await this.completeHedgeValidation(series, true, context, stabilityResult);
+      } else {
+        // Рынок нестабилен - не покупаем хедж
+        await this.completeHedgeValidation(series, false, context, stabilityResult);
       }
+      return;
+    }
+    
+    // Проверка условий покупки: если рынок стабилен (по checkStability) и есть достаточно данных
+    if (series.hedgeValidationHistory.length >= 3 && stabilityResult.stable) {
+      // Рынок стабилен - покупаем хедж
+      await this.completeHedgeValidation(series, true, context, stabilityResult);
     }
   }
 

@@ -84,6 +84,11 @@ const tradeSeriesSchema = new mongoose.Schema({
     price: Number,
     matches: Boolean,  // соответствует ли цена сигналу
     symbol: String,     // '+' или '-'
+    orderBook: {     // Данные order book (опционально)
+      imbalance: Number,  // imbalance из analyzeOrderBook
+      bidsTotal: Number,
+      asksTotal: Number,
+    },
   }],
   hedgeValidationEventIndex: {
     type: Number,
@@ -91,6 +96,11 @@ const tradeSeriesSchema = new mongoose.Schema({
   },
   hedgeValidationMarketSlug: String,  // Рынок который валидируем (следующий рынок)
   hedgeLastValidationCheck: Date,      // Время последней проверки
+  lastHedgeStabilityResult: {         // Последний результат проверки стабильности для хеджа
+    stable: Boolean,
+    reason: String,
+    changePercent: Number,
+  },
   
   status: { 
     type: String, 
