@@ -1224,7 +1224,8 @@ class TradingEmulator {
     
     // Обновляем событие по индексу
     if (series.validationEventIndex !== undefined && series.validationEventIndex >= 0 && series.validationEventIndex < series.events.length) {
-      const message = `Валидирую рынок: ${displaySymbols} | Цена: $${price.toFixed(3)}${priceChangeText ? ` (${priceChangeText})` : ''}${orderBookText} | ${stabilityEmoji} ${stabilityResult.stable ? 'стабильно' : 'нестабильно'}`;
+      const signalStatus = stabilityResult.stable ? 'Сигнал надежный' : 'Сигнал ненадежный';
+      const message = `Валидирую рынок: ${displaySymbols} | Цена: $${price.toFixed(3)}${priceChangeText ? ` (${priceChangeText})` : ''}${orderBookText} | ${stabilityEmoji} ${signalStatus}`;
       series.events[series.validationEventIndex].message = message;
     }
     
@@ -1586,8 +1587,8 @@ class TradingEmulator {
     
     // Обновляем событие по индексу
     if (series.hedgeValidationEventIndex !== undefined && series.hedgeValidationEventIndex >= 0 && series.hedgeValidationEventIndex < series.events.length) {
-      const signalStatus = stabilityResult.stable ? 'Сигнал надежный' : 'Сигнал нестабилен';
-      const message = `Проверяю сигнал для хеджа Step ${nextStep}: ${displaySymbols} ${signalStatus}`;
+      const signalStatus = stabilityResult.stable ? 'Сигнал надежный' : 'Сигнал ненадежный';
+      const message = `Проверяю сигнал для хеджа Step ${nextStep}: ${displaySymbols} | Цена: $${price.toFixed(3)}${priceChangeText ? ` (${priceChangeText})` : ''}${orderBookText} | ${stabilityEmoji} ${signalStatus}`;
       series.events[series.hedgeValidationEventIndex].message = message;
     }
     
