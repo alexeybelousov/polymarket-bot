@@ -1282,7 +1282,7 @@ class TradingEmulator {
         if (reasonText.includes('Цена упала') || reasonText.includes('Цена выросла') || reasonText.includes('Цена стабильна') || reasonText.includes('Цена низкая') || reasonText.includes('Цена очень низкая')) {
           enhancedReason = reasonText.replace(/Цена/g, `Цена ${checkOutcome}`);
         }
-        series.events[series.validationEventIndex].message = `Валидирую рынок: ${displaySymbols} ✅ Покупка | Причина: ${enhancedReason}${priceChangeInfo}`;
+        series.events[series.validationEventIndex].message = `Валидирую рынок: ${displaySymbols} Покупка: ${enhancedReason}${priceChangeInfo}`;
       }
       
       await series.save();
@@ -1334,7 +1334,7 @@ class TradingEmulator {
         if (reasonText.includes('Цена упала') || reasonText.includes('Цена выросла') || reasonText.includes('Цена стабильна') || reasonText.includes('Цена низкая') || reasonText.includes('Цена очень низкая')) {
           enhancedReason = reasonText.replace(/Цена/g, `Цена ${checkOutcome}`);
         }
-        series.events[series.validationEventIndex].message = `Валидирую рынок: ${displaySymbols} ❌ Отменено | Причина: ${enhancedReason}${priceChangeInfo}`;
+        series.events[series.validationEventIndex].message = `Валидирую рынок: ${displaySymbols} Отменено: ${enhancedReason}${priceChangeInfo}`;
       }
       
       series.addEvent('validation_rejected', {
@@ -1645,7 +1645,7 @@ class TradingEmulator {
         if (reasonText.includes('Цена упала') || reasonText.includes('Цена выросла') || reasonText.includes('Цена стабильна') || reasonText.includes('Цена низкая') || reasonText.includes('Цена очень низкая')) {
           enhancedReason = reasonText.replace(/Цена/g, `Цена ${checkOutcome}`);
         }
-        series.events[series.hedgeValidationEventIndex].message = `Валидирую рынок для хеджа Step ${nextStep}: ${displaySymbols} ✅ Покупка | Причина: ${enhancedReason}${priceChangeInfo}`;
+        series.events[series.hedgeValidationEventIndex].message = `Валидирую рынок для хеджа Step ${nextStep}: ${displaySymbols} Покупка: ${enhancedReason}${priceChangeInfo}`;
       }
       
       await series.save();
@@ -1684,7 +1684,7 @@ class TradingEmulator {
         if (reasonText.includes('Цена упала') || reasonText.includes('Цена выросла') || reasonText.includes('Цена стабильна') || reasonText.includes('Цена низкая') || reasonText.includes('Цена очень низкая')) {
           enhancedReason = reasonText.replace(/Цена/g, `Цена ${checkOutcome}`);
         }
-        series.events[series.hedgeValidationEventIndex].message = `Валидирую рынок для хеджа Step ${nextStep}: ${displaySymbols} ❌ Отменено | Причина: ${enhancedReason}${priceChangeInfo}`;
+        series.events[series.hedgeValidationEventIndex].message = `Валидирую рынок для хеджа Step ${nextStep}: ${displaySymbols} Отменено: ${enhancedReason}${priceChangeInfo}`;
       }
       
       series.addEvent('validation_rejected', {
