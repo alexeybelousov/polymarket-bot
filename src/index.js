@@ -35,11 +35,18 @@ async function main() {
   
   // Создаём несколько экземпляров эмулятора торговли (по одному на каждый конфиг)
   const tradingEmulators = [];
+  console.log(`📋 Found ${Object.keys(TRADING_CONFIGS).length} bot configs: ${Object.keys(TRADING_CONFIGS).join(', ')}`);
   for (const [botId, config] of Object.entries(TRADING_CONFIGS)) {
-    const emulator = new TradingEmulator(bot, dataProvider, botId, config);
-    await emulator.start();
-    tradingEmulators.push(emulator);
-    console.log(`✅ Created trading emulator: ${botId}`);
+    try {
+      console.log(`🔄 Creating trading emulator: ${botId}...`);
+      const emulator = new TradingEmulator(bot, dataProvider, botId, config);
+      await emulator.start();
+      tradingEmulators.push(emulator);
+      console.log(`✅ Created trading emulator: ${botId}`);
+    } catch (error) {
+      console.error(`❌ Failed to create trading emulator ${botId}:`, error);
+      throw error;
+    }
   }
 
   // Детектор сигналов (определяет и сохраняет в БД, передает сигналы всем ботам)
