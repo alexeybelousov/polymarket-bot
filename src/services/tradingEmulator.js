@@ -1615,7 +1615,7 @@ class TradingEmulator {
     const finalStabilityResult = stabilityResult || series.lastHedgeStabilityResult || { stable: success, reason: success ? 'Рынок стабилен' : 'Рынок нестабилен' };
     
     if (success) {
-      // Сигнал нестабилен - покупаем хедж для защиты
+      // Сигнал надежный - покупаем хедж (рынок закроется зеленым)
       series.hedgeValidationState = 'validated';
       
       // Формируем финальное сообщение с причиной решения
@@ -1638,13 +1638,13 @@ class TradingEmulator {
       
       // Обновляем событие с причиной решения
       if (series.hedgeValidationEventIndex !== undefined && series.hedgeValidationEventIndex >= 0 && series.hedgeValidationEventIndex < series.events.length) {
-        const reasonText = finalStabilityResult.reason || 'Сигнал нестабилен';
+        const reasonText = finalStabilityResult.reason || 'Сигнал надежный';
         // Заменяем "Цена" на "Цена UP" или "Цена DOWN" в reason, если там просто "Цена"
         let enhancedReason = reasonText;
         if (reasonText.includes('Цена упала') || reasonText.includes('Цена выросла') || reasonText.includes('Цена стабильна') || reasonText.includes('Цена низкая') || reasonText.includes('Цена очень низкая')) {
           enhancedReason = reasonText.replace(/Цена/g, `Цена ${checkOutcome}`);
         }
-        series.events[series.hedgeValidationEventIndex].message = `Проверяю сигнал для хеджа Step ${nextStep}: ${displaySymbols} Сигнал нестабилен - Покупка хеджа: ${enhancedReason}${priceChangeInfo}`;
+        series.events[series.hedgeValidationEventIndex].message = `Проверяю сигнал для хеджа Step ${nextStep}: ${displaySymbols} Сигнал надежный - Покупка хеджа: ${enhancedReason}${priceChangeInfo}`;
       }
       
       await series.save();
@@ -1652,9 +1652,9 @@ class TradingEmulator {
       // Покупаем хедж
       await this.buyNextStepEarly(series, context);
       
-      console.log(`[TRADE] [${this.botId}] ${asset}: Hedge validation: signal unstable, bought hedge for Step ${nextStep}`);
+      console.log(`[TRADE] [${this.botId}] ${asset}: Hedge validation: signal stable, bought hedge for Step ${nextStep}`);
     } else {
-      // Сигнал надежный - не покупаем хедж
+      // Сигнал ненадежный - не покупаем хедж (рынок закроется красным, мы выиграем)
       series.hedgeValidationState = 'rejected';
       
       // Формируем финальное сообщение с причиной отказа
@@ -1754,21 +1754,21 @@ class TradingEmulator {
     // Проверка: за 1 минуту до начала/конца принимаем решение
     if (timeToEnd !== null && timeToEnd <= 60) {
       // Принимаем решение на основе checkStability
-      // Если сигнал надежный (stable = true) → НЕ покупаем хедж (мы выиграем)
-      // Если сигнал нестабилен (stable = false) → покупаем хедж (нужна защита)
-      if (!stabilityResult.stable && series.hedgeValidationHistory.length >= 3) {
-        // Сигнал нестабилен - покупаем хедж для защиты
+      // Если сигнал надежный (stable = true) → покупаем хедж (рынок закроется зеленым, нужна защита)
+      // Если сигнал ненадежный (stable = false) → не покупаем хедж (рынок закроется красным, мы выиграем)
+      if (stabilityResult.stable && series.hedgeValidationHistory.length >= 3) {
+        // Сигнал надежный - покупаем хедж (рынок закроется зеленым)
         await this.completeHedgeValidation(series, true, context, stabilityResult);
       } else {
-        // Сигнал надежный - не покупаем хедж
+        // Сигнал ненадежный - не покупаем хедж (рынок закроется красным, мы выиграем)
         await this.completeHedgeValidation(series, false, context, stabilityResult);
       }
       return;
     }
     
-    // Проверка условий покупки: если сигнал нестабилен (по checkStability) и есть достаточно данных
-    if (series.hedgeValidationHistory.length >= 3 && !stabilityResult.stable) {
-      // Сигнал нестабилен - покупаем хедж для защиты
+    // Проверка условий покупки: если сигнал надежный (по checkStability) и есть достаточно данных
+    if (series.hedgeValidationHistory.length >= 3 && stabilityResult.stable) {
+      // Сигнал надежный - покупаем хедж (рынок закроется зеленым)
       await this.completeHedgeValidation(series, true, context, stabilityResult);
     }
   }
