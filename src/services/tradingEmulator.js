@@ -2257,6 +2257,7 @@ class TradingEmulator {
     // Обновляем статистику
     stats.currentBalance += totalReturn;
     stats.totalPnL += pnl;
+    stats.totalCommissions += series.totalCommission; // Учитываем все комиссии (вход + выход)
     stats.cancelledTrades++;
     await stats.save();
     series.status = 'cancelled';
