@@ -928,20 +928,20 @@ class TradingEmulator {
     const isVeryHighPrice = lastPrice > 0.95;
     
     // ПРИОРИТЕТНАЯ ПРОВЕРКА: абсолютное значение цены
-    // Для RED сигнала, если цена UP > 0.5, это означает отмену сигнала (рынок уже ушел в GREEN)
+    // Для RED сигнала (ставим на GREEN): если цена UP > 0.5, это означает что рынок идет в GREEN → сигнал подтверждается (stable = true)
     if (signalColor === 'red' && lastPrice > 0.5) {
       return {
-        stable: false,
-        reason: `Цена UP ($${lastPrice.toFixed(4)}) выше $0.50 - рынок ушел в GREEN, сигнал RED отменяется`,
+        stable: true,
+        reason: `Цена UP ($${lastPrice.toFixed(4)}) выше $0.50 - рынок идет в GREEN, сигнал RED подтверждается`,
         changePercent,
       };
     }
     
-    // Для GREEN сигнала, если цена DOWN > 0.5, это означает отмену сигнала (рынок уже ушел в RED)
+    // Для GREEN сигнала (ставим на RED): если цена DOWN > 0.5, это означает что рынок идет в RED → сигнал подтверждается (stable = true)
     if (signalColor === 'green' && lastPrice > 0.5) {
       return {
-        stable: false,
-        reason: `Цена DOWN ($${lastPrice.toFixed(4)}) выше $0.50 - рынок ушел в RED, сигнал GREEN отменяется`,
+        stable: true,
+        reason: `Цена DOWN ($${lastPrice.toFixed(4)}) выше $0.50 - рынок идет в RED, сигнал GREEN подтверждается`,
         changePercent,
       };
     }
