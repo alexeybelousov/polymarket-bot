@@ -1151,7 +1151,10 @@ class TradingEmulator {
     historyForStability.push(historyRecord);
     
     // Используем checkStability для определения стабильности
-    const stabilityResult = this.checkStability(historyForStability, series.signalColor);
+    // Для хеджа мы ставим на betColor, поэтому проверяем стабильность betColor
+    // Если ставим на GREEN, проверяем стабильность GREEN (передаем 'green')
+    // Если ставим на RED, проверяем стабильность RED (передаем 'red')
+    const stabilityResult = this.checkStability(historyForStability, series.betColor);
     const matches = stabilityResult.stable;
     const symbol = matches ? '+' : '-';
     
@@ -1417,8 +1420,11 @@ class TradingEmulator {
     const polymarket = require('./polymarket');
     const nextStep = series.currentStep + 1;
     
-    // Определяем какую цену проверяем (тот же сигнал что и для первого шага)
-    const checkOutcome = series.signalColor === 'red' ? 'up' : 'down';
+    // Определяем какую цену проверяем
+    // Для хеджа мы ставим на betColor, поэтому проверяем цену того исхода, на который ставим
+    // Если ставим на GREEN (down) - проверяем цену DOWN
+    // Если ставим на RED (up) - проверяем цену UP
+    const checkOutcome = series.betColor === 'green' ? 'down' : 'up';
     const polySlug = this.convertToPolymarketSlug(marketSlug);
     
     let price = null;
@@ -1468,7 +1474,10 @@ class TradingEmulator {
     historyForStability.push(historyRecord);
     
     // Используем checkStability для определения стабильности
-    const stabilityResult = this.checkStability(historyForStability, series.signalColor);
+    // Для хеджа мы ставим на betColor, поэтому проверяем стабильность betColor
+    // Если ставим на GREEN, проверяем стабильность GREEN (передаем 'green')
+    // Если ставим на RED, проверяем стабильность RED (передаем 'red')
+    const stabilityResult = this.checkStability(historyForStability, series.betColor);
     const matches = stabilityResult.stable;
     const symbol = matches ? '+' : '-';
     
