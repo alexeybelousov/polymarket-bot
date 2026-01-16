@@ -1655,7 +1655,8 @@ class TradingEmulator {
     }));
     
     // Используем checkStability для принятия решения
-    const stabilityResult = this.checkStability(historyForStability, series.signalColor);
+    // Для хеджа мы ставим на betColor, поэтому проверяем стабильность betColor
+    const stabilityResult = this.checkStability(historyForStability, series.betColor);
     
     // Проверка: за 1 минуту до начала/конца принимаем решение
     if (timeToEnd !== null && timeToEnd <= 60) {
