@@ -71,6 +71,15 @@
       border-color: var(--blue);
       color: white;
     }
+    .filter-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .filter-btn:disabled:hover {
+      background: var(--bg3);
+      border-color: var(--border);
+      color: var(--text2);
+    }
     
     
     .markets-wrapper {
@@ -268,9 +277,8 @@
     <header>
       <div style="display: flex; align-items: center; gap: 24px;">
         <div class="logo">📊 <span>Polymarket</span> Monitor</div>
-        <div class="filters">
-          <button class="filter-btn" data-asset="btc">BTC</button>
-          <button class="filter-btn active" data-asset="eth">ETH</button>
+        <div class="filters" id="bot-filters">
+          <!-- Кнопки ботов будут добавлены динамически -->
         </div>
       </div>
       <div class="meta">
@@ -282,9 +290,8 @@
     
     <div class="markets-wrapper">
       <div class="time-indicator"></div>
-      <div class="bot-labels">
-        <div class="bot-label">Bot 2</div>
-        <div class="bot-label">Bot 3</div>
+      <div class="bot-labels" id="bot-labels">
+        <!-- Метки ботов будут добавлены динамически -->
       </div>
       <div class="markets-container" id="markets-container"></div>
     </div>
@@ -299,7 +306,7 @@
     let allBots = [];
     let marketsStartTime = null; // Время начала движения столбцов
     let marketDuration = 15 * 60; // 15 минут в секундах
-    let selectedAsset = 'eth'; // Выбранный актив по умолчанию
+    let selectedBots = []; // Выбранные боты (максимум 2)
     
     function getEventClass(type) {
       if (type === 'series_opened') return 'neutral';
@@ -360,7 +367,77 @@
       try {
         const res = await fetch('/api/trading/bots');
         allBots = await res.json();
+        
+        // Создаем кнопки фильтров для ботов
+        const filtersContainer = document.getElementById('bot-filters');
+        if (filtersContainer) {
+          filtersContainer.innerHTML = '';
+          allBots.forEach((bot, index) => {
+            const btn = document.createElement('button');
+            btn.className = 'filter-btn';
+            btn.dataset.botId = bot.botId;
+            btn.textContent = bot.name || bot.botId;
+            
+            // Первые 2 бота активны по умолчанию
+            if (index < 2) {
+              btn.classList.add('active');
+              selectedBots.push(bot.botId);
+            }
+            
+            // Если ботов больше 2, остальные disabled
+            if (index >= 2) {
+              btn.disabled = true;
+            }
+            
+            btn.addEventListener('click', () => {
+              if (btn.disabled) return;
+              
+              const isActive = btn.classList.contains('active');
+              
+              if (isActive) {
+                // Убираем бота из выбранных
+                btn.classList.remove('active');
+                selectedBots = selectedBots.filter(id => id !== bot.botId);
+              } else {
+                // Добавляем бота, если не достигнут лимит
+                if (selectedBots.length < 2) {
+                  btn.classList.add('active');
+                  selectedBots.push(bot.botId);
+                }
+              }
+              
+              // Обновляем disabled состояние всех кнопок
+              updateBotFiltersState();
+              
+              // Обновляем метки ботов
+              updateBotLabels();
+              
+              // Перезагружаем данные и перерисовываем рынки
+              loadSeries();
+              renderMarkets();
+            });
+            
+            filtersContainer.appendChild(btn);
+          });
+          
+          // Обновляем метки ботов при первой загрузке
+          updateBotLabels();
+        }
       } catch(e) { console.error(e); }
+    }
+    
+    function updateBotFiltersState() {
+      document.querySelectorAll('.filter-btn[data-bot-id]').forEach(btn => {
+        const botId = btn.dataset.botId;
+        const isSelected = selectedBots.includes(botId);
+        
+        // Если бот не выбран и уже выбрано 2 бота, disabled
+        if (!isSelected && selectedBots.length >= 2) {
+          btn.disabled = true;
+        } else {
+          btn.disabled = false;
+        }
+      });
     }
     
     async function loadMarkets() {
@@ -370,18 +447,20 @@
         
         console.log('[MONITOR] Markets data:', data);
         
-        // Получаем текущий рынок выбранного актива
-        const assetData = data[selectedAsset];
+        // Используем ETH по умолчанию (оба бота торгуют ETH)
+        const assetData = data.eth || data.btc;
+        const defaultAsset = data.eth ? 'eth' : 'btc';
+        
         if (!assetData) {
-          console.error(`[MONITOR] No ${selectedAsset.toUpperCase()} data found`);
+          console.error('[MONITOR] No market data found');
           return;
         }
         
         const currentSlug = assetData.current?.slug;
-        console.log(`[MONITOR] ${selectedAsset.toUpperCase()} current slug:`, currentSlug);
+        console.log(`[MONITOR] ${defaultAsset.toUpperCase()} current slug:`, currentSlug);
         
         if (!currentSlug) {
-          console.error(`[MONITOR] No ${selectedAsset.toUpperCase()} current slug found`);
+          console.error(`[MONITOR] No current slug found`);
           return;
         }
         
@@ -399,14 +478,13 @@
         
         // Определяем формат slug и базовый префикс
         const isBinance = currentSlug.startsWith('binance-');
-        const assetUpper = selectedAsset.toUpperCase();
-        const assetPair = selectedAsset === 'btc' ? 'btcusdt' : 'ethusdt';
+        const assetPair = defaultAsset === 'btc' ? 'btcusdt' : 'ethusdt';
         
         // Будущий рынок (справа)
         const futureTs = currentMarket.timestamp + marketInterval;
         const futureSlug = isBinance
           ? `binance-${assetPair}-${futureTs * 1000}` // Binance использует миллисекунды
-          : `${selectedAsset}-updown-15m-${futureTs}`;
+          : `${defaultAsset}-updown-15m-${futureTs}`;
         newMarkets.push({
           timestamp: futureTs,
           slug: futureSlug,
@@ -427,7 +505,7 @@
           // Формируем slug в зависимости от формата исходного
           const slug = isBinance 
             ? `binance-${assetPair}-${ts * 1000}` // Binance использует миллисекунды
-            : `${selectedAsset}-updown-15m-${ts}`;
+            : `${defaultAsset}-updown-15m-${ts}`;
           
           // Получаем цвет из API данных для предыдущих рынков
           let pastColor = null;
@@ -459,16 +537,24 @@
     
     async function loadSeries() {
       try {
-        const [bot2Res, bot3Res] = await Promise.all([
-          fetch('/api/trading/series?botId=bot2&limit=1000'),
-          fetch('/api/trading/series?botId=bot3&limit=1000'),
-        ]);
+        // Загружаем серии только для выбранных ботов
+        const promises = selectedBots.map(botId => 
+          fetch(`/api/trading/series?botId=${botId}&limit=1000`)
+        );
         
-        series.bot2 = await bot2Res.json();
-        series.bot3 = await bot3Res.json();
+        const responses = await Promise.all(promises);
+        const seriesData = await Promise.all(responses.map(r => r.json()));
         
-        console.log('[MONITOR] Bot2 series:', series.bot2.length);
-        console.log('[MONITOR] Bot3 series:', series.bot3.length);
+        // Очищаем старые данные
+        Object.keys(series).forEach(key => {
+          if (key.startsWith('bot')) delete series[key];
+        });
+        
+        // Сохраняем данные по botId
+        selectedBots.forEach((botId, index) => {
+          series[botId] = seriesData[index];
+          console.log(`[MONITOR] ${botId} series:`, series[botId].length);
+        });
         
         renderSeries();
       } catch(e) { 
@@ -500,18 +586,25 @@
         // Для polymarket формата: btc-updown-15m-1768412700 -> btc-updown-15m-1768412700
         let displaySlug = market.slug;
         if (displaySlug.startsWith('binance-')) {
-          // Извлекаем timestamp (миллисекунды) и конвертируем в секунды
-          const ms = parseInt(displaySlug.split('-').pop());
+          // Извлекаем asset и timestamp
+          const parts = displaySlug.split('-');
+          const assetPair = parts[1]; // btcusdt или ethusdt
+          const asset = assetPair.substring(0, 3); // btc или eth
+          const ms = parseInt(parts[2]);
           const seconds = Math.floor(ms / 1000);
-          displaySlug = `${selectedAsset}-updown-15m-${seconds}`;
+          displaySlug = `${asset}-updown-15m-${seconds}`;
         }
+        
+        // Создаем секции для выбранных ботов
+        const botSections = selectedBots.map(botId => 
+          `<div class="bot-section ${botId}"></div>`
+        ).join('');
         
         col.innerHTML = `
           <div class="market-header">
             <div class="market-slug">${displaySlug}</div>
           </div>
-          <div class="bot-section bot2"></div>
-          <div class="bot-section bot3"></div>
+          ${botSections}
         `;
         
         // Добавляем метку времени между столбцами (справа от текущего)
@@ -531,15 +624,26 @@
       renderSeries();
     }
     
+    function updateBotLabels() {
+      const labelsContainer = document.getElementById('bot-labels');
+      if (labelsContainer) {
+        labelsContainer.innerHTML = '';
+        selectedBots.forEach(botId => {
+          const bot = allBots.find(b => b.botId === botId);
+          const label = document.createElement('div');
+          label.className = 'bot-label';
+          label.textContent = bot ? (bot.name || botId) : botId;
+          labelsContainer.appendChild(label);
+        });
+      }
+    }
+    
     function renderSeries() {
-      if (!markets.length) return;
+      if (!markets.length || selectedBots.length === 0) return;
       
       // Очищаем предыдущие серии из всех столбцов
       document.querySelectorAll('.bot-section').forEach(section => {
-        // Удаляем все карточки, кроме bot-label
-        const label = section.querySelector('.bot-label');
         section.innerHTML = '';
-        if (label) section.appendChild(label);
       });
       
       // Фильтруем серии, которые видны в рамках 6 столбцов
@@ -547,12 +651,12 @@
       const maxTimestamp = Math.max(...markets.map(m => m.timestamp));
       const marketInterval = 15 * 60;
       
-      [series.bot2, series.bot3].forEach((botSeries, botIndex) => {
-        const botId = botIndex === 0 ? 'bot2' : 'bot3';
+      // Обрабатываем серии для каждого выбранного бота
+      selectedBots.forEach(botId => {
+        const botSeries = series[botId] || [];
         
-        // Фильтруем только серии выбранного актива
+        // Фильтруем серии по времени (убрана фильтрация по валюте)
         const visibleSeries = botSeries.filter(s => {
-          if (s.asset !== selectedAsset) return false;
           if (!s.startedAt) return false;
           const startTime = new Date(s.startedAt).getTime() / 1000;
           const endTime = s.endedAt ? new Date(s.endedAt).getTime() / 1000 : Date.now() / 1000;
@@ -659,9 +763,10 @@
         
         // Ищем событие series_opened для этого рынка
         let signalColor = null;
-        [series.bot2, series.bot3].forEach(botSeries => {
+        selectedBots.forEach(botId => {
+          const botSeries = series[botId] || [];
           botSeries.forEach(s => {
-            if (s.asset !== selectedAsset || !s.events) return;
+            if (!s.events) return;
             const marketStart = market.timestamp;
             const marketEnd = market.timestamp + (15 * 60);
             
@@ -742,22 +847,11 @@
       updateMarketsPosition();
     }
     
-    // Обработчики кнопок фильтров
-    document.querySelectorAll('.filter-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        // Убираем активный класс со всех кнопок
-        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-        // Добавляем активный класс к нажатой кнопке
-        btn.classList.add('active');
-        // Обновляем выбранный актив
-        selectedAsset = btn.dataset.asset;
-        // Перезагружаем данные
-        update();
-      });
-    });
-    
-    loadBots();
-    update();
+    // Инициализация: сначала загружаем ботов, потом данные
+    (async () => {
+      await loadBots();
+      update();
+    })();
     setInterval(update, 1000); // Обновляем каждую секунду для плавного движения
     setInterval(updateMarketsPosition, 100); // Плавное движение каждые 100мс
   </script>

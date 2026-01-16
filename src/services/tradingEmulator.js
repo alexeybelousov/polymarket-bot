@@ -9,22 +9,12 @@ const User = require('../models/User');
 // Конфигурации для нескольких ботов
 const TRADING_CONFIGS = {
   bot1: {
-    name: '3 свечи, 2%, 4 шага, ≤$0.55',              // Имя бота для отображения
-    firstBetPercent: 0.02,      // Первая ставка: 2% от депозита
-    signalType: '3candles',     // На каком сигнале начинается торговля: 3 свечи
-    maxSteps: 4,                // Количество шагов
-    baseDeposit: 100,           // Базовый депозит: $100
-    maxPrice: 0.55,             // Верхний предел цены (не входим если цена выше)
-    entryFee: 0.015,            // Комиссия на вход: 1.5%
-    exitFee: 0.015,             // Комиссия на выход: 1.5%
-    buyStrategy: 'signal',      // Тип покупки: "signal" - покупаем сразу по сигналу, "validate" - валидируем рынок перед покупкой
-  },
-  bot2: {
-    name: '2 свечи, 1.5%, 3 шага (break-even), ≤$0.55',              // Имя бота для отображения
+    name: 'ETH signal 1,5% ≤$0.55',              // Имя бота для отображения
+    asset: 'eth',              // Валюта для торговли: 'eth' или 'btc'
     firstBetPercent: 0.015,     // Первая ставка: 1,5% от депозита
     signalType: '2candles',     // На каком сигнале начинается торговля: 2 свечи
     maxSteps: 3,                // Количество шагов
-    baseDeposit: 100,           // Базовый депозит: $100
+    baseDeposit: 1000,           // Базовый депозит: $100
     maxPrice: 0.55,             // Верхний предел цены (не входим если цена выше)
     entryFee: 0.015,            // Комиссия на вход: 1.5%
     exitFee: 0.015,             // Комиссия на выход: 1.5%
@@ -32,12 +22,41 @@ const TRADING_CONFIGS = {
     breakEvenOnLastStep: true,  // На последнем шаге просто покрываем убытки без прибыли
     cooldownAfterFullLoss: 15 * 60 * 1000, // 15 минут в миллисекундах после полного проигрыша
   },
-  bot3: {
-    name: '2 свечи, 1.5%, 3 шага (validated), ≤$0.55',              // Имя бота для отображения
+  bot2: {
+    name: 'ETH validate 1,5% ≤$0.55',              // Имя бота для отображения
+    asset: 'eth',              // Валюта для торговли: 'eth' или 'btc'
     firstBetPercent: 0.015,     // Первая ставка: 1,5% от депозита
     signalType: '2candles',     // На каком сигнале начинается торговля: 2 свечи
     maxSteps: 3,                // Количество шагов
-    baseDeposit: 100,           // Базовый депозит: $1000
+    baseDeposit: 1000,           // Базовый депозит: $100
+    maxPrice: 0.55,             // Верхний предел цены (не входим если цена выше)
+    entryFee: 0.015,            // Комиссия на вход: 1.5%
+    exitFee: 0.015,             // Комиссия на выход: 1.5%
+    buyStrategy: 'validate',  // Тип покупки: "signal" - покупаем сразу по сигналу, "validate" - валидируем рынок перед покупкой
+    breakEvenOnLastStep: true,  // На последнем шаге просто покрываем убытки без прибыли
+    cooldownAfterFullLoss: 15 * 60 * 1000, // 15 минут в миллисекундах после полного проигрыша
+  },
+  bot3: {
+    name: 'BTC signal 1,5% ≤$0.55',              // Имя бота для отображения
+    asset: 'btc',              // Валюта для торговли: 'eth' или 'btc'
+    firstBetPercent: 0.015,     // Первая ставка: 1,5% от депозита
+    signalType: '2candles',     // На каком сигнале начинается торговля: 2 свечи
+    maxSteps: 3,                // Количество шагов
+    baseDeposit: 1000,           // Базовый депозит: $100
+    maxPrice: 0.55,             // Верхний предел цены (не входим если цена выше)
+    entryFee: 0.015,            // Комиссия на вход: 1.5%
+    exitFee: 0.015,             // Комиссия на выход: 1.5%
+    buyStrategy: 'signal',      // Тип покупки: "signal" - покупаем сразу по сигналу, "validate" - валидируем рынок перед покупкой
+    breakEvenOnLastStep: true,  // На последнем шаге просто покрываем убытки без прибыли
+    cooldownAfterFullLoss: 15 * 60 * 1000, // 15 минут в миллисекундах после полного проигрыша
+  },
+  bot4: {
+    name: 'BTC validate 1,5% ≤$0.55',              // Имя бота для отображения
+    asset: 'btc',              // Валюта для торговли: 'eth' или 'btc'
+    firstBetPercent: 0.015,     // Первая ставка: 1,5% от депозита
+    signalType: '2candles',     // На каком сигнале начинается торговля: 2 свечи
+    maxSteps: 3,                // Количество шагов
+    baseDeposit: 1000,           // Базовый депозит: $100
     maxPrice: 0.55,             // Верхний предел цены (не входим если цена выше)
     entryFee: 0.015,            // Комиссия на вход: 1.5%
     exitFee: 0.015,             // Комиссия на выход: 1.5%
@@ -76,7 +95,7 @@ function getShortHash(tokenId) {
 const MS_PER_MINUTE = 60 * 1000;
 
 class TradingEmulator {
-  constructor(bot, dataProvider, botId = 'bot1', config = TRADING_CONFIGS.bot1) {
+  constructor(bot, dataProvider, botId = 'bot2', config = TRADING_CONFIGS.bot2) {
     this.bot = bot;
     this.dataProvider = dataProvider;
     this.botId = botId;
@@ -333,13 +352,20 @@ class TradingEmulator {
   async onSignal(type, signalColor, signalMarketSlug, nextMarketSlug, signalType = '3candles') {
     console.log(`[TRADE] [${this.botId}] Received signal: ${type.toUpperCase()} ${signalType} ${signalColor} (config: ${this.config.signalType})`);
     
+    // Проверяем валюту - бот торгует только на свою валюту из конфига
+    const configAsset = this.config.asset || null;
+    if (configAsset && configAsset.toLowerCase() !== type.toLowerCase()) {
+      console.log(`[TRADE] [${this.botId}] ${type.toUpperCase()}: Asset mismatch (${type} !== ${configAsset}), skipping`);
+      return; // Пропускаем сигналы по другим валютам
+    }
+    
     // Проверяем тип сигнала - бот торгует только на сигналы, соответствующие его конфигу
     if (this.config.signalType !== signalType) {
       console.log(`[TRADE] [${this.botId}] ${type.toUpperCase()}: Signal type mismatch (${signalType} !== ${this.config.signalType}), skipping`);
       return; // Пропускаем сигналы, которые не соответствуют конфигу бота
     }
     
-    console.log(`[TRADE] [${this.botId}] ${type.toUpperCase()}: Signal type matches, proceeding...`);
+    console.log(`[TRADE] [${this.botId}] ${type.toUpperCase()}: Signal type and asset match, proceeding...`);
     
     // Проверяем нет ли активной серии в activeSeries
     if (this.activeSeries.has(type)) {

@@ -52,11 +52,18 @@
     .stat-item.clickable { cursor: pointer; transition: all 0.2s; }
     .stat-item.clickable:hover { border-color: var(--blue); background: var(--bg3); }
     .stat-item.clickable.active { border-color: var(--blue); background: rgba(59, 130, 246, 0.1); }
-    .stat-value { font-size: 20px; font-weight: 600; }
+    .stat-value { font-size: 18px; font-weight: 600; }
     .stat-value.positive { color: var(--green); }
     .stat-value.negative { color: var(--red); }
     .stat-value.neutral { color: var(--yellow); }
     .stat-label { font-size: 10px; color: var(--text2); margin-top: 4px; }
+    
+    /* Адаптивность для мобильных устройств */
+    @media (max-width: 600px) {
+      .stats-row:first-of-type {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
 
     /* Series */
     .series-section { margin-bottom: 24px; }
@@ -277,12 +284,14 @@
     </div>
 
     <!-- Signals -->
+    <!-- Закомментировано для экономии места
     <div class="signals-grid">
       <div class="signal-box" id="sig-eth-3"><div class="signal-label">ETH 3с</div><div class="signal-status">—</div></div>
       <div class="signal-box" id="sig-eth-2"><div class="signal-label">ETH 2с</div><div class="signal-status">—</div></div>
       <div class="signal-box" id="sig-btc-3"><div class="signal-label">BTC 3с</div><div class="signal-status">—</div></div>
       <div class="signal-box" id="sig-btc-2"><div class="signal-label">BTC 2с</div><div class="signal-status">—</div></div>
     </div>
+    -->
 
     <!-- Bot Selector -->
     <div class="bot-toggle" id="bot-toggle" style="display: none; margin-bottom: 12px;">
@@ -293,9 +302,6 @@
     <div class="period-toggle">
       <button class="period-btn active" data-period="all" onclick="setPeriod('all')">Всего</button>
       <button class="period-btn" data-period="day" onclick="setPeriod('day')">За сутки</button>
-      <button class="period-btn active" data-asset="all" onclick="setAsset('all')">Все</button>
-      <button class="period-btn" data-asset="btc" onclick="setAsset('btc')">BTC</button>
-      <button class="period-btn" data-asset="eth" onclick="setAsset('eth')">ETH</button>
       <button class="stats-toggle-btn" onclick="toggleStats()" title="Скрыть/показать статистику">
         <span id="stats-toggle-icon">▼</span>
       </button>
@@ -375,7 +381,6 @@
     
     let currentFilter = 'all';
     let currentPeriod = 'all';
-    let currentAsset = 'all'; // Фильтр по валюте: 'all', 'btc', 'eth'
     let currentView = 'list';
     let allSeries = [];
     let showAll = false;
@@ -519,21 +524,6 @@
       }
     }
     
-    function setAsset(asset) {
-      currentAsset = asset;
-      showAll = false;
-      document.querySelectorAll('.period-btn[data-asset]').forEach(el => {
-        el.classList.toggle('active', el.dataset.asset === asset);
-      });
-      updateStats();
-      if (currentView === 'chart') {
-        renderChart();
-      } else {
-        const filteredSeries = filterSeries(allSeries);
-        document.getElementById('series-list').innerHTML = renderSeries(filteredSeries);
-      }
-    }
-    
     function toggleStats() {
       const statsSection = document.getElementById('stats-section');
       statsSection.classList.toggle('hidden');
@@ -551,8 +541,8 @@
     }
     
     function filterByAsset(series) {
-      if (currentAsset === 'all') return series;
-      return series.filter(s => s.asset.toLowerCase() === currentAsset);
+      // Всегда возвращаем все серии (фильтр по валюте убран)
+      return series;
     }
     
     function filterSeries(series) {
@@ -706,10 +696,11 @@
         document.getElementById('timer-btc').textContent = fmt(d.btc.timeToEnd);
         renderCandles('candles-eth', d.eth);
         renderCandles('candles-btc', d.btc);
-        updateSignal('sig-eth-3', d.eth, 3);
-        updateSignal('sig-eth-2', d.eth, 2);
-        updateSignal('sig-btc-3', d.btc, 3);
-        updateSignal('sig-btc-2', d.btc, 2);
+        // Закомментировано для экономии места
+        // updateSignal('sig-eth-3', d.eth, 3);
+        // updateSignal('sig-eth-2', d.eth, 2);
+        // updateSignal('sig-btc-3', d.btc, 3);
+        // updateSignal('sig-btc-2', d.btc, 2);
         document.getElementById('time').textContent = fmtTime(new Date());
       } catch(e) { console.error(e); }
     }
@@ -766,7 +757,7 @@
         : `${percentChange.toFixed(2)}%`;
       
       const balanceEl = document.getElementById('stat-balance');
-      balanceEl.textContent = `$${displayBalance.toFixed(2)} (${percentText})`;
+      balanceEl.innerHTML = `$${displayBalance.toFixed(2)} <span style="font-size: 10px;">(${percentText})</span>`;
       balanceEl.className = 'stat-value ' + (displayBalance >= initialDeposit ? 'positive' : 'negative');
       
       const pnlEl = document.getElementById('stat-pnl');

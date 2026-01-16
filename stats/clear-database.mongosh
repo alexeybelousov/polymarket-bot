@@ -1,0 +1,92 @@
+// Скрипт для полной очистки базы данных
+// ВНИМАНИЕ: Этот скрипт удалит ВСЕ данные из всех коллекций!
+
+use('polymarket-bot');
+
+print("=".repeat(70));
+print("ПОЛНАЯ ОЧИСТКА БАЗЫ ДАННЫХ");
+print("=".repeat(70));
+print("");
+
+// Список коллекций для очистки
+const collections = [
+  'tradeseries',
+  'tradingstats',
+  'signals',
+  'signallogs',
+  'users'
+];
+
+print("ШАГ 1: Проверка текущего состояния");
+print("-".repeat(70));
+
+let totalDocs = 0;
+collections.forEach(collectionName => {
+  const count = db[collectionName].countDocuments();
+  totalDocs += count;
+  if (count > 0) {
+    print(`  ${collectionName}: ${count} документов`);
+  }
+});
+
+print(`\nВсего документов: ${totalDocs}`);
+print("");
+
+if (totalDocs === 0) {
+  print("✅ База данных уже пуста!");
+  quit(0);
+}
+
+print("ШАГ 2: Удаление данных из коллекций");
+print("-".repeat(70));
+
+let deletedCount = 0;
+collections.forEach(collectionName => {
+  const count = db[collectionName].countDocuments();
+  if (count > 0) {
+    const result = db[collectionName].deleteMany({});
+    const deleted = result.deletedCount || 0;
+    deletedCount += deleted;
+    print(`  ${collectionName}: удалено ${deleted} документов`);
+  } else {
+    print(`  ${collectionName}: пусто (пропущено)`);
+  }
+});
+
+print("");
+print(`Всего удалено: ${deletedCount} документов`);
+print("");
+
+print("ШАГ 3: Проверка результата");
+print("-".repeat(70));
+
+let remainingDocs = 0;
+collections.forEach(collectionName => {
+  const count = db[collectionName].countDocuments();
+  remainingDocs += count;
+  if (count > 0) {
+    print(`  ⚠️  ${collectionName}: осталось ${count} документов`);
+  } else {
+    print(`  ✅ ${collectionName}: пусто`);
+  }
+});
+
+print("");
+
+if (remainingDocs === 0) {
+  print("=".repeat(70));
+  print("✅ БАЗА ДАННЫХ ПОЛНОСТЬЮ ОЧИЩЕНА!");
+  print("=".repeat(70));
+} else {
+  print("=".repeat(70));
+  print(`⚠️  ВНИМАНИЕ: Осталось ${remainingDocs} документов!`);
+  print("=".repeat(70));
+}
+
+print("");
+print("После очистки БД:");
+print("  - Все боты будут созданы заново с начальными депозитами из конфига");
+print("  - Все серии торговли будут удалены");
+print("  - Вся статистика будет сброшена");
+print("");
+
