@@ -1474,12 +1474,11 @@ class TradingEmulator {
     const nextStep = series.currentStep + 1;
     
     // Определяем какую цену проверяем
-    // Для хеджа логика такая же как для первой валидации:
-    // - Если ставим на RED (down) - проверяем цену DOWN (чтобы понять не ушел ли рынок в GREEN)
-    // - Если ставим на GREEN (up) - проверяем цену UP (чтобы понять не ушел ли рынок в RED)
-    // betColor = 'red' означает ставим на RED (down), проверяем DOWN
-    // betColor = 'green' означает ставим на GREEN (up), проверяем UP
-    const checkOutcome = series.betColor === 'red' ? 'down' : 'up';
+    // Для хеджа логика такая же как для первой валидации (используем исходный signalColor):
+    // - Если исходный сигнал был GREEN → проверяем цену DOWN (чтобы понять не ушел ли рынок в RED)
+    // - Если исходный сигнал был RED → проверяем цену UP (чтобы понять не ушел ли рынок в GREEN)
+    // Это соответствует логике monitor-signal-cancel.js: MONITOR_OUTCOME = SIGNAL_COLOR === 'green' ? 'down' : 'up'
+    const checkOutcome = series.signalColor === 'green' ? 'down' : 'up';
     const polySlug = this.convertToPolymarketSlug(marketSlug);
     
     let price = null;
