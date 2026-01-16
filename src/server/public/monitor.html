@@ -503,28 +503,14 @@
       [series.bot2, series.bot3].forEach((botSeries, botIndex) => {
         const botId = botIndex === 0 ? 'bot2' : 'bot3';
         
-        console.log(`[MONITOR] Processing ${botId}, total series: ${botSeries.length}`);
-        
         // Фильтруем только серии ETH (монитор для ETH)
         const visibleSeries = botSeries.filter(s => {
-          if (s.asset !== 'eth') {
-            console.log(`[MONITOR] ${botId}: Skipping series ${s._id} - asset is ${s.asset}, not eth`);
-            return false;
-          }
-          if (!s.startedAt) {
-            console.log(`[MONITOR] ${botId}: Skipping series ${s._id} - no startedAt`);
-            return false;
-          }
+          if (s.asset !== 'eth') return false;
+          if (!s.startedAt) return false;
           const startTime = new Date(s.startedAt).getTime() / 1000;
           const endTime = s.endedAt ? new Date(s.endedAt).getTime() / 1000 : Date.now() / 1000;
-          const isVisible = (startTime < maxTimestamp + marketInterval && endTime > minTimestamp - marketInterval);
-          if (!isVisible) {
-            console.log(`[MONITOR] ${botId}: Skipping series ${s._id} - outside visible time range`);
-          }
-          return isVisible;
+          return (startTime < maxTimestamp + marketInterval && endTime > minTimestamp - marketInterval);
         });
-        
-        console.log(`[MONITOR] ${botId}: Visible series: ${visibleSeries.length}`);
         
         // Ограничиваем количество
         const activeSeries = visibleSeries.filter(s => s.status === 'active');
@@ -532,8 +518,6 @@
         const seriesToShow = activeSeries.length > 0 
           ? [...activeSeries, ...completedSeries.slice(-5)]
           : completedSeries.slice(-10);
-        
-        console.log(`[MONITOR] ${botId}: Series to show: ${seriesToShow.length} (${activeSeries.length} active, ${completedSeries.length} completed)`);
         
         // Для каждой серии создаем карточки в соответствующих столбцах
         seriesToShow.forEach(seriesItem => {
@@ -566,10 +550,7 @@
         
         // Находим секцию бота в этом столбце
         const botSection = colEl.querySelector(`.bot-section.${botId}`);
-        if (!botSection) {
-          console.warn(`[MONITOR] ${botId}: Bot section not found in column ${market.slug}`);
-          return;
-        }
+        if (!botSection) return;
         
         // Находим события для этого столбца
         const columnEvents = (seriesItem.events || []).filter(event => {
