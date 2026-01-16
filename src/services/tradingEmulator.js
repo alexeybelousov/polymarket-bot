@@ -1125,9 +1125,9 @@ class TradingEmulator {
     const polymarket = require('./polymarket');
     
     // Определяем какую цену проверяем
-    // Для GREEN сигнала проверяем цену UP (зеленую) - хорошо ли она держится?
-    // Для RED сигнала проверяем цену DOWN (красную) - хорошо ли она держится?
-    const checkOutcome = series.signalColor === 'green' ? 'up' : 'down';
+    // Для RED сигнала (ставим на GREEN) проверяем цену UP (зеленую) - подтверждается ли сигнал?
+    // Для GREEN сигнала (ставим на RED) проверяем цену DOWN (красную) - подтверждается ли сигнал?
+    const checkOutcome = series.signalColor === 'red' ? 'up' : 'down';
     const polySlug = this.convertToPolymarketSlug(marketSlug);
     
     let price = null;
@@ -1273,9 +1273,9 @@ class TradingEmulator {
       
       // Вычисляем изменение цены для финального сообщения
       let priceChangeInfo = '';
-      const checkOutcome = series.validationHistory.length > 0 && series.validationHistory[0].checkOutcome 
-        ? series.validationHistory[0].checkOutcome.toUpperCase() 
-        : (series.signalColor === 'red' ? 'UP' : 'DOWN');
+      // Всегда определяем checkOutcome на основе текущей логики, а не из истории (которая может содержать старые данные)
+      // Для RED сигнала проверяем цену UP, для GREEN сигнала проверяем цену DOWN
+      const checkOutcome = series.signalColor === 'red' ? 'UP' : 'DOWN';
       
       if (series.validationHistory.length >= 2) {
         const firstPrice = series.validationHistory[0].price;
@@ -1325,9 +1325,9 @@ class TradingEmulator {
       
       // Вычисляем изменение цены для финального сообщения
       let priceChangeInfo = '';
-      const checkOutcome = series.validationHistory.length > 0 && series.validationHistory[0].checkOutcome 
-        ? series.validationHistory[0].checkOutcome.toUpperCase() 
-        : (series.signalColor === 'red' ? 'UP' : 'DOWN');
+      // Всегда определяем checkOutcome на основе текущей логики, а не из истории (которая может содержать старые данные)
+      // Для RED сигнала проверяем цену UP, для GREEN сигнала проверяем цену DOWN
+      const checkOutcome = series.signalColor === 'red' ? 'UP' : 'DOWN';
       
       if (series.validationHistory.length >= 2) {
         const firstPrice = series.validationHistory[0].price;
@@ -1417,11 +1417,21 @@ class TradingEmulator {
     // Если проверка еще не выполнялась, используем дефолтное значение
     const stabilityResult = series.lastStabilityResult || { stable: false, reason: 'Проверка еще не выполнена' };
     
+    // Проверяем, что последние 12 записей были стабильными (символ '+')
+    // Это гарантирует, что рынок был стабилен в течение 2 минут (12 записей × 10 сек = 120 сек)
+    let last12Stable = false;
+    if (series.validationHistory.length >= 12) {
+      const last12 = series.validationHistory.slice(-12);
+      const stableCount = last12.filter(h => h.matches === true).length;
+      // Требуем все 12 записей стабильными (100%) - полные 2 минуты стабильности
+      last12Stable = stableCount === 12;
+    }
+    
     // Проверка: за 1 минуту до конца принимаем решение
     if (timeToEnd !== null && timeToEnd <= 60) {
-      // Принимаем решение на основе checkStability
+      // Принимаем решение на основе checkStability И проверки стабильности последних 12 записей
       // checkStability требует минимум 12 записей для правильной оценки
-      if (stabilityResult.stable && series.validationHistory.length >= 12) {
+      if (stabilityResult.stable && series.validationHistory.length >= 12 && last12Stable) {
         // Рынок стабилен - покупаем
         await this.completeValidation(series, true, stabilityResult);
       } else {
@@ -1433,8 +1443,8 @@ class TradingEmulator {
     
     // Проверка условий покупки: если рынок стабилен (по checkStability) и есть достаточно данных
     // checkStability требует минимум 12 записей (2 минуты при интервале 10 сек) для правильной оценки
-    // Поэтому ждем минимум 12 проверок перед покупкой
-    if (series.validationHistory.length >= 12 && stabilityResult.stable) {
+    // Также проверяем, что последние 12 записей были стабильными
+    if (series.validationHistory.length >= 12 && stabilityResult.stable && last12Stable) {
       // Рынок стабилен в течение 2 минут - покупаем
       await this.completeValidation(series, true, stabilityResult);
     }
@@ -1484,9 +1494,9 @@ class TradingEmulator {
     
     // Определяем какую цену проверяем
     // Для хеджа логика такая же как для первой валидации:
-    // - Если исходный сигнал был GREEN → проверяем цену UP (зеленую) - хорошо ли она держится?
-    // - Если исходный сигнал был RED → проверяем цену DOWN (красную) - хорошо ли она держится?
-    const checkOutcome = series.signalColor === 'green' ? 'up' : 'down';
+    // - Если исходный сигнал был RED (ставим на GREEN) → проверяем цену UP (зеленую) - подтверждается ли сигнал?
+    // - Если исходный сигнал был GREEN (ставим на RED) → проверяем цену DOWN (красную) - подтверждается ли сигнал?
+    const checkOutcome = series.signalColor === 'red' ? 'up' : 'down';
     const polySlug = this.convertToPolymarketSlug(marketSlug);
     
     let price = null;
@@ -1633,9 +1643,9 @@ class TradingEmulator {
       
       // Вычисляем изменение цены для финального сообщения
       let priceChangeInfo = '';
-      const checkOutcome = series.hedgeValidationHistory.length > 0 && series.hedgeValidationHistory[0].checkOutcome 
-        ? series.hedgeValidationHistory[0].checkOutcome.toUpperCase() 
-        : (series.signalColor === 'green' ? 'DOWN' : 'UP');
+      // Всегда определяем checkOutcome на основе текущей логики, а не из истории (которая может содержать старые данные)
+      // Для RED сигнала проверяем цену UP, для GREEN сигнала проверяем цену DOWN
+      const checkOutcome = series.signalColor === 'red' ? 'UP' : 'DOWN';
       
       if (series.hedgeValidationHistory.length >= 2) {
         const firstPrice = series.hedgeValidationHistory[0].price;
@@ -1672,9 +1682,9 @@ class TradingEmulator {
       
       // Вычисляем изменение цены для финального сообщения
       let priceChangeInfo = '';
-      const checkOutcome = series.hedgeValidationHistory.length > 0 && series.hedgeValidationHistory[0].checkOutcome 
-        ? series.hedgeValidationHistory[0].checkOutcome.toUpperCase() 
-        : (series.signalColor === 'green' ? 'DOWN' : 'UP');
+      // Всегда определяем checkOutcome на основе текущей логики, а не из истории (которая может содержать старые данные)
+      // Для RED сигнала проверяем цену UP, для GREEN сигнала проверяем цену DOWN
+      const checkOutcome = series.signalColor === 'red' ? 'UP' : 'DOWN';
       
       if (series.hedgeValidationHistory.length >= 2) {
         const firstPrice = series.hedgeValidationHistory[0].price;
