@@ -918,8 +918,11 @@ class TradingEmulator {
     }
     
     // Расчёты по формуле Polymarket
-    const entryFee = amount * this.ENTRY_FEE_RATE;
-    const netAmount = amount - entryFee;
+    // amount - это сумма, которую нужно потратить (включая комиссию на вход)
+    // Комиссия считается от суммы без комиссии: entryFee = netAmount * ENTRY_FEE_RATE
+    // netAmount = amount / (1 + ENTRY_FEE_RATE)
+    const netAmount = amount / (1 + this.ENTRY_FEE_RATE);
+    const entryFee = amount - netAmount;
     const shares = netAmount / price;
     
     // Списываем с баланса (amount включает комиссию)
@@ -2251,6 +2254,9 @@ class TradingEmulator {
     }
     
     // Рассчитываем P&L
+    // totalInvested включает комиссию на вход (потому что amount включает комиссию)
+    // totalReturn уже после комиссии на выход
+    // P&L = totalReturn - totalInvested
     const pnl = totalReturn - series.totalInvested;
     series.totalPnL = pnl;
     
