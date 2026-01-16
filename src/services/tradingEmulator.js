@@ -666,9 +666,9 @@ class TradingEmulator {
       targetProfit = 0; // Просто покрываем убытки, без прибыли
       console.log(`[TRADE] [${this.botId}] ${series.asset.toUpperCase()}: Last step (${series.currentStep}), breakEven mode - no profit, just covering losses`);
     } else {
-      // Фиксированный профит 1.5% от депозита
-      targetProfit = this.config.baseDeposit * 0.015; // $1.50 при депозите $100
-      console.log(`[TRADE] [${this.botId}] ${series.asset.toUpperCase()}: Target profit: $${targetProfit.toFixed(2)} (1.5% of $${this.config.baseDeposit})`);
+      // Фиксированный профит 1.5% от текущего депозита
+      targetProfit = deposit * 0.015; // 1.5% от текущего депозита
+      console.log(`[TRADE] [${this.botId}] ${series.asset.toUpperCase()}: Target profit: $${targetProfit.toFixed(2)} (1.5% of $${deposit.toFixed(2)})`);
     }
     
     const amount = calculateDynamicBet(price, previousLosses, targetProfit, this.ENTRY_FEE_RATE, this.EXIT_FEE_RATE);
@@ -919,9 +919,9 @@ class TradingEmulator {
       targetProfit = 0; // Просто покрываем убытки, без прибыли
       console.log(`[TRADE] [${this.botId}] ${asset}: Hedge for last step (${nextStep}), breakEven mode - no profit, just covering losses`);
     } else {
-      // Фиксированный профит 1.5% от депозита
-      targetProfit = this.config.baseDeposit * 0.015; // $1.50 при депозите $100
-      console.log(`[TRADE] [${this.botId}] ${asset}: Hedge target profit: $${targetProfit.toFixed(2)} (1.5% of $${this.config.baseDeposit})`);
+      // Фиксированный профит 1.5% от текущего депозита
+      targetProfit = deposit * 0.015; // 1.5% от текущего депозита
+      console.log(`[TRADE] [${this.botId}] ${asset}: Hedge target profit: $${targetProfit.toFixed(2)} (1.5% of $${deposit.toFixed(2)})`);
     }
     
     const amount = calculateDynamicBet(price, previousLosses, targetProfit, this.ENTRY_FEE_RATE, this.EXIT_FEE_RATE);
