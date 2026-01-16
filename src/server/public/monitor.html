@@ -172,7 +172,7 @@
       flex-direction: column;
       gap: 8px;
     }
-    .bot-section.bot1 {
+    .bot-section.bot2 {
       border-bottom: 1px solid var(--border);
     }
     
@@ -248,8 +248,8 @@
     <div class="markets-wrapper">
       <div class="time-indicator"></div>
       <div class="bot-labels">
-        <div class="bot-label">Bot 1</div>
         <div class="bot-label">Bot 2</div>
+        <div class="bot-label">Bot 3</div>
       </div>
       <div class="markets-container" id="markets-container"></div>
     </div>
@@ -260,7 +260,7 @@
     const fmtTime = ts => new Date(ts).toLocaleTimeString('ru', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
     
     let markets = [];
-    let series = { bot1: [], bot2: [] };
+    let series = { bot2: [], bot3: [] };
     let allBots = [];
     let marketsStartTime = null; // Время начала движения столбцов
     let marketDuration = 15 * 60; // 15 минут в секундах
@@ -412,16 +412,16 @@
     
     async function loadSeries() {
       try {
-        const [bot1Res, bot2Res] = await Promise.all([
-          fetch('/api/trading/series?botId=bot1&limit=1000'),
+        const [bot2Res, bot3Res] = await Promise.all([
           fetch('/api/trading/series?botId=bot2&limit=1000'),
+          fetch('/api/trading/series?botId=bot3&limit=1000'),
         ]);
         
-        series.bot1 = await bot1Res.json();
         series.bot2 = await bot2Res.json();
+        series.bot3 = await bot3Res.json();
         
-        console.log('[MONITOR] Bot1 series:', series.bot1.length);
         console.log('[MONITOR] Bot2 series:', series.bot2.length);
+        console.log('[MONITOR] Bot3 series:', series.bot3.length);
         
         renderSeries();
       } catch(e) { 
@@ -463,8 +463,8 @@
           <div class="market-header">
             <div class="market-slug">${displaySlug}</div>
           </div>
-          <div class="bot-section bot1"></div>
           <div class="bot-section bot2"></div>
+          <div class="bot-section bot3"></div>
         `;
         
         // Добавляем метку времени между столбцами (справа от текущего)
@@ -500,8 +500,8 @@
       const maxTimestamp = Math.max(...markets.map(m => m.timestamp));
       const marketInterval = 15 * 60;
       
-      [series.bot1, series.bot2].forEach((botSeries, botIndex) => {
-        const botId = botIndex === 0 ? 'bot1' : 'bot2';
+      [series.bot2, series.bot3].forEach((botSeries, botIndex) => {
+        const botId = botIndex === 0 ? 'bot2' : 'bot3';
         
         // Фильтруем только серии ETH (монитор для ETH)
         const visibleSeries = botSeries.filter(s => {
@@ -612,7 +612,7 @@
         
         // Ищем событие series_opened для этого рынка
         let signalColor = null;
-        [series.bot1, series.bot2].forEach(botSeries => {
+        [series.bot2, series.bot3].forEach(botSeries => {
           botSeries.forEach(s => {
             if (s.asset !== 'eth' || !s.events) return;
             const marketStart = market.timestamp;

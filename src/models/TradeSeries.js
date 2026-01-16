@@ -23,6 +23,8 @@ const eventSchema = new mongoose.Schema({
       'hedge_bought',     // Куплен хедж
       'hedge_sold',       // Продан хедж
       'order_book',       // Информация об order book
+      'validation_started', // Начата валидация рынка
+      'validation_rejected', // Валидация не пройдена
     ],
     required: true 
   },
@@ -39,8 +41,46 @@ const tradeSeriesSchema = new mongoose.Schema({
   botId: { type: String, default: 'bot1', required: true }, // ID бота (для поддержки нескольких ботов)
   asset: { type: String, enum: ['eth', 'btc'], required: true },
   signalMarketSlug: { type: String }, // Рынок где был сигнал (для отслеживания отмены)
-  signalColor: { type: String, enum: ['green', 'red'], required: true },
-  betColor: { type: String, enum: ['green', 'red'], required: true },
+  signalColor: { type: String, enum: ['green', 'red', 'unknown'], required: true },
+  betColor: { type: String, enum: ['green', 'red', 'unknown'], required: true },
+  
+  // Валидация покупки
+  validationState: {
+    type: String,
+    enum: ['validating', 'validated', 'rejected'],
+    default: null,
+  },
+  validationHistory: [{
+    timestamp: Date,
+    price: Number,
+    matches: Boolean,  // соответствует ли цена сигналу
+    symbol: String,   // '+' или '-'
+  }],
+  validationEventIndex: {
+    type: Number,
+    default: null,
+  },
+  validationMarketSlug: String,  // Рынок который валидируем (рынок где сигнал)
+  lastValidationCheck: Date,     // Время последней проверки
+  
+  // Валидация хеджа
+  hedgeValidationState: {
+    type: String,
+    enum: ['validating', 'validated', 'rejected'],
+    default: null,
+  },
+  hedgeValidationHistory: [{
+    timestamp: Date,
+    price: Number,
+    matches: Boolean,  // соответствует ли цена сигналу
+    symbol: String,     // '+' или '-'
+  }],
+  hedgeValidationEventIndex: {
+    type: Number,
+    default: null,
+  },
+  hedgeValidationMarketSlug: String,  // Рынок который валидируем (следующий рынок)
+  hedgeLastValidationCheck: Date,      // Время последней проверки
   
   status: { 
     type: String, 

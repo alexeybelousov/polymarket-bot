@@ -17,8 +17,8 @@ const TRADING_CONFIGS = {
     maxPrice: 0.55,             // Верхний предел цены (не входим если цена выше)
     entryFee: 0.015,            // Комиссия на вход: 1.5%
     exitFee: 0.015,             // Комиссия на выход: 1.5%
-    buyStrategy: 'signal',      // Тип покупки: "signal" - покупаем сразу по сигналу, "validated" - проверяем стабильность перед покупкой
-    sellStrategy: 'early_exit', // Тип продажи: "early_exit" - продаем за 20 сек если сигнал изменился, "hold" - не продаем заранее
+    buyStrategy: 'signal',      // Тип покупки: "signal" - покупаем сразу по сигналу, "validate" - валидируем рынок перед покупкой
+    sellStrategy: 'signal', // Тип продажи: "signal" - продаем за 20 сек если сигнал изменился, "hold" - не продаем заранее
   },
   bot2: {
     name: '2 свечи, 1.5%, 3 шага (break-even), ≤$0.55',              // Имя бота для отображения
@@ -29,8 +29,7 @@ const TRADING_CONFIGS = {
     maxPrice: 0.55,             // Верхний предел цены (не входим если цена выше)
     entryFee: 0.015,            // Комиссия на вход: 1.5%
     exitFee: 0.015,             // Комиссия на выход: 1.5%
-    buyStrategy: 'signal',      // Тип покупки: "signal" - покупаем сразу по сигналу, "validated" - проверяем стабильность перед покупкой
-    sellStrategy: 'early_exit', // Тип продажи: "early_exit" - продаем за 20 сек если сигнал изменился, "hold" - не продаем заранее
+    buyStrategy: 'signal',      // Тип покупки: "signal" - покупаем сразу по сигналу, "validate" - валидируем рынок перед покупкой
     breakEvenOnLastStep: true,  // На последнем шаге просто покрываем убытки без прибыли
     cooldownAfterFullLoss: 15 * 60 * 1000, // 15 минут в миллисекундах после полного проигрыша
   },
@@ -45,8 +44,7 @@ const TRADING_CONFIGS = {
   //   exitFee: 0.015,             // Комиссия на выход: 1.5%
   //   breakEvenOnLastStep: true,  // На последнем шаге просто покрываем убытки без прибыли
   //   cooldownAfterFullLoss: 15 * 60 * 1000, // 15 минут в миллисекундах после полного проигрыша
-  //   buyStrategy: 'validated',  // Тип покупки: "signal" - покупаем сразу по сигналу, "validated" - проверяем стабильность перед покупкой (логика будет добавлена позже)
-  //   sellStrategy: 'hold',      // Тип продажи: "early_exit" - продаем за 20 сек если сигнал изменился, "hold" - не продаем заранее
+  //   buyStrategy: 'validate',  // Тип покупки: "signal" - покупаем сразу по сигналу, "validate" - валидируем рынок перед покупкой (логика будет добавлена позже)
   // },
 };
 
@@ -97,9 +95,8 @@ class TradingEmulator {
     
     // Значения по умолчанию для стратегий
     this.config.buyStrategy = this.config.buyStrategy || 'signal';
-    this.config.sellStrategy = this.config.sellStrategy || 'early_exit';
     
-    console.log(`[TRADE] [${botId}] Initialized with ENTRY_FEE_RATE: ${this.ENTRY_FEE_RATE}, EXIT_FEE_RATE: ${this.EXIT_FEE_RATE}, buyStrategy: ${this.config.buyStrategy}, sellStrategy: ${this.config.sellStrategy}`);
+    console.log(`[TRADE] [${botId}] Initialized with ENTRY_FEE_RATE: ${this.ENTRY_FEE_RATE}, EXIT_FEE_RATE: ${this.EXIT_FEE_RATE}, buyStrategy: ${this.config.buyStrategy}`);
   }
 
   async start() {
@@ -409,42 +406,57 @@ class TradingEmulator {
     console.log(`[TRADE] [${this.botId}] ${type.toUpperCase()}: Series created, buyStrategy: ${this.config.buyStrategy || 'signal'}`);
     
     // Покупаем первую ставку в зависимости от стратегии
-    let bought = false;
-    if (this.config.buyStrategy === 'validated') {
-      // TODO: Реализовать логику проверки стабильности перед покупкой
-      // Пока используем стратегию 'signal' как fallback
-      console.log(`[TRADE] [${this.botId}] ${type.toUpperCase()}: buyStrategy 'validated' not yet implemented, using 'signal' as fallback`);
-      bought = await this.buyStep(series);
+    if (this.config.buyStrategy === 'validate') {
+      // Начинаем валидацию рынка (валидируем рынок где сигнал)
+      series.validationState = 'validating';
+      series.validationMarketSlug = signalMarketSlug; // Валидируем рынок где сигнал
+      series.validationHistory = [];
+      series.lastValidationCheck = null;
+      
+      // Добавляем событие валидации
+      series.addEvent('validation_started', {
+        message: 'Валидирую рынок:',
+      });
+      // Сохраняем индекс последнего события (validation_started)
+      series.validationEventIndex = series.events.length - 1;
+      
+      // НЕ вызываем buyStep() - ждем валидации
+      await series.save();
+      this.activeSeries.set(type, series);
+      
+      console.log(`[TRADE] [${this.botId}] ${type.toUpperCase()}: Started validation for signal market ${signalMarketSlug}`);
+      await this.notifyUsers(series, 'Валидация рынка...');
+      return; // Выходим, не покупаем сразу
     } else {
       // buyStrategy === 'signal' (по умолчанию) - покупаем сразу по сигналу
-      bought = await this.buyStep(series);
-    }
-    
-    console.log(`[TRADE] [${this.botId}] ${type.toUpperCase()}: buyStep returned: ${bought}`);
-    if (!bought) {
-      // Не удалось купить — отменяем серию
-      series.status = 'cancelled';
-      series.endedAt = new Date();
-      series.addEvent('series_cancelled', {
-        message: '⛔ Серия отменена: не удалось купить (нет цены или баланса)',
-      });
+      const bought = await this.buyStep(series);
       
-      // Обновляем статистику
-      const stats = await TradingStats.getStats(this.botId);
-      stats.cancelledTrades++;
-      await stats.save();
+      console.log(`[TRADE] [${this.botId}] ${type.toUpperCase()}: buyStep returned: ${bought}`);
+      if (!bought) {
+        // Не удалось купить — отменяем серию
+        series.status = 'cancelled';
+        series.endedAt = new Date();
+        series.addEvent('series_cancelled', {
+          message: '⛔ Серия отменена: не удалось купить (нет цены или баланса)',
+        });
+        
+        // Обновляем статистику
+        const stats = await TradingStats.getStats(this.botId);
+        stats.cancelledTrades++;
+        await stats.save();
+        
+        await series.save();
+        console.log(`[TRADE] [${this.botId}] ${type.toUpperCase()}: Series cancelled - could not buy`);
+        await this.notifyUsers(series, '⛔ Серия отменена');
+        return;
+      }
       
       await series.save();
-      console.log(`[TRADE] [${this.botId}] ${type.toUpperCase()}: Series cancelled - could not buy`);
-      await this.notifyUsers(series, '⛔ Серия отменена');
-      return;
+      this.activeSeries.set(type, series);
+      
+      console.log(`[TRADE] [${this.botId}] ${type.toUpperCase()}: Series opened, betting ${betEmoji} ${betColor.toUpperCase()}`);
+      await this.notifyUsers(series, 'Серия открыта');
     }
-    
-    await series.save();
-    this.activeSeries.set(type, series);
-    
-    console.log(`[TRADE] [${this.botId}] ${type.toUpperCase()}: Series opened, betting ${betEmoji} ${betColor.toUpperCase()}`);
-    await this.notifyUsers(series, 'Серия открыта');
   }
 
   // ==================== ПОКУПКА СТАВКИ ====================
@@ -790,6 +802,435 @@ class TradingEmulator {
     await this.notifyUsers(series, `⚡ Хедж Step ${nextStep}`);
   }
 
+  // ==================== ВАЛИДАЦИЯ РЫНКА ====================
+  
+  /**
+   * Проверяет соответствует ли цена сигналу
+   */
+  checkPriceMatchesSignal(price, signalColor) {
+    // Сигнал RED → проверяем цену UP
+    // Если price <= 0.5 → сигнал подтверждается (RED)
+    // Если price > 0.5 → сигнал отменился (GREEN)
+    
+    // Сигнал GREEN → проверяем цену DOWN
+    // Если price <= 0.5 → сигнал подтверждается (GREEN)
+    // Если price > 0.5 → сигнал отменился (RED)
+    
+    return price <= 0.5;
+  }
+  
+  /**
+   * Выполняет проверку цены для валидации
+   */
+  async performValidationCheck(series, marketSlug) {
+    const asset = series.asset.toUpperCase();
+    const polymarket = require('./polymarket');
+    
+    // Определяем какую цену проверяем
+    // Для RED сигнала проверяем цену UP (чтобы понять не ушел ли рынок в GREEN)
+    // Для GREEN сигнала проверяем цену DOWN (чтобы понять не ушел ли рынок в RED)
+    const checkOutcome = series.signalColor === 'red' ? 'up' : 'down';
+    const polySlug = this.convertToPolymarketSlug(marketSlug);
+    
+    let price = null;
+    try {
+      const priceData = await polymarket.getBuyPrice(polySlug, checkOutcome);
+      if (priceData && priceData.price) {
+        price = priceData.price;
+      }
+    } catch (error) {
+      console.error(`[TRADE] [${this.botId}] Error getting price for validation:`, error.message);
+      return;
+    }
+    
+    if (!price) {
+      return;
+    }
+    
+    // Проверяем соответствует ли цена сигналу
+    const matches = this.checkPriceMatchesSignal(price, series.signalColor);
+    const symbol = matches ? '+' : '-';
+    
+    // Добавляем в историю
+    series.validationHistory.push({
+      timestamp: new Date(),
+      price,
+      matches,
+      symbol,
+    });
+    
+    // Ограничиваем историю (храним последние 50 записей)
+    if (series.validationHistory.length > 50) {
+      series.validationHistory = series.validationHistory.slice(-50);
+    }
+    
+    // Обновляем время последней проверки
+    series.lastValidationCheck = new Date();
+    
+    // Обновляем событие (показываем последние 20 символов)
+    const symbols = series.validationHistory.map(h => h.symbol).join('');
+    const displaySymbols = symbols.slice(-20); // Последние 20 символов
+    
+    // Обновляем событие по индексу
+    if (series.validationEventIndex !== undefined && series.validationEventIndex >= 0 && series.validationEventIndex < series.events.length) {
+      series.events[series.validationEventIndex].message = `Валидирую рынок: ${displaySymbols}`;
+    }
+    
+    await series.save();
+    
+    console.log(`[TRADE] [${this.botId}] ${asset}: Validation check: price $${price.toFixed(3)} → ${symbol} (${series.validationHistory.length} checks)`);
+  }
+  
+  /**
+   * Завершает валидацию (покупает или отменяет)
+   */
+  async completeValidation(series, success) {
+    const asset = series.asset.toUpperCase();
+    
+    if (success) {
+      // Валидация успешна - покупаем
+      series.validationState = 'validated';
+      
+      // Обновляем событие
+      if (series.validationEventIndex !== undefined && series.validationEventIndex >= 0 && series.validationEventIndex < series.events.length) {
+        const symbols = series.validationHistory.map(h => h.symbol).join('');
+        const displaySymbols = symbols.slice(-20);
+        series.events[series.validationEventIndex].message = `Валидирую рынок: ${displaySymbols} ✅ Покупка`;
+      }
+      
+      await series.save();
+      
+      // Покупаем
+      const bought = await this.buyStep(series);
+      if (!bought) {
+        // Не удалось купить - отменяем серию
+        series.status = 'cancelled';
+        series.endedAt = new Date();
+        series.addEvent('series_cancelled', {
+          message: '⛔ Серия отменена: не удалось купить после валидации',
+        });
+        await series.save();
+        this.activeSeries.delete(series.asset);
+        return;
+      }
+      
+      await series.save();
+      console.log(`[TRADE] [${this.botId}] ${asset}: Validation successful, bought Step 1`);
+      await this.notifyUsers(series, '✅ Валидация пройдена, покупка выполнена');
+    } else {
+      // Валидация не пройдена - отменяем серию
+      series.validationState = 'rejected';
+      
+      // Обновляем событие
+      if (series.validationEventIndex !== undefined && series.validationEventIndex >= 0 && series.validationEventIndex < series.events.length) {
+        const symbols = series.validationHistory.map(h => h.symbol).join('');
+        const displaySymbols = symbols.slice(-20);
+        series.events[series.validationEventIndex].message = `Валидирую рынок: ${displaySymbols} ❌ Отменено`;
+      }
+      
+      series.addEvent('validation_rejected', {
+        message: 'Валидация не пройдена, покупка отменена',
+      });
+      
+      series.status = 'cancelled';
+      series.endedAt = new Date();
+      
+      await series.save();
+      this.activeSeries.delete(series.asset);
+      
+      console.log(`[TRADE] [${this.botId}] ${asset}: Validation failed, series cancelled`);
+      await this.notifyUsers(series, '❌ Валидация не пройдена, серия отменена');
+    }
+  }
+  
+  /**
+   * Валидация рынка (основная функция)
+   */
+  async validateMarket(series) {
+    const asset = series.asset.toUpperCase();
+    
+    // Получаем контекст для рынка валидации (рынок где сигнал)
+    const isBinance = config.dataSource === 'binance';
+    const context = isBinance 
+      ? await this.dataProvider.get15mContext(series.asset)
+      : await this.dataProvider.get15mContext(config.polymarket.markets[series.asset]);
+    
+    // Находим рынок валидации в контексте
+    const validationSlug = series.validationMarketSlug; // Рынок где сигнал
+    const getTimestamp = (slug) => parseInt(slug.split('-').pop());
+    const validationTimestamp = getTimestamp(validationSlug);
+    
+    // Определяем какой это рынок (current, prev1, etc.)
+    const currentTimestamp = getTimestamp(context.slugs.current);
+    const prev1Timestamp = getTimestamp(context.slugs.prev1);
+    
+    let timeToEnd = null;
+    
+    if (validationTimestamp === currentTimestamp) {
+      // Валидируем текущий рынок (где сигнал)
+      timeToEnd = context.current.timeToEnd;
+    } else if (validationTimestamp === prev1Timestamp) {
+      // Рынок уже закрылся - валидация не нужна
+      console.log(`[TRADE] [${this.botId}] ${asset}: Validation market ${validationSlug} already closed`);
+      // Отменяем валидацию, не покупаем
+      await this.completeValidation(series, false);
+      return;
+    } else {
+      // Рынок еще не наступил или потеряли его
+      console.log(`[TRADE] [${this.botId}] ${asset}: Validation market ${validationSlug} not found in context`);
+      return;
+    }
+    
+    // Проверка: за 1 минуту до конца принимаем решение
+    if (timeToEnd !== null && timeToEnd <= 60) {
+      // Принимаем решение
+      const last10 = series.validationHistory.slice(-10);
+      const allMatch = last10.length === 10 && last10.every(h => h.matches === true);
+      
+      if (allMatch) {
+        // 10 подряд '+' - покупаем
+        await this.completeValidation(series, true);
+      } else {
+        // Нет 10 подряд '+' - не покупаем, отменяем серию
+        await this.completeValidation(series, false);
+      }
+      return;
+    }
+    
+    // Проверка интервала (каждые 30 сек)
+    const now = new Date();
+    if (series.lastValidationCheck === null) {
+      // Первая проверка
+      await this.performValidationCheck(series, validationSlug);
+    } else {
+      const timeSinceLastCheck = now - series.lastValidationCheck;
+      if (timeSinceLastCheck >= 30000) { // 30 секунд
+        await this.performValidationCheck(series, validationSlug);
+      }
+    }
+    
+    // Проверка условий покупки (10 подряд '+')
+    const last10 = series.validationHistory.slice(-10);
+    if (last10.length === 10) {
+      const allMatch = last10.every(h => h.matches === true);
+      if (allMatch) {
+        // 10 подряд '+' - покупаем
+        await this.completeValidation(series, true);
+      }
+    }
+  }
+
+  // ==================== ВАЛИДАЦИЯ ХЕДЖА ====================
+  
+  /**
+   * Начинает валидацию хеджа для следующего шага
+   */
+  async startHedgeValidation(series, context) {
+    const asset = series.asset.toUpperCase();
+    const nextMarketSlug = context.slugs.next;
+    const nextStep = series.currentStep + 1;
+    
+    // Проверяем, что следующий шаг не превышает maxSteps
+    if (nextStep > this.config.maxSteps) {
+      return; // Не валидируем если шаг превышает maxSteps
+    }
+    
+    // Начинаем валидацию хеджа
+    series.hedgeValidationState = 'validating';
+    series.hedgeValidationMarketSlug = nextMarketSlug; // Валидируем следующий рынок
+    series.hedgeValidationHistory = [];
+    series.hedgeLastValidationCheck = null;
+    
+    // Добавляем событие валидации хеджа
+    series.addEvent('validation_started', {
+      message: `Валидирую хедж Step ${nextStep}:`,
+    });
+    // Сохраняем индекс последнего события
+    series.hedgeValidationEventIndex = series.events.length - 1;
+    
+    await series.save();
+    
+    console.log(`[TRADE] [${this.botId}] ${asset}: Started hedge validation for Step ${nextStep} on market ${nextMarketSlug}`);
+  }
+  
+  /**
+   * Выполняет проверку цены для валидации хеджа
+   */
+  async performHedgeValidationCheck(series, marketSlug) {
+    const asset = series.asset.toUpperCase();
+    const polymarket = require('./polymarket');
+    const nextStep = series.currentStep + 1;
+    
+    // Определяем какую цену проверяем (тот же сигнал что и для первого шага)
+    const checkOutcome = series.signalColor === 'red' ? 'up' : 'down';
+    const polySlug = this.convertToPolymarketSlug(marketSlug);
+    
+    let price = null;
+    try {
+      const priceData = await polymarket.getBuyPrice(polySlug, checkOutcome);
+      if (priceData && priceData.price) {
+        price = priceData.price;
+      }
+    } catch (error) {
+      console.error(`[TRADE] [${this.botId}] Error getting price for hedge validation:`, error.message);
+      return;
+    }
+    
+    if (!price) {
+      return;
+    }
+    
+    // Проверяем соответствует ли цена сигналу
+    const matches = this.checkPriceMatchesSignal(price, series.signalColor);
+    const symbol = matches ? '+' : '-';
+    
+    // Добавляем в историю
+    series.hedgeValidationHistory.push({
+      timestamp: new Date(),
+      price,
+      matches,
+      symbol,
+    });
+    
+    // Ограничиваем историю (храним последние 50 записей)
+    if (series.hedgeValidationHistory.length > 50) {
+      series.hedgeValidationHistory = series.hedgeValidationHistory.slice(-50);
+    }
+    
+    // Обновляем время последней проверки
+    series.hedgeLastValidationCheck = new Date();
+    
+    // Обновляем событие (показываем последние 20 символов)
+    const symbols = series.hedgeValidationHistory.map(h => h.symbol).join('');
+    const displaySymbols = symbols.slice(-20);
+    
+    // Обновляем событие по индексу
+    if (series.hedgeValidationEventIndex !== undefined && series.hedgeValidationEventIndex >= 0 && series.hedgeValidationEventIndex < series.events.length) {
+      series.events[series.hedgeValidationEventIndex].message = `Валидирую хедж Step ${nextStep}: ${displaySymbols}`;
+    }
+    
+    await series.save();
+    
+    console.log(`[TRADE] [${this.botId}] ${asset}: Hedge validation check: price $${price.toFixed(3)} → ${symbol} (${series.hedgeValidationHistory.length} checks)`);
+  }
+  
+  /**
+   * Завершает валидацию хеджа (покупает или отменяет)
+   */
+  async completeHedgeValidation(series, success, context) {
+    const asset = series.asset.toUpperCase();
+    const nextStep = series.currentStep + 1;
+    
+    if (success) {
+      // Валидация успешна - покупаем хедж
+      series.hedgeValidationState = 'validated';
+      
+      // Обновляем событие
+      if (series.hedgeValidationEventIndex !== undefined && series.hedgeValidationEventIndex >= 0 && series.hedgeValidationEventIndex < series.events.length) {
+        const symbols = series.hedgeValidationHistory.map(h => h.symbol).join('');
+        const displaySymbols = symbols.slice(-20);
+        series.events[series.hedgeValidationEventIndex].message = `Валидирую хедж Step ${nextStep}: ${displaySymbols} ✅ Покупка`;
+      }
+      
+      await series.save();
+      
+      // Покупаем хедж
+      await this.buyNextStepEarly(series, context);
+      
+      console.log(`[TRADE] [${this.botId}] ${asset}: Hedge validation successful, bought hedge for Step ${nextStep}`);
+    } else {
+      // Валидация не пройдена - просто не покупаем хедж
+      series.hedgeValidationState = 'rejected';
+      
+      // Обновляем событие
+      if (series.hedgeValidationEventIndex !== undefined && series.hedgeValidationEventIndex >= 0 && series.hedgeValidationEventIndex < series.events.length) {
+        const symbols = series.hedgeValidationHistory.map(h => h.symbol).join('');
+        const displaySymbols = symbols.slice(-20);
+        series.events[series.hedgeValidationEventIndex].message = `Валидирую хедж Step ${nextStep}: ${displaySymbols} ❌ Отменено`;
+      }
+      
+      series.addEvent('validation_rejected', {
+        message: `Валидация хеджа Step ${nextStep} не пройдена, хедж не покупаем`,
+      });
+      
+      await series.save();
+      
+      console.log(`[TRADE] [${this.botId}] ${asset}: Hedge validation failed, not buying hedge for Step ${nextStep}`);
+    }
+  }
+  
+  /**
+   * Валидация хеджа (основная функция)
+   */
+  async validateHedgeMarket(series, context) {
+    const asset = series.asset.toUpperCase();
+    
+    // Находим рынок валидации (следующий рынок)
+    const validationSlug = series.hedgeValidationMarketSlug;
+    const getTimestamp = (slug) => parseInt(slug.split('-').pop());
+    const validationTimestamp = getTimestamp(validationSlug);
+    
+    // Определяем какой это рынок
+    const currentTimestamp = getTimestamp(context.slugs.current);
+    const nextTimestamp = getTimestamp(context.slugs.next);
+    
+    let timeToEnd = null;
+    
+    if (validationTimestamp === currentTimestamp) {
+      // Валидируем текущий рынок (следующий рынок уже начался)
+      timeToEnd = context.current.timeToEnd;
+    } else if (validationTimestamp === nextTimestamp) {
+      // Валидируем следующий рынок (еще не начался)
+      // Время до начала = timeToEnd текущего рынка + 15 минут
+      timeToEnd = context.current.timeToEnd + (15 * 60);
+    } else {
+      // Рынок уже прошел или еще не наступил
+      console.log(`[TRADE] [${this.botId}] ${asset}: Hedge validation market ${validationSlug} not found in context`);
+      // Отменяем валидацию хеджа
+      series.hedgeValidationState = 'rejected';
+      await series.save();
+      return;
+    }
+    
+    // Проверка: за 1 минуту до начала/конца принимаем решение
+    if (timeToEnd !== null && timeToEnd <= 60) {
+      // Принимаем решение
+      const last10 = series.hedgeValidationHistory.slice(-10);
+      const allMatch = last10.length === 10 && last10.every(h => h.matches === true);
+      
+      if (allMatch) {
+        // 10 подряд '+' - покупаем хедж
+        await this.completeHedgeValidation(series, true, context);
+      } else {
+        // Нет 10 подряд '+' - не покупаем хедж
+        await this.completeHedgeValidation(series, false, context);
+      }
+      return;
+    }
+    
+    // Проверка интервала (каждые 30 сек)
+    const now = new Date();
+    if (series.hedgeLastValidationCheck === null) {
+      // Первая проверка
+      await this.performHedgeValidationCheck(series, validationSlug);
+    } else {
+      const timeSinceLastCheck = now - series.hedgeLastValidationCheck;
+      if (timeSinceLastCheck >= 30000) { // 30 секунд
+        await this.performHedgeValidationCheck(series, validationSlug);
+      }
+    }
+    
+    // Проверка условий покупки (10 подряд '+')
+    const last10 = series.hedgeValidationHistory.slice(-10);
+    if (last10.length === 10) {
+      const allMatch = last10.every(h => h.matches === true);
+      if (allMatch) {
+        // 10 подряд '+' - покупаем хедж
+        await this.completeHedgeValidation(series, true, context);
+      }
+    }
+  }
+
   // ==================== ОТМЕНА СИГНАЛА ====================
   
   async cancelSignal(series, currentColor) {
@@ -900,7 +1341,7 @@ class TradingEmulator {
     this.activeSeries.delete(series.asset);
     
     console.log(`[TRADE] [${this.botId}] ${asset}: ⚠️ SIGNAL CANCELLED - returned $${totalReturn.toFixed(2)}, P&L: $${pnl.toFixed(2)}`);
-    await this.log(series.asset, series.signalMarketSlug, 'signal_cancelled', `SIGNAL CANCELLED: returned $${totalReturn.toFixed(2)}, P&L: $${pnl.toFixed(2)}`, { totalReturn, pnl });
+    await this.log(series.asset, series.signalMarketSlug, `SIGNAL CANCELLED: returned $${totalReturn.toFixed(2)}, P&L: $${pnl.toFixed(2)}`, { totalReturn, pnl });
     await this.notifyUsers(series, `⚠️ Сигнал отменён`);
   }
 
@@ -1038,10 +1479,22 @@ class TradingEmulator {
   }
 
   async checkSeries(series) {
+    // Проверка валидации (если серия в процессе валидации)
+    if (series.validationState === 'validating') {
+      await this.validateMarket(series);
+      return; // Выходим, не продолжаем обычную логику
+    }
+    
     const isBinance = config.dataSource === 'binance';
     const context = isBinance 
       ? await this.dataProvider.get15mContext(series.asset)
       : await this.dataProvider.get15mContext(config.polymarket.markets[series.asset]);
+    
+    // Проверка валидации хеджа (если серия в процессе валидации хеджа)
+    // НЕ выходим, продолжаем обычную логику (валидация хеджа не блокирует серию)
+    if (series.hedgeValidationState === 'validating') {
+      await this.validateHedgeMarket(series, context);
+    }
 
     const getTimestamp = (slug) => parseInt(slug.split('-').pop());
     
@@ -1054,8 +1507,7 @@ class TradingEmulator {
     const colorEmoji = currentColor === 'green' ? '🟢' : '🔴';
 
     // ПРОВЕРКА ОТМЕНЫ СИГНАЛА: если рынок где был сигнал ещё активен и цвет изменился
-    // Работает только если sellStrategy === 'early_exit'
-    if (series.signalMarketSlug && series.currentStep === 1 && this.config.sellStrategy === 'early_exit') {
+    if (series.signalMarketSlug && series.currentStep === 1) {
       const signalTimestamp = getTimestamp(series.signalMarketSlug);
       
       // Сигнальный рынок ещё активен
@@ -1095,15 +1547,21 @@ class TradingEmulator {
       }
       
       // РАННЯЯ ПОКУПКА: если рынок идёт против нас (цвет = signalColor), покупаем следующий шаг заранее
-      // Работает только если buyStrategy === 'signal' (при 'validated' нужно проверять стабильность)
-      if (!series.nextStepBought && series.currentStep < this.config.maxSteps && currentColor === series.signalColor && this.config.buyStrategy === 'signal') {
-        await this.buyNextStepEarly(series, context);
+      if (!series.nextStepBought && series.currentStep < this.config.maxSteps && currentColor === series.signalColor) {
+        if (this.config.buyStrategy === 'signal') {
+          // Покупаем хедж сразу
+          await this.buyNextStepEarly(series, context);
+        } else if (this.config.buyStrategy === 'validate') {
+          // Начинаем валидацию хеджа
+          if (!series.hedgeValidationState || series.hedgeValidationState === null) {
+            await this.startHedgeValidation(series, context);
+          }
+        }
       }
       
       // ПРОДАЖА ХЕДЖА: за 20 сек до конца, если рынок наш цвет — продаём хедж
-      // Работает только если sellStrategy === 'early_exit'
       const timeToEnd = context.current.timeToEnd;
-      if (series.nextStepBought && currentColor === series.betColor && timeToEnd <= 20 && this.config.sellStrategy === 'early_exit') {
+      if (series.nextStepBought && currentColor === series.betColor && timeToEnd <= 20) {
         await this.sellHedge(series, timeToEnd);
       }
       
@@ -1145,6 +1603,15 @@ class TradingEmulator {
       if (series.nextStepBought) {
         console.log(`[TRADE] [${this.botId}] ${asset}: Market won, selling hedge before calculating P&L...`);
         await this.sellHedge(series, null); // null = не за 20 секунд до конца
+      } else {
+        // Хедж не был куплен - сбрасываем состояние валидации хеджа (если была)
+        if (series.hedgeValidationState === 'rejected' || series.hedgeValidationState === 'validating') {
+          series.hedgeValidationState = null;
+          series.hedgeValidationHistory = [];
+          series.hedgeValidationEventIndex = null;
+          series.hedgeValidationMarketSlug = null;
+          series.hedgeLastValidationCheck = null;
+        }
       }
       
       // ПРОФИТ! Получаем shares (каждая = $1)
@@ -1259,6 +1726,15 @@ class TradingEmulator {
         series.nextMarketSlug = null;
         series.marketState = 'waiting';
         
+        // Сбрасываем состояние валидации хеджа (хедж уже куплен)
+        if (series.hedgeValidationState === 'validated' || series.hedgeValidationState === 'validating') {
+          series.hedgeValidationState = null;
+          series.hedgeValidationHistory = [];
+          series.hedgeValidationEventIndex = null;
+          series.hedgeValidationMarketSlug = null;
+          series.hedgeLastValidationCheck = null;
+        }
+        
         series.addEvent('waiting_market', {
           message: `Переход на Step ${series.currentStep} (хедж уже куплен)`,
         });
@@ -1341,6 +1817,15 @@ class TradingEmulator {
         series.currentStep++;
         series.currentMarketSlug = context.slugs.current;
         series.marketState = 'waiting';
+        
+        // Сбрасываем состояние валидации хеджа (если была неудачная валидация)
+        if (series.hedgeValidationState === 'rejected' || series.hedgeValidationState === 'validating') {
+          series.hedgeValidationState = null;
+          series.hedgeValidationHistory = [];
+          series.hedgeValidationEventIndex = null;
+          series.hedgeValidationMarketSlug = null;
+          series.hedgeLastValidationCheck = null;
+        }
         
         const bought = await this.buyStep(series);
         if (!bought) {
