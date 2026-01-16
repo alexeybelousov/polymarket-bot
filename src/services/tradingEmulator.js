@@ -1677,13 +1677,13 @@ class TradingEmulator {
       
       // Обновляем событие с причиной отказа
       if (series.hedgeValidationEventIndex !== undefined && series.hedgeValidationEventIndex >= 0 && series.hedgeValidationEventIndex < series.events.length) {
-        const reasonText = finalStabilityResult.reason || 'Сигнал надежный';
+        const reasonText = finalStabilityResult.reason || 'Сигнал ненадежный';
         // Заменяем "Цена" на "Цена UP" или "Цена DOWN" в reason, если там просто "Цена"
         let enhancedReason = reasonText;
         if (reasonText.includes('Цена упала') || reasonText.includes('Цена выросла') || reasonText.includes('Цена стабильна') || reasonText.includes('Цена низкая') || reasonText.includes('Цена очень низкая')) {
           enhancedReason = reasonText.replace(/Цена/g, `Цена ${checkOutcome}`);
         }
-        series.events[series.hedgeValidationEventIndex].message = `Проверяю сигнал для хеджа Step ${nextStep}: ${displaySymbols} Сигнал надежный - Хедж не нужен: ${enhancedReason}${priceChangeInfo}`;
+        series.events[series.hedgeValidationEventIndex].message = `Проверяю сигнал для хеджа Step ${nextStep}: ${displaySymbols} Сигнал ненадежный - Хедж не нужен: ${enhancedReason}${priceChangeInfo}`;
       }
       
       series.addEvent('validation_rejected', {
