@@ -721,31 +721,32 @@
     function updateStats() {
       const filteredSeries = filterSeries(allSeries);
       
-      // Stats - Row 1: Баланс и P&L
+      // Stats - Row 1: Баланс и P&L из БД
       const initialDeposit = globalStats.initialDeposit || 100;
+      const currentBalance = globalStats.currentBalance || initialDeposit;
+      const totalPnL = globalStats.totalPnL || 0;
       
-      // P&L зависит от периода и валюты
+      // Для "Всего" используем данные из БД
+      // Для "За сутки" считаем из серий
       let pnl = 0;
       let completedSeries = [];
       let activeSeries = [];
       
       if (currentPeriod === 'all') {
-        // P&L "Всего" - считаем из всех завершенных серий выбранной валюты (исключаем cooldown)
+        // Используем данные из БД для "Всего"
+        pnl = totalPnL;
+        // Активные серии для расчета замороженных средств
         const assetSeries = filterByAsset(allSeries);
-        completedSeries = assetSeries.filter(s => s.status !== 'active' && s.status !== 'cooldown');
         activeSeries = assetSeries.filter(s => s.status === 'active' || s.status === 'cooldown');
-        pnl = completedSeries.reduce((sum, s) => sum + (s.totalPnL || 0), 0);
       } else {
         // P&L за период — сумма из серий, которые ЗАКОНЧИЛИСЬ за последние 24 часа (исключаем cooldown)
-        // (используем endedAt, а не startedAt, потому что P&L фиксируется при завершении)
         const dayAgo = Date.now() - 24 * 60 * 60 * 1000;
         const assetSeries = filterByAsset(allSeries);
         completedSeries = assetSeries.filter(s => {
-          if (s.status === 'active' || s.status === 'cooldown') return false; // Исключаем активные и cooldown
+          if (s.status === 'active' || s.status === 'cooldown') return false;
           const endTime = s.endedAt ? new Date(s.endedAt).getTime() : null;
-          return endTime && endTime > dayAgo; // Закончились за последние 24 часа
+          return endTime && endTime > dayAgo;
         });
-        // Активные серии для "За сутки" - все активные и cooldown серии выбранной валюты
         activeSeries = assetSeries.filter(s => s.status === 'active' || s.status === 'cooldown');
         pnl = completedSeries.reduce((sum, s) => sum + (s.totalPnL || 0), 0);
       }
@@ -753,34 +754,57 @@
       // Заморожено — сумма инвестиций в активных сериях (исключаем cooldown, у них нет инвестиций)
       const frozen = activeSeries.filter(s => s.status === 'active').reduce((sum, s) => sum + (s.totalInvested || 0), 0);
       
-      // Баланс пересчитываем из серий для согласованности: initialDeposit + P&L - Торгуется
-      const calculatedBalance = initialDeposit + pnl - frozen;
+      // Баланс: для "Всего" используем из БД, для "За сутки" пересчитываем
+      const displayBalance = currentPeriod === 'all' 
+        ? currentBalance - frozen  // Из БД минус замороженные средства
+        : initialDeposit + pnl - frozen;  // Пересчет для периода
+      
+      // Процент к начальному депозиту
+      const percentChange = ((displayBalance - initialDeposit) / initialDeposit) * 100;
+      const percentText = percentChange >= 0 
+        ? `+${percentChange.toFixed(2)}%` 
+        : `${percentChange.toFixed(2)}%`;
       
       const balanceEl = document.getElementById('stat-balance');
-      balanceEl.textContent = `$${calculatedBalance.toFixed(2)}`;
-      balanceEl.className = 'stat-value ' + (calculatedBalance >= initialDeposit ? 'positive' : 'negative');
+      balanceEl.textContent = `$${displayBalance.toFixed(2)} (${percentText})`;
+      balanceEl.className = 'stat-value ' + (displayBalance >= initialDeposit ? 'positive' : 'negative');
       
       const pnlEl = document.getElementById('stat-pnl');
       pnlEl.textContent = `${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}`;
       pnlEl.className = 'stat-value ' + (pnl >= 0 ? 'positive' : 'negative');
       
-      // Считаем статистику из серий за период
-      const wonSeries = filteredSeries.filter(s => s.status === 'won');
-      const lostSeries = filteredSeries.filter(s => s.status === 'lost');
-      const cancelledSeries = filteredSeries.filter(s => s.status === 'cancelled');
-      const activeSeriesFiltered = filteredSeries.filter(s => s.status === 'active');
+      // Статистика из БД для "Всего", из серий для "За сутки"
+      let wonCount, lostCount, cancelledCount, totalCount, winRate;
       
-      const winLossSeries = wonSeries.length + lostSeries.length;
-      const winRate = winLossSeries > 0 ? ((wonSeries.length / winLossSeries) * 100).toFixed(0) : 0;
+      if (currentPeriod === 'all') {
+        // Используем данные из БД
+        totalCount = globalStats.totalTrades || 0;
+        wonCount = globalStats.wonTrades || 0;
+        lostCount = globalStats.lostTrades || 0;
+        cancelledCount = globalStats.cancelledTrades || 0;
+        const winLossCount = wonCount + lostCount;
+        winRate = winLossCount > 0 ? ((wonCount / winLossCount) * 100).toFixed(0) : 0;
+      } else {
+        // Считаем из серий за период
+        const wonSeries = filteredSeries.filter(s => s.status === 'won');
+        const lostSeries = filteredSeries.filter(s => s.status === 'lost');
+        const cancelledSeries = filteredSeries.filter(s => s.status === 'cancelled');
+        totalCount = filteredSeries.length;
+        wonCount = wonSeries.length;
+        lostCount = lostSeries.length;
+        cancelledCount = cancelledSeries.length;
+        const winLossSeries = wonCount + lostCount;
+        winRate = winLossSeries > 0 ? ((wonCount / winLossSeries) * 100).toFixed(0) : 0;
+      }
+      
       document.getElementById('stat-winrate').textContent = `${winRate}%`;
-      
       document.getElementById('stat-frozen').textContent = `$${frozen.toFixed(2)}`;
       
       // Stats - Row 2 (фильтры)
-      document.getElementById('stat-total').textContent = filteredSeries.length;
-      document.getElementById('stat-wins').textContent = wonSeries.length;
-      document.getElementById('stat-losses').textContent = lostSeries.length;
-      document.getElementById('stat-cancelled').textContent = cancelledSeries.length;
+      document.getElementById('stat-total').textContent = currentPeriod === 'all' ? totalCount : filteredSeries.length;
+      document.getElementById('stat-wins').textContent = wonCount;
+      document.getElementById('stat-losses').textContent = lostCount;
+      document.getElementById('stat-cancelled').textContent = cancelledCount;
       document.getElementById('stat-active').textContent = activeSeries.length;
       
       // Перерисовываем серии
