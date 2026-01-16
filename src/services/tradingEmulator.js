@@ -1455,7 +1455,7 @@ class TradingEmulator {
     
     // Добавляем событие валидации хеджа
     series.addEvent('validation_started', {
-      message: `Валидирую рынок для хеджа Step ${nextStep}:`,
+      message: `Проверяю сигнал для хеджа Step ${nextStep}:`,
     });
     // Сохраняем индекс последнего события
     series.hedgeValidationEventIndex = series.events.length - 1;
@@ -1584,7 +1584,8 @@ class TradingEmulator {
     
     // Обновляем событие по индексу
     if (series.hedgeValidationEventIndex !== undefined && series.hedgeValidationEventIndex >= 0 && series.hedgeValidationEventIndex < series.events.length) {
-      const message = `Валидирую рынок для хеджа Step ${nextStep}: ${displaySymbols} | Цена: $${price.toFixed(3)}${priceChangeText ? ` (${priceChangeText})` : ''}${orderBookText} | ${stabilityEmoji} ${stabilityResult.stable ? 'стабильно' : 'нестабильно'}`;
+      const signalStatus = stabilityResult.stable ? 'Сигнал надежный' : 'Сигнал нестабилен';
+      const message = `Проверяю сигнал для хеджа Step ${nextStep}: ${displaySymbols} ${signalStatus}`;
       series.events[series.hedgeValidationEventIndex].message = message;
     }
     
@@ -1643,7 +1644,7 @@ class TradingEmulator {
         if (reasonText.includes('Цена упала') || reasonText.includes('Цена выросла') || reasonText.includes('Цена стабильна') || reasonText.includes('Цена низкая') || reasonText.includes('Цена очень низкая')) {
           enhancedReason = reasonText.replace(/Цена/g, `Цена ${checkOutcome}`);
         }
-        series.events[series.hedgeValidationEventIndex].message = `Валидирую рынок для хеджа Step ${nextStep}: ${displaySymbols} Покупка: ${enhancedReason}${priceChangeInfo}`;
+        series.events[series.hedgeValidationEventIndex].message = `Проверяю сигнал для хеджа Step ${nextStep}: ${displaySymbols} Сигнал надежный - Покупка: ${enhancedReason}${priceChangeInfo}`;
       }
       
       await series.save();
@@ -1682,7 +1683,7 @@ class TradingEmulator {
         if (reasonText.includes('Цена упала') || reasonText.includes('Цена выросла') || reasonText.includes('Цена стабильна') || reasonText.includes('Цена низкая') || reasonText.includes('Цена очень низкая')) {
           enhancedReason = reasonText.replace(/Цена/g, `Цена ${checkOutcome}`);
         }
-        series.events[series.hedgeValidationEventIndex].message = `Валидирую рынок для хеджа Step ${nextStep}: ${displaySymbols} Отменено: ${enhancedReason}${priceChangeInfo}`;
+        series.events[series.hedgeValidationEventIndex].message = `Проверяю сигнал для хеджа Step ${nextStep}: ${displaySymbols} Сигнал нестабилен - Отменено: ${enhancedReason}${priceChangeInfo}`;
       }
       
       series.addEvent('validation_rejected', {
