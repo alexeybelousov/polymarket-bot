@@ -1354,14 +1354,14 @@ class TradingEmulator {
       return;
     }
     
-    // Проверка интервала (каждые 30 сек)
+    // Проверка интервала (каждые 10 сек для более частого обновления)
     const now = new Date();
     if (series.lastValidationCheck === null) {
       // Первая проверка
       await this.performValidationCheck(series, validationSlug);
     } else {
       const timeSinceLastCheck = now - series.lastValidationCheck;
-      if (timeSinceLastCheck >= 30000) { // 30 секунд
+      if (timeSinceLastCheck >= 10000) { // 10 секунд
         await this.performValidationCheck(series, validationSlug);
       }
     }
@@ -1655,14 +1655,14 @@ class TradingEmulator {
       return;
     }
     
-    // Проверка интервала (каждые 30 сек)
+    // Проверка интервала (каждые 10 сек для более частого обновления)
     const now = new Date();
     if (series.hedgeLastValidationCheck === null) {
       // Первая проверка
       await this.performHedgeValidationCheck(series, validationSlug);
     } else {
       const timeSinceLastCheck = now - series.hedgeLastValidationCheck;
-      if (timeSinceLastCheck >= 30000) { // 30 секунд
+      if (timeSinceLastCheck >= 10000) { // 10 секунд
         await this.performHedgeValidationCheck(series, validationSlug);
       }
     }
