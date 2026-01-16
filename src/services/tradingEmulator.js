@@ -1629,7 +1629,7 @@ class TradingEmulator {
       let priceChangeInfo = '';
       const checkOutcome = series.hedgeValidationHistory.length > 0 && series.hedgeValidationHistory[0].checkOutcome 
         ? series.hedgeValidationHistory[0].checkOutcome.toUpperCase() 
-        : (series.signalColor === 'green' ? 'UP' : 'DOWN');
+        : (series.signalColor === 'green' ? 'DOWN' : 'UP');
       
       if (series.hedgeValidationHistory.length >= 2) {
         const firstPrice = series.hedgeValidationHistory[0].price;
@@ -1668,7 +1668,7 @@ class TradingEmulator {
       let priceChangeInfo = '';
       const checkOutcome = series.hedgeValidationHistory.length > 0 && series.hedgeValidationHistory[0].checkOutcome 
         ? series.hedgeValidationHistory[0].checkOutcome.toUpperCase() 
-        : (series.signalColor === 'green' ? 'UP' : 'DOWN');
+        : (series.signalColor === 'green' ? 'DOWN' : 'UP');
       
       if (series.hedgeValidationHistory.length >= 2) {
         const firstPrice = series.hedgeValidationHistory[0].price;
