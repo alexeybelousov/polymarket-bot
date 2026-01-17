@@ -1024,28 +1024,32 @@ class TradingEmulator {
       const debugPositions = debugSeries?.positions || [];
       console.log(`[TRADE] [${this.botId}] ${series.asset.toUpperCase()} Step ${series.currentStep}: Current positions count: ${debugPositions.length} [${callId}]`);
       
-      // Правильный подход: проверяем отсутствие позиции с step=X И status='active'
-      // Для пустого массива используем простое условие
-      // Для непустого массива проверяем отсутствие совпадения
-      let queryCondition;
-      
-      if (debugPositions.length === 0) {
-        // Массив пустой - просто проверяем ID
-        queryCondition = { _id: series._id };
-      } else {
-        // Массив не пустой - проверяем, что нет позиции с нужным step и status
-        queryCondition = {
-          _id: series._id,
-          positions: {
-            $not: {
-              $elemMatch: {
-                step: series.currentStep,
-                status: 'active'
+      // Используем $expr для проверки отсутствия позиции
+      // Это работает и для пустого массива, и для непустого
+      const queryCondition = {
+        _id: series._id,
+        $expr: {
+          $eq: [
+            {
+              $size: {
+                $filter: {
+                  input: { $ifNull: ['$positions', []] }, // Если positions нет, используем пустой массив
+                  as: 'pos',
+                  cond: {
+                    $and: [
+                      { $eq: ['$$pos.step', series.currentStep] },
+                      { $eq: ['$$pos.status', 'active'] }
+                    ]
+                  }
+                }
               }
-            }
-          }
-        };
-      }
+            },
+            0 // Размер отфильтрованного массива должен быть 0 (нет совпадений)
+          ]
+        }
+      };
+      
+      console.log(`[TRADE] [${this.botId}] ${series.asset.toUpperCase()} Step ${series.currentStep}: Using $expr query for atomic position add [${callId}]`);
       
       const updatedSeries = await TradeSeries.findOneAndUpdate(
         queryCondition,
