@@ -926,8 +926,23 @@ class TradingEmulator {
     const shares = netAmount / price;
     
     // Списываем с баланса (amount включает комиссию)
+    const balanceBefore = stats.currentBalance;
     stats.currentBalance -= amount;
-    await stats.save();
+    try {
+      await stats.save();
+      console.log(`[TRADE] [${this.botId}] ${series.asset.toUpperCase()} Step ${series.currentStep}: Balance $${balanceBefore.toFixed(2)} - $${amount.toFixed(2)} = $${stats.currentBalance.toFixed(2)}`);
+    } catch (saveError) {
+      // Обработка ошибок версионирования
+      if (saveError.name === 'VersionError' || saveError.message.includes('No matching document found')) {
+        console.warn(`[TRADE] [${this.botId}] Version conflict when saving stats, reloading and retrying...`);
+        const reloadedStats = await TradingStats.getStats(this.botId);
+        reloadedStats.currentBalance -= amount;
+        await reloadedStats.save();
+        console.log(`[TRADE] [${this.botId}] ${series.asset.toUpperCase()} Step ${series.currentStep}: Balance updated after reload: $${reloadedStats.currentBalance.toFixed(2)}`);
+      } else {
+        throw saveError;
+      }
+    }
     
     // Сохраняем позицию
     series.positions.push({
