@@ -643,10 +643,6 @@ class TradingEmulator {
       throw new Error('this.ENTRY_FEE_RATE is undefined');
     }
     
-    // Логирование для отладки двойного вызова
-    const callId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    console.log(`[TRADE] [${this.botId}] ${series.asset.toUpperCase()} Step ${series.currentStep}: buyStep CALLED [${callId}]`);
-    
     const stats = await TradingStats.getStats(this.botId);
     const betEmoji = series.betColor === 'green' ? '🟢' : '🔴';
     const betOutcome = series.betColor === 'green' ? 'up' : 'down';
@@ -750,22 +746,17 @@ class TradingEmulator {
         // Step 1 или нет инвестиций - отменяем серию
         console.log(`[TRADE] [${this.botId}] ${series.asset.toUpperCase()}: Price too high on Step ${series.currentStep} - $${price.toFixed(3)} > $${this.config.maxPrice}, cancelling`);
         
-        // Рассчитываем P&L (убыток = потерянные инвестиции)
-        const pnl = -(series.totalInvested || 0);
-        series.totalPnL = pnl;
-        
         // Добавляем событие в таймлайн
         series.addEvent('series_cancelled', {
           message: `⛔ Не удалось купить: цена превысила лимит ($${price.toFixed(3)} > $${this.config.maxPrice}) на Step ${series.currentStep}`,
           marketColor: null,
-          pnl,
+          pnl: -(series.totalInvested || 0),
         });
         
         series.status = 'cancelled';
         series.endedAt = new Date();
         
         const stats = await TradingStats.getStats(this.botId);
-        stats.totalPnL += pnl;
         stats.cancelledTrades++;
         await stats.save();
         
@@ -802,9 +793,6 @@ class TradingEmulator {
     }
     
     const amount = calculateDynamicBet(price, previousLosses, targetProfit, this.ENTRY_FEE_RATE, this.EXIT_FEE_RATE);
-    
-    // Дополнительное логирование для отладки
-    console.log(`[TRADE] [${this.botId}] ${series.asset.toUpperCase()} Step ${series.currentStep}: Calculated bet amount: $${amount?.toFixed(2) || 'N/A'}, price: $${price.toFixed(2)}, targetProfit: $${targetProfit.toFixed(2)}, previousLosses: $${previousLosses.toFixed(2)}, currentBalance: $${stats.currentBalance.toFixed(2)}`);
     
     if (!amount || amount <= 0) {
       // Если это Step 2 (хедж) и Step 1 уже куплен - фиксируем убыток, иначе просто возвращаем false
@@ -902,10 +890,6 @@ class TradingEmulator {
         return false;
       } else {
         // Step 1 или нет инвестиций - отменяем серию
-        // Рассчитываем P&L (убыток = потерянные инвестиции)
-        const pnl = -(series.totalInvested || 0);
-        series.totalPnL = pnl;
-        
         series.addEvent('insufficient_balance', {
           amount,
           message: `Недостаточно средств: нужно $${amount.toFixed(2)}, есть $${stats.currentBalance.toFixed(2)}`,
@@ -914,7 +898,6 @@ class TradingEmulator {
         series.endedAt = new Date();
         
         const cancelStats = await TradingStats.getStats(this.botId);
-        cancelStats.totalPnL += pnl;
         cancelStats.cancelledTrades++;
         await cancelStats.save();
         
@@ -925,196 +908,28 @@ class TradingEmulator {
     }
     
     // Расчёты по формуле Polymarket
-    // amount - это сумма, которую нужно потратить (включая комиссию на вход)
-    // Комиссия считается от суммы без комиссии: entryFee = netAmount * ENTRY_FEE_RATE
-    // netAmount = amount / (1 + ENTRY_FEE_RATE)
-    const netAmount = amount / (1 + this.ENTRY_FEE_RATE);
-    const entryFee = amount - netAmount;
+    const entryFee = amount * this.ENTRY_FEE_RATE;
+    const netAmount = amount - entryFee;
     const shares = netAmount / price;
     
-    // КРИТИЧЕСКАЯ ПРОВЕРКА: убеждаемся, что amount - это число в долларах, а не shares
-    if (typeof amount !== 'number' || isNaN(amount)) {
-      console.error(`[TRADE] [${this.botId}] ERROR: amount is not a valid number! amount=${amount}, type=${typeof amount}`);
-      return false;
-    }
-    if (amount > 1000 || amount < 0.01) {
-      console.error(`[TRADE] [${this.botId}] WARNING: amount seems suspicious! amount=$${amount.toFixed(2)}, shares=${shares.toFixed(2)}, price=$${price.toFixed(2)}`);
-    }
-    console.log(`[TRADE] [${this.botId}] ${series.asset.toUpperCase()} Step ${series.currentStep}: PRE-DEDUCT CHECK - amount=$${amount.toFixed(2)}, shares=${shares.toFixed(2)}, price=$${price.toFixed(2)}, netAmount=$${netAmount.toFixed(2)} [${callId}]`);
+    // Списываем с баланса (amount включает комиссию)
+    stats.currentBalance -= amount;
+    await stats.save();
     
-    // Защита от двойного списания: проверяем, не была ли уже куплена позиция на этом шаге
-    // Сначала проверяем в памяти (быстро)
-    const existingPosition = series.positions.find(p => p.step === series.currentStep && p.status === 'active');
-    if (existingPosition) {
-      console.warn(`[TRADE] [${this.botId}] ${series.asset.toUpperCase()} Step ${series.currentStep}: Position already exists in memory! Amount: $${existingPosition.amount.toFixed(2)}, skipping duplicate buy. [${callId}]`);
-      return true; // Уже куплено, возвращаем true
-    }
-    
-    // Также проверяем в БД (на случай если позиция была добавлена другим процессом)
-    const seriesFromDb = await TradeSeries.findById(series._id);
-    if (seriesFromDb) {
-      const dbExistingPosition = seriesFromDb.positions.find(p => p.step === series.currentStep && p.status === 'active');
-      if (dbExistingPosition) {
-        console.warn(`[TRADE] [${this.botId}] ${series.asset.toUpperCase()} Step ${series.currentStep}: Position already exists in DB! Amount: $${dbExistingPosition.amount.toFixed(2)}, skipping duplicate buy. [${callId}]`);
-        // Обновляем локальную серию из БД
-        Object.assign(series, seriesFromDb.toObject());
-        return true; // Уже куплено, возвращаем true
-      }
-    }
-    
-    console.log(`[TRADE] [${this.botId}] ${series.asset.toUpperCase()} Step ${series.currentStep}: No existing position (checked memory and DB), proceeding with buy [${callId}]`);
-    
-    // Атомарное списание баланса (защита от race condition и двойного списания)
-    const balanceBefore = stats.currentBalance;
-    
-    // Дополнительная проверка: убеждаемся, что баланс достаточен
-    if (balanceBefore < amount) {
-      console.error(`[TRADE] [${this.botId}] ${series.asset.toUpperCase()} Step ${series.currentStep}: Insufficient balance! Need $${amount.toFixed(2)}, have $${balanceBefore.toFixed(2)}`);
-      return false;
-    }
-    
-    try {
-      // Используем атомарную операцию для списания баланса
-      console.log(`[TRADE] [${this.botId}] ${series.asset.toUpperCase()} Step ${series.currentStep}: Calling deductBalance(${amount.toFixed(2)}) [${callId}]`);
-      const updatedStats = await TradingStats.deductBalance(this.botId, amount);
-      const balanceAfter = updatedStats.currentBalance;
-      
-      // Обновляем локальный объект stats для дальнейшего использования
-      stats.currentBalance = balanceAfter;
-      
-      console.log(`[TRADE] [${this.botId}] ${series.asset.toUpperCase()} Step ${series.currentStep}: Balance $${balanceBefore.toFixed(2)} - $${amount.toFixed(2)} = $${balanceAfter.toFixed(2)} (atomic) [${callId}]`);
-    } catch (deductError) {
-      if (deductError.message.includes('Insufficient balance')) {
-        console.error(`[TRADE] [${this.botId}] ${series.asset.toUpperCase()} Step ${series.currentStep}: ${deductError.message}`);
-        return false;
-      }
-      // Другие ошибки (например, документ не найден) - пробуем через обычный save как fallback
-      console.warn(`[TRADE] [${this.botId}] Atomic balance deduction failed, using fallback: ${deductError.message}`);
-      stats.currentBalance -= amount;
-      try {
-        await stats.save();
-        console.log(`[TRADE] [${this.botId}] ${series.asset.toUpperCase()} Step ${series.currentStep}: Balance updated via fallback: $${stats.currentBalance.toFixed(2)}`);
-      } catch (saveError) {
-        console.error(`[TRADE] [${this.botId}] Failed to save balance: ${saveError.message}`);
-        throw saveError;
-      }
-    }
-    
-    // КРИТИЧНО: Атомарное добавление позиции (защита от двойного добавления)
-    // Используем findOneAndUpdate с условием, что позиции на этом шаге еще нет
-    const newPosition = {
+    // Сохраняем позицию
+    series.positions.push({
       step: series.currentStep,
-      marketSlug: series.currentMarketSlug,
-      tokenId,
+      marketSlug: series.currentMarketSlug,  // Рынок где была куплена позиция
+      tokenId,                                // ID токена для отслеживания
       amount,
       price,
       shares,
       commission: entryFee,
       status: 'active',
-    };
+    });
     
-    try {
-      // Атомарно добавляем позицию только если её еще нет
-      // Используем условие: НЕТ позиции с step=X И status='active'
-      // Альтернативный подход: проверяем через $and с отрицанием
-      console.log(`[TRADE] [${this.botId}] ${series.asset.toUpperCase()} Step ${series.currentStep}: Attempting atomic position add [${callId}]`);
-      
-      // Сначала проверяем текущее состояние серии для отладки
-      const debugSeries = await TradeSeries.findById(series._id);
-      const debugPositions = debugSeries?.positions || [];
-      console.log(`[TRADE] [${this.botId}] ${series.asset.toUpperCase()} Step ${series.currentStep}: Current positions count: ${debugPositions.length} [${callId}]`);
-      
-      // Используем $expr для проверки отсутствия позиции
-      // Это работает и для пустого массива, и для непустого
-      const queryCondition = {
-        _id: series._id,
-        $expr: {
-          $eq: [
-            {
-              $size: {
-                $filter: {
-                  input: { $ifNull: ['$positions', []] }, // Если positions нет, используем пустой массив
-                  as: 'pos',
-                  cond: {
-                    $and: [
-                      { $eq: ['$$pos.step', series.currentStep] },
-                      { $eq: ['$$pos.status', 'active'] }
-                    ]
-                  }
-                }
-              }
-            },
-            0 // Размер отфильтрованного массива должен быть 0 (нет совпадений)
-          ]
-        }
-      };
-      
-      console.log(`[TRADE] [${this.botId}] ${series.asset.toUpperCase()} Step ${series.currentStep}: Using $expr query for atomic position add [${callId}]`);
-      
-      const updatedSeries = await TradeSeries.findOneAndUpdate(
-        queryCondition,
-        {
-          $push: { positions: newPosition },
-          $inc: { 
-            totalInvested: amount,
-            totalCommission: entryFee
-          }
-        },
-        { new: true }
-      );
-      
-      if (!updatedSeries) {
-        // Позиция уже существует или условие не выполнено - проверяем почему
-        const checkSeries = await TradeSeries.findById(series._id);
-        const existingPos = checkSeries?.positions?.find(p => p.step === series.currentStep && p.status === 'active');
-        if (existingPos) {
-          console.error(`[TRADE] [${this.botId}] ${series.asset.toUpperCase()} Step ${series.currentStep}: Position already exists in DB! Amount: $${existingPos.amount?.toFixed(2) || 'N/A'}. Rolling back balance. [${callId}]`);
-        } else {
-          console.error(`[TRADE] [${this.botId}] ${series.asset.toUpperCase()} Step ${series.currentStep}: findOneAndUpdate returned null but no position found! This is unexpected. [${callId}]`);
-        }
-        // Откатываем списание баланса атомарно
-        try {
-          // Атомарный откат баланса
-          const rollbackStats = await TradingStats.findOneAndUpdate(
-            { _id: this.botId },
-            { $inc: { currentBalance: amount } },
-            { new: true }
-          );
-          if (rollbackStats) {
-            console.log(`[TRADE] [${this.botId}] ${series.asset.toUpperCase()} Step ${series.currentStep}: Balance rolled back atomically: $${rollbackStats.currentBalance.toFixed(2)} [${callId}]`);
-          } else {
-            console.error(`[TRADE] [${this.botId}] Failed to rollback balance: stats not found`);
-          }
-        } catch (rollbackError) {
-          console.error(`[TRADE] [${this.botId}] Failed to rollback balance atomically: ${rollbackError.message}`);
-        }
-        // Обновляем локальную серию из БД
-        const seriesFromDb = await TradeSeries.findById(series._id);
-        if (seriesFromDb) {
-          Object.assign(series, seriesFromDb.toObject());
-        }
-        return true; // Уже куплено другим процессом
-      }
-      
-      // Обновляем локальную серию из обновленного документа
-      Object.assign(series, updatedSeries.toObject());
-    } catch (positionError) {
-      console.error(`[TRADE] [${this.botId}] Failed to add position atomically: ${positionError.message}`);
-      // В случае ошибки откатываем баланс
-      try {
-        const rollbackStats = await TradingStats.findOneAndUpdate(
-          { _id: this.botId },
-          { $inc: { currentBalance: amount } },
-          { new: true }
-        );
-        if (rollbackStats) {
-          console.log(`[TRADE] [${this.botId}] Balance rolled back due to position error: $${rollbackStats.currentBalance.toFixed(2)}`);
-        }
-      } catch (rollbackError) {
-        console.error(`[TRADE] [${this.botId}] Failed to rollback balance: ${rollbackError.message}`);
-      }
-      throw positionError;
-    }
+    series.totalInvested += amount;
+    series.totalCommission += entryFee;
     
     // Событие: купили
     const priceHash = getShortHash(tokenId);
@@ -1251,143 +1066,31 @@ class TradingEmulator {
       return;
     }
     
-    // Защита от двойного списания: проверяем, не была ли уже куплена позиция на этом шаге
-    const existingHedgePosition = series.positions.find(p => p.step === nextStep && p.status === 'active');
-    if (existingHedgePosition) {
-      console.warn(`[TRADE] [${this.botId}] ${asset}: Hedge position for Step ${nextStep} already exists! Amount: $${existingHedgePosition.amount.toFixed(2)}, skipping duplicate buy.`);
-      return; // Уже куплено, выходим
-    }
-    
-    // Расчёты по формуле Polymarket (аналогично buyStep)
-    // amount - это сумма, которую нужно потратить (включая комиссию на вход)
-    // Комиссия считается от суммы без комиссии: entryFee = netAmount * ENTRY_FEE_RATE
-    // netAmount = amount / (1 + ENTRY_FEE_RATE)
-    const netAmount = amount / (1 + this.ENTRY_FEE_RATE);
-    const entryFee = amount - netAmount;
+    // Расчёты
+    const entryFee = amount * this.ENTRY_FEE_RATE;
+    const netAmount = amount - entryFee;
     const shares = netAmount / price;
     
-    // Атомарное списание баланса для хеджа (защита от race condition и двойного списания)
-    const balanceBefore = stats.currentBalance;
+    // Списываем с баланса
+    stats.currentBalance -= amount;
+    await stats.save();
     
-    // Дополнительная проверка: убеждаемся, что баланс достаточен
-    if (balanceBefore < amount) {
-      console.error(`[TRADE] [${this.botId}] ${asset}: Insufficient balance for hedge! Need $${amount.toFixed(2)}, have $${balanceBefore.toFixed(2)}`);
-      series.addEvent('insufficient_balance', {
-        amount,
-        message: `Не хватает средств на хедж Step ${nextStep}: нужно $${amount.toFixed(2)}, есть $${balanceBefore.toFixed(2)}`,
-      });
-      await series.save();
-      return;
-    }
-    
-    try {
-      // Используем атомарную операцию для списания баланса
-      const updatedStats = await TradingStats.deductBalance(this.botId, amount);
-      const balanceAfter = updatedStats.currentBalance;
-      
-      // Обновляем локальный объект stats для дальнейшего использования
-      stats.currentBalance = balanceAfter;
-      
-      console.log(`[TRADE] [${this.botId}] ${asset}: Hedge Step ${nextStep}: Balance $${balanceBefore.toFixed(2)} - $${amount.toFixed(2)} = $${balanceAfter.toFixed(2)} (atomic)`);
-    } catch (deductError) {
-      if (deductError.message.includes('Insufficient balance')) {
-        console.error(`[TRADE] [${this.botId}] ${asset}: Hedge Step ${nextStep}: ${deductError.message}`);
-        series.addEvent('insufficient_balance', {
-          amount,
-          message: `Не хватает средств на хедж Step ${nextStep}: ${deductError.message}`,
-        });
-        await series.save();
-        return;
-      }
-      // Другие ошибки (например, документ не найден) - пробуем через обычный save как fallback
-      console.warn(`[TRADE] [${this.botId}] Atomic balance deduction failed for hedge, using fallback: ${deductError.message}`);
-      stats.currentBalance -= amount;
-      try {
-        await stats.save();
-        console.log(`[TRADE] [${this.botId}] ${asset}: Hedge Step ${nextStep}: Balance updated via fallback: $${stats.currentBalance.toFixed(2)}`);
-      } catch (saveError) {
-        console.error(`[TRADE] [${this.botId}] Failed to save balance for hedge: ${saveError.message}`);
-        throw saveError;
-      }
-    }
-    
-    // КРИТИЧНО: Атомарное добавление позиции хеджа (защита от двойного добавления)
-    const newHedgePosition = {
+    // Сохраняем позицию хеджа
+    series.positions.push({
       step: nextStep,
-      marketSlug: context.slugs.next,
-      tokenId,
+      marketSlug: context.slugs.next,  // Рынок где была куплена позиция
+      tokenId,                          // ID токена для отслеживания
       amount,
       price,
       shares,
       commission: entryFee,
       status: 'active',
-    };
+    });
     
-    try {
-      // Атомарно добавляем позицию хеджа только если её еще нет
-      const updatedSeries = await TradeSeries.findOneAndUpdate(
-        {
-          _id: series._id,
-          $nor: [
-            { 'positions': { $elemMatch: { step: nextStep, status: 'active' } } }
-          ]
-        },
-        {
-          $push: { positions: newHedgePosition },
-          $inc: { 
-            totalInvested: amount,
-            totalCommission: entryFee
-          },
-          $set: {
-            nextStepBought: true,
-            nextMarketSlug: context.slugs.next
-          }
-        },
-        { new: true }
-      );
-      
-      if (!updatedSeries) {
-        // Позиция хеджа уже существует - откатываем списание баланса атомарно
-        console.error(`[TRADE] [${this.botId}] ${asset}: Hedge position already exists! Rolling back balance atomically.`);
-        try {
-          const rollbackStats = await TradingStats.findOneAndUpdate(
-            { _id: this.botId },
-            { $inc: { currentBalance: amount } },
-            { new: true }
-          );
-          if (rollbackStats) {
-            console.log(`[TRADE] [${this.botId}] ${asset}: Hedge balance rolled back atomically: $${rollbackStats.currentBalance.toFixed(2)}`);
-          }
-        } catch (rollbackError) {
-          console.error(`[TRADE] [${this.botId}] Failed to rollback hedge balance atomically: ${rollbackError.message}`);
-        }
-        const seriesFromDb = await TradeSeries.findById(series._id);
-        if (seriesFromDb) {
-          Object.assign(series, seriesFromDb.toObject());
-        }
-        return; // Уже куплено другим процессом
-      }
-      
-      // Обновляем локальную серию
-      Object.assign(series, updatedSeries.toObject());
-    } catch (positionError) {
-      console.error(`[TRADE] [${this.botId}] Failed to add hedge position atomically: ${positionError.message}`);
-      // В случае ошибки откатываем баланс
-      try {
-        const rollbackStats = await TradingStats.findOneAndUpdate(
-          { _id: this.botId },
-          { $inc: { currentBalance: amount } },
-          { new: true }
-        );
-        if (rollbackStats) {
-          console.log(`[TRADE] [${this.botId}] Hedge balance rolled back due to error: $${rollbackStats.currentBalance.toFixed(2)}`);
-        }
-      } catch (rollbackError) {
-        console.error(`[TRADE] [${this.botId}] Failed to rollback hedge balance: ${rollbackError.message}`);
-      }
-      throw positionError;
-    }
-    // nextStepBought и nextMarketSlug уже установлены в атомарной операции выше
+    series.totalInvested += amount;
+    series.totalCommission += entryFee;
+    series.nextStepBought = true;
+    series.nextMarketSlug = context.slugs.next;
     
     // Событие: ранняя покупка
     const priceHash = getShortHash(tokenId);
@@ -1900,22 +1603,11 @@ class TradingEmulator {
           return { continueValidation: true }; // Возвращаем флаг, что нужно продолжить валидацию
         } else {
           // Рынок закрылся или не передан timeToEnd - отменяем серию
-          // Рассчитываем P&L (убыток = потерянные инвестиции)
-          const pnl = -(series.totalInvested || 0);
-          series.totalPnL = pnl;
-          
           series.status = 'cancelled';
           series.endedAt = new Date();
           series.addEvent('series_cancelled', {
             message: '⛔ Серия отменена: не удалось купить после валидации',
-            pnl,
           });
-          
-          const stats = await TradingStats.getStats(this.botId);
-          stats.totalPnL += pnl;
-          stats.cancelledTrades++;
-          await stats.save();
-          
           await series.save();
           this.activeSeries.delete(series.asset);
           return { continueValidation: false };
@@ -2537,22 +2229,13 @@ class TradingEmulator {
       }
     }
     
-    // Рассчитываем P&L
-    // totalInvested включает комиссию на вход (потому что amount включает комиссию)
-    // totalReturn уже после комиссии на выход
-    // P&L = totalReturn - totalInvested
-    const pnl = totalReturn - series.totalInvested;
-    series.totalPnL = pnl;
-    
-    // Обновляем статистику
-    const balanceBefore = stats.currentBalance;
     stats.currentBalance += totalReturn;
-    stats.totalPnL += pnl;
-    stats.totalCommissions += series.totalCommission; // Учитываем все комиссии (вход + выход)
     stats.cancelledTrades++;
     await stats.save();
     
-    console.log(`[TRADE] [${this.botId}] ${asset}: Balance update: $${balanceBefore.toFixed(2)} + $${totalReturn.toFixed(2)} (from ${series.positions.filter(p => p.status === 'sold').length} sold positions) = $${stats.currentBalance.toFixed(2)}`);
+    // Рассчитываем P&L
+    const pnl = totalReturn - series.totalInvested;
+    series.totalPnL = pnl;
     series.status = 'cancelled';
     series.endedAt = new Date();
     series.nextStepBought = false;
@@ -3109,20 +2792,14 @@ class TradingEmulator {
             return;
           } else {
             // Step 1 или нет инвестиций - отменяем серию
-            // Рассчитываем P&L (убыток = потерянные инвестиции)
-            const pnl = -(series.totalInvested || 0);
-            series.totalPnL = pnl;
-            
             series.status = 'cancelled';
             series.endedAt = new Date();
             series.addEvent('series_cancelled', {
               message: `⛔ Серия отменена на Step ${series.currentStep}: не удалось купить`,
-              pnl,
             });
             
             // Обновляем статистику
             const cancelStats = await TradingStats.getStats(this.botId);
-            cancelStats.totalPnL += pnl;
             cancelStats.cancelledTrades++;
             await cancelStats.save();
             
@@ -3212,4 +2889,3 @@ class TradingEmulator {
 
 module.exports = TradingEmulator;
 module.exports.TRADING_CONFIGS = TRADING_CONFIGS;
-
