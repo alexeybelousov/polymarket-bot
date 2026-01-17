@@ -727,32 +727,29 @@
 
 
 
-      // P&L зависит от периода и валюты
+      // Баланс и P&L всегда считаем из серий выбранного бота (allSeries уже отфильтрованы по botId)
+      // Не используем filterByAsset для баланса - считаем все серии бота
 
       let pnl = 0;
       let completedSeries = [];
       let activeSeries = [];
 
       if (currentPeriod === 'all') {
-        // P&L "Всего" - считаем из всех завершенных серий выбранной валюты (исключаем cooldown)
-
-
-        const assetSeries = filterByAsset(allSeries);
-        completedSeries = assetSeries.filter(s => s.status !== 'active' && s.status !== 'cooldown');
-        activeSeries = assetSeries.filter(s => s.status === 'active' || s.status === 'cooldown');
+        // P&L "Всего" - считаем из всех завершенных серий выбранного бота (исключаем cooldown)
+        completedSeries = allSeries.filter(s => s.status !== 'active' && s.status !== 'cooldown');
+        activeSeries = allSeries.filter(s => s.status === 'active' || s.status === 'cooldown');
         pnl = completedSeries.reduce((sum, s) => sum + (s.totalPnL || 0), 0);
       } else {
         // P&L за период — сумма из серий, которые ЗАКОНЧИЛИСЬ за последние 24 часа (исключаем cooldown)
         // (используем endedAt, а не startedAt, потому что P&L фиксируется при завершении)
         const dayAgo = Date.now() - 24 * 60 * 60 * 1000;
-        const assetSeries = filterByAsset(allSeries);
-        completedSeries = assetSeries.filter(s => {
+        completedSeries = allSeries.filter(s => {
           if (s.status === 'active' || s.status === 'cooldown') return false; // Исключаем активные и cooldown
           const endTime = s.endedAt ? new Date(s.endedAt).getTime() : null;
           return endTime && endTime > dayAgo; // Закончились за последние 24 часа
         });
-        // Активные серии для "За сутки" - все активные и cooldown серии выбранной валюты
-        activeSeries = assetSeries.filter(s => s.status === 'active' || s.status === 'cooldown');
+        // Активные серии для "За сутки" - все активные и cooldown серии выбранного бота
+        activeSeries = allSeries.filter(s => s.status === 'active' || s.status === 'cooldown');
         pnl = completedSeries.reduce((sum, s) => sum + (s.totalPnL || 0), 0);
       }
 
