@@ -1015,12 +1015,31 @@ class TradingEmulator {
     
     try {
       // Атомарно добавляем позицию только если её еще нет
-      // Проверяем, что нет позиции с таким step И status='active'
+      // Используем условие: НЕТ позиции с step=X И status='active'
+      // Альтернативный подход: проверяем через $and с отрицанием
+      console.log(`[TRADE] [${this.botId}] ${series.asset.toUpperCase()} Step ${series.currentStep}: Attempting atomic position add [${callId}]`);
+      
+      // Сначала проверяем текущее состояние серии для отладки
+      const debugSeries = await TradeSeries.findById(series._id);
+      const debugPositions = debugSeries?.positions || [];
+      console.log(`[TRADE] [${this.botId}] ${series.asset.toUpperCase()} Step ${series.currentStep}: Current positions count: ${debugPositions.length} [${callId}]`);
+      
+      // Правильный подход: проверяем отсутствие позиции с step=X И status='active'
+      // Используем $nor для проверки, что НЕТ позиции, которая соответствует обоим условиям
       const updatedSeries = await TradeSeries.findOneAndUpdate(
         {
           _id: series._id,
           $nor: [
-            { 'positions': { $elemMatch: { step: series.currentStep, status: 'active' } } }
+            {
+              positions: {
+                $elemMatch: {
+                  $and: [
+                    { step: series.currentStep },
+                    { status: 'active' }
+                  ]
+                }
+              }
+            }
           ]
         },
         {
@@ -1034,8 +1053,15 @@ class TradingEmulator {
       );
       
       if (!updatedSeries) {
-        // Позиция уже существует - откатываем списание баланса атомарно
-        console.error(`[TRADE] [${this.botId}] ${series.asset.toUpperCase()} Step ${series.currentStep}: Position already exists! Rolling back balance atomically. [${callId}]`);
+        // Позиция уже существует или условие не выполнено - проверяем почему
+        const checkSeries = await TradeSeries.findById(series._id);
+        const existingPos = checkSeries?.positions?.find(p => p.step === series.currentStep && p.status === 'active');
+        if (existingPos) {
+          console.error(`[TRADE] [${this.botId}] ${series.asset.toUpperCase()} Step ${series.currentStep}: Position already exists in DB! Amount: $${existingPos.amount?.toFixed(2) || 'N/A'}. Rolling back balance. [${callId}]`);
+        } else {
+          console.error(`[TRADE] [${this.botId}] ${series.asset.toUpperCase()} Step ${series.currentStep}: findOneAndUpdate returned null but no position found! This is unexpected. [${callId}]`);
+        }
+        // Откатываем списание баланса атомарно
         try {
           // Атомарный откат баланса
           const rollbackStats = await TradingStats.findOneAndUpdate(
