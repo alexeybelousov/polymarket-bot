@@ -395,6 +395,8 @@
     let updateStatsTimeout = null;
     let renderChartTimeout = null;
     let isPageVisible = true;
+    let lastStatsValues = {}; // Кэш последних значений статистики для избежания лишних обновлений DOM
+    let lastChartDataHash = null; // Хеш данных графика
     
     // Throttle функция
     function throttle(func, wait) {
@@ -477,6 +479,7 @@
           if (balanceChart) {
             balanceChart.destroy();
             balanceChart = null;
+            lastChartDataHash = null;
           }
           return;
         }
@@ -505,6 +508,13 @@
           const statusText = s.status === 'won' ? 'Профит' : s.status === 'lost' ? 'Убыток' : 'Отмена';
           tooltips.push(`${s.asset.toUpperCase()} ${statusText}: ${pnl}`);
         });
+        
+        // Проверяем, изменились ли данные графика
+        const chartDataHash = JSON.stringify({labels, balanceData, pointColors});
+        if (lastChartDataHash === chartDataHash && balanceChart) {
+          return; // Данные не изменились, не обновляем график
+        }
+        lastChartDataHash = chartDataHash;
         
         const ctx = document.getElementById('balanceChart').getContext('2d');
         
@@ -564,7 +574,7 @@
             }
           });
         }
-      }, 100);
+      }, 1000); // Дебаунсинг 1 секунда
     }
     
     function setPeriod(period) {
@@ -819,13 +829,22 @@
           ? `+${percentChange.toFixed(2)}%` 
           : `${percentChange.toFixed(2)}%`;
         
-        const balanceEl = document.getElementById('stat-balance');
-        balanceEl.innerHTML = `$${displayBalance.toFixed(2)} <span class="percent-change">(${percentText})</span>`;
-        balanceEl.className = 'stat-value ' + (displayBalance >= initialDeposit ? 'positive' : 'negative');
+        // Обновляем DOM только если значения изменились
+        const balanceKey = `balance_${displayBalance.toFixed(2)}_${percentText}`;
+        if (lastStatsValues.balance !== balanceKey) {
+          const balanceEl = document.getElementById('stat-balance');
+          balanceEl.innerHTML = `$${displayBalance.toFixed(2)} <span class="percent-change">(${percentText})</span>`;
+          balanceEl.className = 'stat-value ' + (displayBalance >= initialDeposit ? 'positive' : 'negative');
+          lastStatsValues.balance = balanceKey;
+        }
         
-        const pnlEl = document.getElementById('stat-pnl');
-        pnlEl.textContent = `${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}`;
-        pnlEl.className = 'stat-value ' + (pnl >= 0 ? 'positive' : 'negative');
+        const pnlKey = `${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}`;
+        if (lastStatsValues.pnl !== pnlKey) {
+          const pnlEl = document.getElementById('stat-pnl');
+          pnlEl.textContent = pnlKey;
+          pnlEl.className = 'stat-value ' + (pnl >= 0 ? 'positive' : 'negative');
+          lastStatsValues.pnl = pnlKey;
+        }
         
         // Статистика всегда считаем из серий
         let seriesForStats;
@@ -847,18 +866,30 @@
         const winLossSeries = wonCount + lostCount;
         const winRate = winLossSeries > 0 ? ((wonCount / winLossSeries) * 100).toFixed(0) : 0;
         
-        document.getElementById('stat-winrate').textContent = `${winRate}%`;
-        document.getElementById('stat-frozen').textContent = `$${frozen.toFixed(2)}`;
+        // Обновляем только если значения изменились
+        if (lastStatsValues.winrate !== winRate) {
+          document.getElementById('stat-winrate').textContent = `${winRate}%`;
+          lastStatsValues.winrate = winRate;
+        }
+        const frozenKey = frozen.toFixed(2);
+        if (lastStatsValues.frozen !== frozenKey) {
+          document.getElementById('stat-frozen').textContent = `$${frozenKey}`;
+          lastStatsValues.frozen = frozenKey;
+        }
         
-        // Stats - Row 2 (фильтры)
-        document.getElementById('stat-total').textContent = totalCount;
-        document.getElementById('stat-wins').textContent = wonCount;
-        document.getElementById('stat-losses').textContent = lostCount;
-        document.getElementById('stat-cancelled').textContent = cancelledCount;
-        document.getElementById('stat-active').textContent = activeSeries.length;
+        // Stats - Row 2 (фильтры) - обновляем только если изменились
+        const statsKey = `${totalCount}_${wonCount}_${lostCount}_${cancelledCount}_${activeSeries.length}`;
+        if (lastStatsValues.counts !== statsKey) {
+          document.getElementById('stat-total').textContent = totalCount;
+          document.getElementById('stat-wins').textContent = wonCount;
+          document.getElementById('stat-losses').textContent = lostCount;
+          document.getElementById('stat-cancelled').textContent = cancelledCount;
+          document.getElementById('stat-active').textContent = activeSeries.length;
+          lastStatsValues.counts = statsKey;
+        }
         
-        // Перерисовываем серии только если нужно
-        if (needsFullRender || currentView === 'list') {
+        // Перерисовываем серии только если нужно и данные изменились
+        if (currentView === 'list' && needsFullRender) {
           document.getElementById('series-list').innerHTML = renderSeries(filteredSeries);
         }
         
@@ -871,11 +902,14 @@
       if (forceRender) {
         doUpdate();
       } else {
-        updateStatsTimeout = setTimeout(doUpdate, 50);
+        updateStatsTimeout = setTimeout(doUpdate, 1000); // Дебаунсинг 1 секунда
       }
     }
     
     async function loadBots() {
+      // Загружаем ботов только один раз при загрузке страницы
+      if (allBots.length > 0) return;
+      
       try {
         const res = await fetch('/api/trading/bots');
         allBots = await res.json();
