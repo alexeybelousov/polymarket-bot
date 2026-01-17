@@ -932,6 +932,16 @@ class TradingEmulator {
     const entryFee = amount - netAmount;
     const shares = netAmount / price;
     
+    // КРИТИЧЕСКАЯ ПРОВЕРКА: убеждаемся, что amount - это число в долларах, а не shares
+    if (typeof amount !== 'number' || isNaN(amount)) {
+      console.error(`[TRADE] [${this.botId}] ERROR: amount is not a valid number! amount=${amount}, type=${typeof amount}`);
+      return false;
+    }
+    if (amount > 1000 || amount < 0.01) {
+      console.error(`[TRADE] [${this.botId}] WARNING: amount seems suspicious! amount=$${amount.toFixed(2)}, shares=${shares.toFixed(2)}, price=$${price.toFixed(2)}`);
+    }
+    console.log(`[TRADE] [${this.botId}] ${series.asset.toUpperCase()} Step ${series.currentStep}: PRE-DEDUCT CHECK - amount=$${amount.toFixed(2)}, shares=${shares.toFixed(2)}, price=$${price.toFixed(2)}, netAmount=$${netAmount.toFixed(2)} [${callId}]`);
+    
     // Защита от двойного списания: проверяем, не была ли уже куплена позиция на этом шаге
     // Сначала проверяем в памяти (быстро)
     const existingPosition = series.positions.find(p => p.step === series.currentStep && p.status === 'active');
@@ -987,6 +997,28 @@ class TradingEmulator {
       } catch (saveError) {
         console.error(`[TRADE] [${this.botId}] Failed to save balance: ${saveError.message}`);
         throw saveError;
+      }
+    }
+    
+    // КРИТИЧНО: Проверяем позицию ЕЩЕ РАЗ после списания баланса (на случай параллельных вызовов)
+    // Перезагружаем серию из БД, чтобы увидеть изменения от других процессов
+    const seriesAfterDeduct = await TradeSeries.findById(series._id);
+    if (seriesAfterDeduct) {
+      const positionAfterDeduct = seriesAfterDeduct.positions.find(p => p.step === series.currentStep && p.status === 'active');
+      if (positionAfterDeduct) {
+        console.error(`[TRADE] [${this.botId}] ${series.asset.toUpperCase()} Step ${series.currentStep}: Position appeared AFTER balance deduction! This means duplicate buy. Rolling back balance. [${callId}]`);
+        // Откатываем списание баланса
+        try {
+          const rollbackStats = await TradingStats.getStats(this.botId);
+          rollbackStats.currentBalance += amount;
+          await rollbackStats.save();
+          console.log(`[TRADE] [${this.botId}] ${series.asset.toUpperCase()} Step ${series.currentStep}: Balance rolled back: $${rollbackStats.currentBalance.toFixed(2)} [${callId}]`);
+        } catch (rollbackError) {
+          console.error(`[TRADE] [${this.botId}] Failed to rollback balance: ${rollbackError.message}`);
+        }
+        // Обновляем локальную серию из БД
+        Object.assign(series, seriesAfterDeduct.toObject());
+        return true; // Уже куплено другим процессом
       }
     }
     
@@ -1197,6 +1229,27 @@ class TradingEmulator {
       } catch (saveError) {
         console.error(`[TRADE] [${this.botId}] Failed to save balance for hedge: ${saveError.message}`);
         throw saveError;
+      }
+    }
+    
+    // КРИТИЧНО: Проверяем позицию ЕЩЕ РАЗ после списания баланса (на случай параллельных вызовов)
+    const seriesAfterDeduct = await TradeSeries.findById(series._id);
+    if (seriesAfterDeduct) {
+      const hedgePositionAfterDeduct = seriesAfterDeduct.positions.find(p => p.step === nextStep && p.status === 'active');
+      if (hedgePositionAfterDeduct) {
+        console.error(`[TRADE] [${this.botId}] ${asset}: Hedge position appeared AFTER balance deduction! This means duplicate buy. Rolling back balance.`);
+        // Откатываем списание баланса
+        try {
+          const rollbackStats = await TradingStats.getStats(this.botId);
+          rollbackStats.currentBalance += amount;
+          await rollbackStats.save();
+          console.log(`[TRADE] [${this.botId}] ${asset}: Hedge balance rolled back: $${rollbackStats.currentBalance.toFixed(2)}`);
+        } catch (rollbackError) {
+          console.error(`[TRADE] [${this.botId}] Failed to rollback hedge balance: ${rollbackError.message}`);
+        }
+        // Обновляем локальную серию из БД
+        Object.assign(series, seriesAfterDeduct.toObject());
+        return; // Уже куплено другим процессом
       }
     }
     
