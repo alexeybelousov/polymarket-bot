@@ -42,5 +42,38 @@ tradingStatsSchema.statics.getStats = async function(botId = 'bot1') {
   return stats;
 };
 
+// Атомарное списание баланса (защита от race condition)
+tradingStatsSchema.statics.deductBalance = async function(botId, amount) {
+  const result = await this.findOneAndUpdate(
+    { 
+      _id: botId,
+      currentBalance: { $gte: amount } // Проверяем, что баланс достаточен
+    },
+    { 
+      $inc: { currentBalance: -amount },
+      $set: { updatedAt: new Date() }
+    },
+    { 
+      new: true, // Возвращаем обновленный документ
+      runValidators: true
+    }
+  );
+  
+  if (!result) {
+    // Если не удалось обновить (недостаточно средств или документ не найден)
+    const stats = await this.findById(botId);
+    if (!stats) {
+      throw new Error(`TradingStats not found for botId: ${botId}`);
+    }
+    if (stats.currentBalance < amount) {
+      throw new Error(`Insufficient balance: need $${amount}, have $${stats.currentBalance}`);
+    }
+    // Если документ существует и баланс достаточен, но обновление не прошло - возможно race condition
+    throw new Error(`Failed to deduct balance atomically for botId: ${botId}`);
+  }
+  
+  return result;
+};
+
 module.exports = mongoose.model('TradingStats', tradingStatsSchema);
 

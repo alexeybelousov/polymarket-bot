@@ -935,7 +935,7 @@ class TradingEmulator {
       return true; // Уже куплено, возвращаем true
     }
     
-    // Списываем с баланса (amount включает комиссию)
+    // Атомарное списание баланса (защита от race condition и двойного списания)
     const balanceBefore = stats.currentBalance;
     
     // Дополнительная проверка: убеждаемся, что баланс достаточен
@@ -944,40 +944,28 @@ class TradingEmulator {
       return false;
     }
     
-    stats.currentBalance -= amount;
-    const balanceAfter = stats.currentBalance;
-    
     try {
-      await stats.save();
-      console.log(`[TRADE] [${this.botId}] ${series.asset.toUpperCase()} Step ${series.currentStep}: Balance $${balanceBefore.toFixed(2)} - $${amount.toFixed(2)} = $${balanceAfter.toFixed(2)}`);
-    } catch (saveError) {
-      // Обработка ошибок версионирования
-      if (saveError.name === 'VersionError' || saveError.message.includes('No matching document found')) {
-        console.warn(`[TRADE] [${this.botId}] Version conflict when saving stats, reloading and retrying...`);
-        const reloadedStats = await TradingStats.getStats(this.botId);
-        
-        // Проверяем, не был ли баланс уже списан
-        const expectedBalance = balanceBefore - amount;
-        if (Math.abs(reloadedStats.currentBalance - expectedBalance) > 0.01) {
-          console.warn(`[TRADE] [${this.botId}] Balance mismatch detected! Expected: $${expectedBalance.toFixed(2)}, actual: $${reloadedStats.currentBalance.toFixed(2)}. Adjusting...`);
-          // Если баланс уже был списан (меньше ожидаемого), не списываем повторно
-          if (reloadedStats.currentBalance < expectedBalance) {
-            console.warn(`[TRADE] [${this.botId}] Balance already deducted! Current: $${reloadedStats.currentBalance.toFixed(2)}, expected after deduction: $${expectedBalance.toFixed(2)}. Skipping duplicate deduction.`);
-            // Восстанавливаем баланс в памяти, так как он уже был списан в БД
-            stats.currentBalance = reloadedStats.currentBalance;
-          } else {
-            // Баланс не был списан, списываем сейчас
-            reloadedStats.currentBalance -= amount;
-            await reloadedStats.save();
-            console.log(`[TRADE] [${this.botId}] ${series.asset.toUpperCase()} Step ${series.currentStep}: Balance updated after reload: $${reloadedStats.currentBalance.toFixed(2)}`);
-          }
-        } else {
-          // Баланс соответствует ожидаемому, просто сохраняем
-          reloadedStats.currentBalance = expectedBalance;
-          await reloadedStats.save();
-          console.log(`[TRADE] [${this.botId}] ${series.asset.toUpperCase()} Step ${series.currentStep}: Balance updated after reload: $${reloadedStats.currentBalance.toFixed(2)}`);
-        }
-      } else {
+      // Используем атомарную операцию для списания баланса
+      const updatedStats = await TradingStats.deductBalance(this.botId, amount);
+      const balanceAfter = updatedStats.currentBalance;
+      
+      // Обновляем локальный объект stats для дальнейшего использования
+      stats.currentBalance = balanceAfter;
+      
+      console.log(`[TRADE] [${this.botId}] ${series.asset.toUpperCase()} Step ${series.currentStep}: Balance $${balanceBefore.toFixed(2)} - $${amount.toFixed(2)} = $${balanceAfter.toFixed(2)} (atomic)`);
+    } catch (deductError) {
+      if (deductError.message.includes('Insufficient balance')) {
+        console.error(`[TRADE] [${this.botId}] ${series.asset.toUpperCase()} Step ${series.currentStep}: ${deductError.message}`);
+        return false;
+      }
+      // Другие ошибки (например, документ не найден) - пробуем через обычный save как fallback
+      console.warn(`[TRADE] [${this.botId}] Atomic balance deduction failed, using fallback: ${deductError.message}`);
+      stats.currentBalance -= amount;
+      try {
+        await stats.save();
+        console.log(`[TRADE] [${this.botId}] ${series.asset.toUpperCase()} Step ${series.currentStep}: Balance updated via fallback: $${stats.currentBalance.toFixed(2)}`);
+      } catch (saveError) {
+        console.error(`[TRADE] [${this.botId}] Failed to save balance: ${saveError.message}`);
         throw saveError;
       }
     }
@@ -1147,7 +1135,7 @@ class TradingEmulator {
     const entryFee = amount - netAmount;
     const shares = netAmount / price;
     
-    // Списываем с баланса (amount включает комиссию)
+    // Атомарное списание баланса для хеджа (защита от race condition и двойного списания)
     const balanceBefore = stats.currentBalance;
     
     // Дополнительная проверка: убеждаемся, что баланс достаточен
@@ -1161,40 +1149,33 @@ class TradingEmulator {
       return;
     }
     
-    stats.currentBalance -= amount;
-    const balanceAfter = stats.currentBalance;
-    
     try {
-      await stats.save();
-      console.log(`[TRADE] [${this.botId}] ${asset}: Hedge Step ${nextStep}: Balance $${balanceBefore.toFixed(2)} - $${amount.toFixed(2)} = $${balanceAfter.toFixed(2)}`);
-    } catch (saveError) {
-      // Обработка ошибок версионирования
-      if (saveError.name === 'VersionError' || saveError.message.includes('No matching document found')) {
-        console.warn(`[TRADE] [${this.botId}] Version conflict when saving stats for hedge, reloading and retrying...`);
-        const reloadedStats = await TradingStats.getStats(this.botId);
-        
-        // Проверяем, не был ли баланс уже списан
-        const expectedBalance = balanceBefore - amount;
-        if (Math.abs(reloadedStats.currentBalance - expectedBalance) > 0.01) {
-          console.warn(`[TRADE] [${this.botId}] Balance mismatch detected for hedge! Expected: $${expectedBalance.toFixed(2)}, actual: $${reloadedStats.currentBalance.toFixed(2)}. Adjusting...`);
-          // Если баланс уже был списан (меньше ожидаемого), не списываем повторно
-          if (reloadedStats.currentBalance < expectedBalance) {
-            console.warn(`[TRADE] [${this.botId}] Balance already deducted for hedge! Current: $${reloadedStats.currentBalance.toFixed(2)}, expected after deduction: $${expectedBalance.toFixed(2)}. Skipping duplicate deduction.`);
-            // Восстанавливаем баланс в памяти, так как он уже был списан в БД
-            stats.currentBalance = reloadedStats.currentBalance;
-          } else {
-            // Баланс не был списан, списываем сейчас
-            reloadedStats.currentBalance -= amount;
-            await reloadedStats.save();
-            console.log(`[TRADE] [${this.botId}] ${asset}: Hedge Step ${nextStep}: Balance updated after reload: $${reloadedStats.currentBalance.toFixed(2)}`);
-          }
-        } else {
-          // Баланс соответствует ожидаемому, просто сохраняем
-          reloadedStats.currentBalance = expectedBalance;
-          await reloadedStats.save();
-          console.log(`[TRADE] [${this.botId}] ${asset}: Hedge Step ${nextStep}: Balance updated after reload: $${reloadedStats.currentBalance.toFixed(2)}`);
-        }
-      } else {
+      // Используем атомарную операцию для списания баланса
+      const updatedStats = await TradingStats.deductBalance(this.botId, amount);
+      const balanceAfter = updatedStats.currentBalance;
+      
+      // Обновляем локальный объект stats для дальнейшего использования
+      stats.currentBalance = balanceAfter;
+      
+      console.log(`[TRADE] [${this.botId}] ${asset}: Hedge Step ${nextStep}: Balance $${balanceBefore.toFixed(2)} - $${amount.toFixed(2)} = $${balanceAfter.toFixed(2)} (atomic)`);
+    } catch (deductError) {
+      if (deductError.message.includes('Insufficient balance')) {
+        console.error(`[TRADE] [${this.botId}] ${asset}: Hedge Step ${nextStep}: ${deductError.message}`);
+        series.addEvent('insufficient_balance', {
+          amount,
+          message: `Не хватает средств на хедж Step ${nextStep}: ${deductError.message}`,
+        });
+        await series.save();
+        return;
+      }
+      // Другие ошибки (например, документ не найден) - пробуем через обычный save как fallback
+      console.warn(`[TRADE] [${this.botId}] Atomic balance deduction failed for hedge, using fallback: ${deductError.message}`);
+      stats.currentBalance -= amount;
+      try {
+        await stats.save();
+        console.log(`[TRADE] [${this.botId}] ${asset}: Hedge Step ${nextStep}: Balance updated via fallback: $${stats.currentBalance.toFixed(2)}`);
+      } catch (saveError) {
+        console.error(`[TRADE] [${this.botId}] Failed to save balance for hedge: ${saveError.message}`);
         throw saveError;
       }
     }
