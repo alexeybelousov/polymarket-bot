@@ -1000,42 +1000,84 @@ class TradingEmulator {
       }
     }
     
-    // КРИТИЧНО: Проверяем позицию ЕЩЕ РАЗ после списания баланса (на случай параллельных вызовов)
-    // Перезагружаем серию из БД, чтобы увидеть изменения от других процессов
-    const seriesAfterDeduct = await TradeSeries.findById(series._id);
-    if (seriesAfterDeduct) {
-      const positionAfterDeduct = seriesAfterDeduct.positions.find(p => p.step === series.currentStep && p.status === 'active');
-      if (positionAfterDeduct) {
-        console.error(`[TRADE] [${this.botId}] ${series.asset.toUpperCase()} Step ${series.currentStep}: Position appeared AFTER balance deduction! This means duplicate buy. Rolling back balance. [${callId}]`);
-        // Откатываем списание баланса
-        try {
-          const rollbackStats = await TradingStats.getStats(this.botId);
-          rollbackStats.currentBalance += amount;
-          await rollbackStats.save();
-          console.log(`[TRADE] [${this.botId}] ${series.asset.toUpperCase()} Step ${series.currentStep}: Balance rolled back: $${rollbackStats.currentBalance.toFixed(2)} [${callId}]`);
-        } catch (rollbackError) {
-          console.error(`[TRADE] [${this.botId}] Failed to rollback balance: ${rollbackError.message}`);
-        }
-        // Обновляем локальную серию из БД
-        Object.assign(series, seriesAfterDeduct.toObject());
-        return true; // Уже куплено другим процессом
-      }
-    }
-    
-    // Сохраняем позицию
-    series.positions.push({
+    // КРИТИЧНО: Атомарное добавление позиции (защита от двойного добавления)
+    // Используем findOneAndUpdate с условием, что позиции на этом шаге еще нет
+    const newPosition = {
       step: series.currentStep,
-      marketSlug: series.currentMarketSlug,  // Рынок где была куплена позиция
-      tokenId,                                // ID токена для отслеживания
+      marketSlug: series.currentMarketSlug,
+      tokenId,
       amount,
       price,
       shares,
       commission: entryFee,
       status: 'active',
-    });
+    };
     
-    series.totalInvested += amount;
-    series.totalCommission += entryFee;
+    try {
+      // Атомарно добавляем позицию только если её еще нет
+      // Проверяем, что нет позиции с таким step И status='active'
+      const updatedSeries = await TradeSeries.findOneAndUpdate(
+        {
+          _id: series._id,
+          $nor: [
+            { 'positions': { $elemMatch: { step: series.currentStep, status: 'active' } } }
+          ]
+        },
+        {
+          $push: { positions: newPosition },
+          $inc: { 
+            totalInvested: amount,
+            totalCommission: entryFee
+          }
+        },
+        { new: true }
+      );
+      
+      if (!updatedSeries) {
+        // Позиция уже существует - откатываем списание баланса атомарно
+        console.error(`[TRADE] [${this.botId}] ${series.asset.toUpperCase()} Step ${series.currentStep}: Position already exists! Rolling back balance atomically. [${callId}]`);
+        try {
+          // Атомарный откат баланса
+          const rollbackStats = await TradingStats.findOneAndUpdate(
+            { _id: this.botId },
+            { $inc: { currentBalance: amount } },
+            { new: true }
+          );
+          if (rollbackStats) {
+            console.log(`[TRADE] [${this.botId}] ${series.asset.toUpperCase()} Step ${series.currentStep}: Balance rolled back atomically: $${rollbackStats.currentBalance.toFixed(2)} [${callId}]`);
+          } else {
+            console.error(`[TRADE] [${this.botId}] Failed to rollback balance: stats not found`);
+          }
+        } catch (rollbackError) {
+          console.error(`[TRADE] [${this.botId}] Failed to rollback balance atomically: ${rollbackError.message}`);
+        }
+        // Обновляем локальную серию из БД
+        const seriesFromDb = await TradeSeries.findById(series._id);
+        if (seriesFromDb) {
+          Object.assign(series, seriesFromDb.toObject());
+        }
+        return true; // Уже куплено другим процессом
+      }
+      
+      // Обновляем локальную серию из обновленного документа
+      Object.assign(series, updatedSeries.toObject());
+    } catch (positionError) {
+      console.error(`[TRADE] [${this.botId}] Failed to add position atomically: ${positionError.message}`);
+      // В случае ошибки откатываем баланс
+      try {
+        const rollbackStats = await TradingStats.findOneAndUpdate(
+          { _id: this.botId },
+          { $inc: { currentBalance: amount } },
+          { new: true }
+        );
+        if (rollbackStats) {
+          console.log(`[TRADE] [${this.botId}] Balance rolled back due to position error: $${rollbackStats.currentBalance.toFixed(2)}`);
+        }
+      } catch (rollbackError) {
+        console.error(`[TRADE] [${this.botId}] Failed to rollback balance: ${rollbackError.message}`);
+      }
+      throw positionError;
+    }
     
     // Событие: купили
     const priceHash = getShortHash(tokenId);
@@ -1232,43 +1274,83 @@ class TradingEmulator {
       }
     }
     
-    // КРИТИЧНО: Проверяем позицию ЕЩЕ РАЗ после списания баланса (на случай параллельных вызовов)
-    const seriesAfterDeduct = await TradeSeries.findById(series._id);
-    if (seriesAfterDeduct) {
-      const hedgePositionAfterDeduct = seriesAfterDeduct.positions.find(p => p.step === nextStep && p.status === 'active');
-      if (hedgePositionAfterDeduct) {
-        console.error(`[TRADE] [${this.botId}] ${asset}: Hedge position appeared AFTER balance deduction! This means duplicate buy. Rolling back balance.`);
-        // Откатываем списание баланса
-        try {
-          const rollbackStats = await TradingStats.getStats(this.botId);
-          rollbackStats.currentBalance += amount;
-          await rollbackStats.save();
-          console.log(`[TRADE] [${this.botId}] ${asset}: Hedge balance rolled back: $${rollbackStats.currentBalance.toFixed(2)}`);
-        } catch (rollbackError) {
-          console.error(`[TRADE] [${this.botId}] Failed to rollback hedge balance: ${rollbackError.message}`);
-        }
-        // Обновляем локальную серию из БД
-        Object.assign(series, seriesAfterDeduct.toObject());
-        return; // Уже куплено другим процессом
-      }
-    }
-    
-    // Сохраняем позицию хеджа
-    series.positions.push({
+    // КРИТИЧНО: Атомарное добавление позиции хеджа (защита от двойного добавления)
+    const newHedgePosition = {
       step: nextStep,
-      marketSlug: context.slugs.next,  // Рынок где была куплена позиция
-      tokenId,                          // ID токена для отслеживания
+      marketSlug: context.slugs.next,
+      tokenId,
       amount,
       price,
       shares,
       commission: entryFee,
       status: 'active',
-    });
+    };
     
-    series.totalInvested += amount;
-    series.totalCommission += entryFee;
-    series.nextStepBought = true;
-    series.nextMarketSlug = context.slugs.next;
+    try {
+      // Атомарно добавляем позицию хеджа только если её еще нет
+      const updatedSeries = await TradeSeries.findOneAndUpdate(
+        {
+          _id: series._id,
+          $nor: [
+            { 'positions': { $elemMatch: { step: nextStep, status: 'active' } } }
+          ]
+        },
+        {
+          $push: { positions: newHedgePosition },
+          $inc: { 
+            totalInvested: amount,
+            totalCommission: entryFee
+          },
+          $set: {
+            nextStepBought: true,
+            nextMarketSlug: context.slugs.next
+          }
+        },
+        { new: true }
+      );
+      
+      if (!updatedSeries) {
+        // Позиция хеджа уже существует - откатываем списание баланса атомарно
+        console.error(`[TRADE] [${this.botId}] ${asset}: Hedge position already exists! Rolling back balance atomically.`);
+        try {
+          const rollbackStats = await TradingStats.findOneAndUpdate(
+            { _id: this.botId },
+            { $inc: { currentBalance: amount } },
+            { new: true }
+          );
+          if (rollbackStats) {
+            console.log(`[TRADE] [${this.botId}] ${asset}: Hedge balance rolled back atomically: $${rollbackStats.currentBalance.toFixed(2)}`);
+          }
+        } catch (rollbackError) {
+          console.error(`[TRADE] [${this.botId}] Failed to rollback hedge balance atomically: ${rollbackError.message}`);
+        }
+        const seriesFromDb = await TradeSeries.findById(series._id);
+        if (seriesFromDb) {
+          Object.assign(series, seriesFromDb.toObject());
+        }
+        return; // Уже куплено другим процессом
+      }
+      
+      // Обновляем локальную серию
+      Object.assign(series, updatedSeries.toObject());
+    } catch (positionError) {
+      console.error(`[TRADE] [${this.botId}] Failed to add hedge position atomically: ${positionError.message}`);
+      // В случае ошибки откатываем баланс
+      try {
+        const rollbackStats = await TradingStats.findOneAndUpdate(
+          { _id: this.botId },
+          { $inc: { currentBalance: amount } },
+          { new: true }
+        );
+        if (rollbackStats) {
+          console.log(`[TRADE] [${this.botId}] Hedge balance rolled back due to error: $${rollbackStats.currentBalance.toFixed(2)}`);
+        }
+      } catch (rollbackError) {
+        console.error(`[TRADE] [${this.botId}] Failed to rollback hedge balance: ${rollbackError.message}`);
+      }
+      throw positionError;
+    }
+    // nextStepBought и nextMarketSlug уже установлены в атомарной операции выше
     
     // Событие: ранняя покупка
     const priceHash = getShortHash(tokenId);
