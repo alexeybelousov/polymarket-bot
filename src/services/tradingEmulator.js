@@ -643,6 +643,10 @@ class TradingEmulator {
       throw new Error('this.ENTRY_FEE_RATE is undefined');
     }
     
+    // Логирование для отладки двойного вызова
+    const callId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    console.log(`[TRADE] [${this.botId}] ${series.asset.toUpperCase()} Step ${series.currentStep}: buyStep CALLED [${callId}]`);
+    
     const stats = await TradingStats.getStats(this.botId);
     const betEmoji = series.betColor === 'green' ? '🟢' : '🔴';
     const betOutcome = series.betColor === 'green' ? 'up' : 'down';
@@ -929,11 +933,26 @@ class TradingEmulator {
     const shares = netAmount / price;
     
     // Защита от двойного списания: проверяем, не была ли уже куплена позиция на этом шаге
+    // Сначала проверяем в памяти (быстро)
     const existingPosition = series.positions.find(p => p.step === series.currentStep && p.status === 'active');
     if (existingPosition) {
-      console.warn(`[TRADE] [${this.botId}] ${series.asset.toUpperCase()} Step ${series.currentStep}: Position already exists! Amount: $${existingPosition.amount.toFixed(2)}, skipping duplicate buy.`);
+      console.warn(`[TRADE] [${this.botId}] ${series.asset.toUpperCase()} Step ${series.currentStep}: Position already exists in memory! Amount: $${existingPosition.amount.toFixed(2)}, skipping duplicate buy. [${callId}]`);
       return true; // Уже куплено, возвращаем true
     }
+    
+    // Также проверяем в БД (на случай если позиция была добавлена другим процессом)
+    const seriesFromDb = await TradeSeries.findById(series._id);
+    if (seriesFromDb) {
+      const dbExistingPosition = seriesFromDb.positions.find(p => p.step === series.currentStep && p.status === 'active');
+      if (dbExistingPosition) {
+        console.warn(`[TRADE] [${this.botId}] ${series.asset.toUpperCase()} Step ${series.currentStep}: Position already exists in DB! Amount: $${dbExistingPosition.amount.toFixed(2)}, skipping duplicate buy. [${callId}]`);
+        // Обновляем локальную серию из БД
+        Object.assign(series, seriesFromDb.toObject());
+        return true; // Уже куплено, возвращаем true
+      }
+    }
+    
+    console.log(`[TRADE] [${this.botId}] ${series.asset.toUpperCase()} Step ${series.currentStep}: No existing position (checked memory and DB), proceeding with buy [${callId}]`);
     
     // Атомарное списание баланса (защита от race condition и двойного списания)
     const balanceBefore = stats.currentBalance;
@@ -946,13 +965,14 @@ class TradingEmulator {
     
     try {
       // Используем атомарную операцию для списания баланса
+      console.log(`[TRADE] [${this.botId}] ${series.asset.toUpperCase()} Step ${series.currentStep}: Calling deductBalance(${amount.toFixed(2)}) [${callId}]`);
       const updatedStats = await TradingStats.deductBalance(this.botId, amount);
       const balanceAfter = updatedStats.currentBalance;
       
       // Обновляем локальный объект stats для дальнейшего использования
       stats.currentBalance = balanceAfter;
       
-      console.log(`[TRADE] [${this.botId}] ${series.asset.toUpperCase()} Step ${series.currentStep}: Balance $${balanceBefore.toFixed(2)} - $${amount.toFixed(2)} = $${balanceAfter.toFixed(2)} (atomic)`);
+      console.log(`[TRADE] [${this.botId}] ${series.asset.toUpperCase()} Step ${series.currentStep}: Balance $${balanceBefore.toFixed(2)} - $${amount.toFixed(2)} = $${balanceAfter.toFixed(2)} (atomic) [${callId}]`);
     } catch (deductError) {
       if (deductError.message.includes('Insufficient balance')) {
         console.error(`[TRADE] [${this.botId}] ${series.asset.toUpperCase()} Step ${series.currentStep}: ${deductError.message}`);
@@ -3020,3 +3040,4 @@ class TradingEmulator {
 
 module.exports = TradingEmulator;
 module.exports.TRADING_CONFIGS = TRADING_CONFIGS;
+
