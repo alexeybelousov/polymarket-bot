@@ -799,6 +799,9 @@ class TradingEmulator {
     
     const amount = calculateDynamicBet(price, previousLosses, targetProfit, this.ENTRY_FEE_RATE, this.EXIT_FEE_RATE);
     
+    // Дополнительное логирование для отладки
+    console.log(`[TRADE] [${this.botId}] ${series.asset.toUpperCase()} Step ${series.currentStep}: Calculated bet amount: $${amount?.toFixed(2) || 'N/A'}, price: $${price.toFixed(2)}, targetProfit: $${targetProfit.toFixed(2)}, previousLosses: $${previousLosses.toFixed(2)}, currentBalance: $${stats.currentBalance.toFixed(2)}`);
+    
     if (!amount || amount <= 0) {
       // Если это Step 2 (хедж) и Step 1 уже куплен - фиксируем убыток, иначе просто возвращаем false
       const isHedgeStep = series.currentStep === 2 && series.totalInvested > 0;
@@ -925,20 +928,55 @@ class TradingEmulator {
     const entryFee = amount - netAmount;
     const shares = netAmount / price;
     
+    // Защита от двойного списания: проверяем, не была ли уже куплена позиция на этом шаге
+    const existingPosition = series.positions.find(p => p.step === series.currentStep && p.status === 'active');
+    if (existingPosition) {
+      console.warn(`[TRADE] [${this.botId}] ${series.asset.toUpperCase()} Step ${series.currentStep}: Position already exists! Amount: $${existingPosition.amount.toFixed(2)}, skipping duplicate buy.`);
+      return true; // Уже куплено, возвращаем true
+    }
+    
     // Списываем с баланса (amount включает комиссию)
     const balanceBefore = stats.currentBalance;
+    
+    // Дополнительная проверка: убеждаемся, что баланс достаточен
+    if (balanceBefore < amount) {
+      console.error(`[TRADE] [${this.botId}] ${series.asset.toUpperCase()} Step ${series.currentStep}: Insufficient balance! Need $${amount.toFixed(2)}, have $${balanceBefore.toFixed(2)}`);
+      return false;
+    }
+    
     stats.currentBalance -= amount;
+    const balanceAfter = stats.currentBalance;
+    
     try {
       await stats.save();
-      console.log(`[TRADE] [${this.botId}] ${series.asset.toUpperCase()} Step ${series.currentStep}: Balance $${balanceBefore.toFixed(2)} - $${amount.toFixed(2)} = $${stats.currentBalance.toFixed(2)}`);
+      console.log(`[TRADE] [${this.botId}] ${series.asset.toUpperCase()} Step ${series.currentStep}: Balance $${balanceBefore.toFixed(2)} - $${amount.toFixed(2)} = $${balanceAfter.toFixed(2)}`);
     } catch (saveError) {
       // Обработка ошибок версионирования
       if (saveError.name === 'VersionError' || saveError.message.includes('No matching document found')) {
         console.warn(`[TRADE] [${this.botId}] Version conflict when saving stats, reloading and retrying...`);
         const reloadedStats = await TradingStats.getStats(this.botId);
-        reloadedStats.currentBalance -= amount;
-        await reloadedStats.save();
-        console.log(`[TRADE] [${this.botId}] ${series.asset.toUpperCase()} Step ${series.currentStep}: Balance updated after reload: $${reloadedStats.currentBalance.toFixed(2)}`);
+        
+        // Проверяем, не был ли баланс уже списан
+        const expectedBalance = balanceBefore - amount;
+        if (Math.abs(reloadedStats.currentBalance - expectedBalance) > 0.01) {
+          console.warn(`[TRADE] [${this.botId}] Balance mismatch detected! Expected: $${expectedBalance.toFixed(2)}, actual: $${reloadedStats.currentBalance.toFixed(2)}. Adjusting...`);
+          // Если баланс уже был списан (меньше ожидаемого), не списываем повторно
+          if (reloadedStats.currentBalance < expectedBalance) {
+            console.warn(`[TRADE] [${this.botId}] Balance already deducted! Current: $${reloadedStats.currentBalance.toFixed(2)}, expected after deduction: $${expectedBalance.toFixed(2)}. Skipping duplicate deduction.`);
+            // Восстанавливаем баланс в памяти, так как он уже был списан в БД
+            stats.currentBalance = reloadedStats.currentBalance;
+          } else {
+            // Баланс не был списан, списываем сейчас
+            reloadedStats.currentBalance -= amount;
+            await reloadedStats.save();
+            console.log(`[TRADE] [${this.botId}] ${series.asset.toUpperCase()} Step ${series.currentStep}: Balance updated after reload: $${reloadedStats.currentBalance.toFixed(2)}`);
+          }
+        } else {
+          // Баланс соответствует ожидаемому, просто сохраняем
+          reloadedStats.currentBalance = expectedBalance;
+          await reloadedStats.save();
+          console.log(`[TRADE] [${this.botId}] ${series.asset.toUpperCase()} Step ${series.currentStep}: Balance updated after reload: $${reloadedStats.currentBalance.toFixed(2)}`);
+        }
       } else {
         throw saveError;
       }
@@ -1094,14 +1132,72 @@ class TradingEmulator {
       return;
     }
     
-    // Расчёты
-    const entryFee = amount * this.ENTRY_FEE_RATE;
-    const netAmount = amount - entryFee;
+    // Защита от двойного списания: проверяем, не была ли уже куплена позиция на этом шаге
+    const existingHedgePosition = series.positions.find(p => p.step === nextStep && p.status === 'active');
+    if (existingHedgePosition) {
+      console.warn(`[TRADE] [${this.botId}] ${asset}: Hedge position for Step ${nextStep} already exists! Amount: $${existingHedgePosition.amount.toFixed(2)}, skipping duplicate buy.`);
+      return; // Уже куплено, выходим
+    }
+    
+    // Расчёты по формуле Polymarket (аналогично buyStep)
+    // amount - это сумма, которую нужно потратить (включая комиссию на вход)
+    // Комиссия считается от суммы без комиссии: entryFee = netAmount * ENTRY_FEE_RATE
+    // netAmount = amount / (1 + ENTRY_FEE_RATE)
+    const netAmount = amount / (1 + this.ENTRY_FEE_RATE);
+    const entryFee = amount - netAmount;
     const shares = netAmount / price;
     
-    // Списываем с баланса
+    // Списываем с баланса (amount включает комиссию)
+    const balanceBefore = stats.currentBalance;
+    
+    // Дополнительная проверка: убеждаемся, что баланс достаточен
+    if (balanceBefore < amount) {
+      console.error(`[TRADE] [${this.botId}] ${asset}: Insufficient balance for hedge! Need $${amount.toFixed(2)}, have $${balanceBefore.toFixed(2)}`);
+      series.addEvent('insufficient_balance', {
+        amount,
+        message: `Не хватает средств на хедж Step ${nextStep}: нужно $${amount.toFixed(2)}, есть $${balanceBefore.toFixed(2)}`,
+      });
+      await series.save();
+      return;
+    }
+    
     stats.currentBalance -= amount;
-    await stats.save();
+    const balanceAfter = stats.currentBalance;
+    
+    try {
+      await stats.save();
+      console.log(`[TRADE] [${this.botId}] ${asset}: Hedge Step ${nextStep}: Balance $${balanceBefore.toFixed(2)} - $${amount.toFixed(2)} = $${balanceAfter.toFixed(2)}`);
+    } catch (saveError) {
+      // Обработка ошибок версионирования
+      if (saveError.name === 'VersionError' || saveError.message.includes('No matching document found')) {
+        console.warn(`[TRADE] [${this.botId}] Version conflict when saving stats for hedge, reloading and retrying...`);
+        const reloadedStats = await TradingStats.getStats(this.botId);
+        
+        // Проверяем, не был ли баланс уже списан
+        const expectedBalance = balanceBefore - amount;
+        if (Math.abs(reloadedStats.currentBalance - expectedBalance) > 0.01) {
+          console.warn(`[TRADE] [${this.botId}] Balance mismatch detected for hedge! Expected: $${expectedBalance.toFixed(2)}, actual: $${reloadedStats.currentBalance.toFixed(2)}. Adjusting...`);
+          // Если баланс уже был списан (меньше ожидаемого), не списываем повторно
+          if (reloadedStats.currentBalance < expectedBalance) {
+            console.warn(`[TRADE] [${this.botId}] Balance already deducted for hedge! Current: $${reloadedStats.currentBalance.toFixed(2)}, expected after deduction: $${expectedBalance.toFixed(2)}. Skipping duplicate deduction.`);
+            // Восстанавливаем баланс в памяти, так как он уже был списан в БД
+            stats.currentBalance = reloadedStats.currentBalance;
+          } else {
+            // Баланс не был списан, списываем сейчас
+            reloadedStats.currentBalance -= amount;
+            await reloadedStats.save();
+            console.log(`[TRADE] [${this.botId}] ${asset}: Hedge Step ${nextStep}: Balance updated after reload: $${reloadedStats.currentBalance.toFixed(2)}`);
+          }
+        } else {
+          // Баланс соответствует ожидаемому, просто сохраняем
+          reloadedStats.currentBalance = expectedBalance;
+          await reloadedStats.save();
+          console.log(`[TRADE] [${this.botId}] ${asset}: Hedge Step ${nextStep}: Balance updated after reload: $${reloadedStats.currentBalance.toFixed(2)}`);
+        }
+      } else {
+        throw saveError;
+      }
+    }
     
     // Сохраняем позицию хеджа
     series.positions.push({
