@@ -285,12 +285,15 @@
     </div>
 
     <!-- Signals -->
+    <!-- Закомментировано: сигналы ETH/BTC не используются -->
+    <!--
     <div class="signals-grid">
       <div class="signal-box" id="sig-eth-3"><div class="signal-label">ETH 3с</div><div class="signal-status">—</div></div>
       <div class="signal-box" id="sig-eth-2"><div class="signal-label">ETH 2с</div><div class="signal-status">—</div></div>
       <div class="signal-box" id="sig-btc-3"><div class="signal-label">BTC 3с</div><div class="signal-status">—</div></div>
       <div class="signal-box" id="sig-btc-2"><div class="signal-label">BTC 2с</div><div class="signal-status">—</div></div>
     </div>
+    -->
 
     <!-- Bot Selector -->
     <div class="bot-toggle" id="bot-toggle" style="display: none; margin-bottom: 12px;">
@@ -851,8 +854,8 @@
     }
 
     init();
-    setInterval(loadMarkets, 3000);
-    setInterval(loadTrading, 3000);
+    setInterval(loadMarkets, 5000); // Обновление каждые 5 секунд
+    setInterval(loadTrading, 5000); // Обновление каждые 5 секунд
   </script>
 </body>
 </html>
