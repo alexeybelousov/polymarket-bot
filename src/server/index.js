@@ -153,7 +153,35 @@ function createServer(port = 3000, tradingEmulators = null) {
         .sort({ startedAt: -1 })
         .limit(limit)
         .lean();
-      res.json(series);
+      
+      // Исключаем неиспользуемые поля для оптимизации
+      const optimizedSeries = series.map(s => {
+        const {
+          validationHistory,
+          hedgeValidationHistory,
+          validationState,
+          hedgeValidationState,
+          validationEventIndex,
+          hedgeValidationEventIndex,
+          validationMarketSlug,
+          hedgeValidationMarketSlug,
+          lastValidationCheck,
+          hedgeLastValidationCheck,
+          lastStabilityResult,
+          lastHedgeStabilityResult,
+          signalMarketSlug,
+          signalColor,
+          currentMarketSlug,
+          marketState,
+          nextStepBought,
+          nextMarketSlug,
+          positions,
+          ...rest
+        } = s;
+        return rest;
+      });
+      
+      res.json(optimizedSeries);
     } catch (error) {
       res.status(500).json({ error: error.message });
     }

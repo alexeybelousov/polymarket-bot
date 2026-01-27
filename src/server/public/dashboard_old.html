@@ -389,6 +389,7 @@
     let balanceChart = null;
     let chartLimit = 10; // Лимит серий на графике
     const DEFAULT_LIMIT = 2; // Показываем только последние 2 серии
+    let isInitialLoad = true; // Флаг первой загрузки
     
     function setView(view) {
       currentView = view;
@@ -832,15 +833,44 @@
         btn.classList.toggle('active', btn.dataset.botId === botId);
       });
       
-      // Перезагружаем статистику и данные для выбранного бота
+      // При смене бота делаем полную перезагрузку
+      isInitialLoad = true;
       await loadStats();
       loadTrading();
     }
 
     async function loadTrading() {
       try {
-        const seriesRes = await fetch(`/api/trading/series?limit=1000&botId=${currentBotId}`);
-        allSeries = await seriesRes.json();
+        // При первой загрузке загружаем все серии для статистики, при обновлении - только последние 2
+        const limit = isInitialLoad ? 2000 : 2;
+        const seriesRes = await fetch(`/api/trading/series?limit=${limit}&botId=${currentBotId}`);
+        const newSeries = await seriesRes.json();
+        
+        if (isInitialLoad) {
+          // При первой загрузке просто заменяем все серии
+          allSeries = newSeries;
+          isInitialLoad = false;
+        } else {
+          // При обновлении мержим с существующими сериями
+          // Создаем Map для быстрого поиска по _id
+          const seriesMap = new Map(allSeries.map(s => [s._id?.toString() || s.id?.toString(), s]));
+          
+          // Обновляем или добавляем новые серии
+          newSeries.forEach(newS => {
+            const id = newS._id?.toString() || newS.id?.toString();
+            if (id) {
+              seriesMap.set(id, newS);
+            }
+          });
+          
+          // Преобразуем обратно в массив и сортируем по startedAt (новые первыми)
+          allSeries = Array.from(seriesMap.values()).sort((a, b) => {
+            const timeA = new Date(a.startedAt).getTime();
+            const timeB = new Date(b.startedAt).getTime();
+            return timeB - timeA;
+          });
+        }
+        
         updateStats();
       } catch(e) { console.error(e); }
     }
