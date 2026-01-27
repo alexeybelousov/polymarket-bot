@@ -52,7 +52,7 @@
     .stat-item.clickable { cursor: pointer; transition: all 0.2s; }
     .stat-item.clickable:hover { border-color: var(--blue); background: var(--bg3); }
     .stat-item.clickable.active { border-color: var(--blue); background: rgba(59, 130, 246, 0.1); }
-    .stat-value { font-size: 18px; font-weight: 600; }
+    .stat-value { font-size: 20px; font-weight: 600; }
     .stat-value.positive { color: var(--green); }
     .stat-value.negative { color: var(--red); }
     .stat-value.neutral { color: var(--yellow); }
@@ -285,7 +285,8 @@
     </div>
 
     <!-- Signals -->
-    <!-- Закомментировано для экономии места
+    <!-- Закомментировано: сигналы ETH/BTC не используются -->
+    <!--
     <div class="signals-grid">
       <div class="signal-box" id="sig-eth-3"><div class="signal-label">ETH 3с</div><div class="signal-status">—</div></div>
       <div class="signal-box" id="sig-eth-2"><div class="signal-label">ETH 2с</div><div class="signal-status">—</div></div>
@@ -387,53 +388,8 @@
     let showAll = false;
     let balanceChart = null;
     let chartLimit = 10; // Лимит серий на графике
-    const DEFAULT_LIMIT = 5;
-    
-    // Кэш для оптимизации
-    let filteredSeriesCache = null;
-    let lastSeriesHash = null;
-    let updateStatsTimeout = null;
-    let renderChartTimeout = null;
-    let isPageVisible = true;
-    let lastStatsValues = {}; // Кэш последних значений статистики для избежания лишних обновлений DOM
-    let lastChartDataHash = null; // Хеш данных графика
-    
-    // Throttle функция
-    function throttle(func, wait) {
-      let timeout;
-      return function executedFunction(...args) {
-        const later = () => {
-          clearTimeout(timeout);
-          func(...args);
-        };
-        clearTimeout(timeout);
-        timeout = setTimeout(later, wait);
-      };
-    }
-    
-    // Debounce функция
-    function debounce(func, wait) {
-      let timeout;
-      return function executedFunction(...args) {
-        const later = () => {
-          clearTimeout(timeout);
-          func(...args);
-        };
-        clearTimeout(timeout);
-        timeout = setTimeout(later, wait);
-      };
-    }
-    
-    // Проверка видимости страницы
-    document.addEventListener('visibilitychange', () => {
-      isPageVisible = !document.hidden;
-    });
-    
-    // Хеш для отслеживания изменений данных
-    function getSeriesHash(series) {
-      if (!series || series.length === 0) return 'empty';
-      return series.length + '_' + series[0]._id + '_' + series[series.length - 1]._id;
-    }
+    const DEFAULT_LIMIT = 2; // Показываем только последние 2 серии
+    let isInitialLoad = true; // Флаг первой загрузки
     
     function setView(view) {
       currentView = view;
@@ -460,131 +416,115 @@
     }
     
     function renderChart() {
-      // Отменяем предыдущий отложенный вызов
-      if (renderChartTimeout) {
-        clearTimeout(renderChartTimeout);
+      const filteredSeries = filterSeries(allSeries);
+      let completedSeries = filteredSeries.filter(s => s.status !== 'active').sort((a, b) => new Date(a.startedAt) - new Date(b.startedAt));
+      
+      // Применяем лимит для графика (берем последние N серий)
+      if (chartLimit !== 'all' && completedSeries.length > chartLimit) {
+        completedSeries = completedSeries.slice(-chartLimit);
       }
       
-      // Дебаунсим обновление графика
-      renderChartTimeout = setTimeout(() => {
-        const filteredSeries = filterSeries(allSeries);
-        let completedSeries = filteredSeries.filter(s => s.status !== 'active').sort((a, b) => new Date(a.startedAt) - new Date(b.startedAt));
-        
-        // Применяем лимит для графика (берем последние N серий)
-        if (chartLimit !== 'all' && completedSeries.length > chartLimit) {
-          completedSeries = completedSeries.slice(-chartLimit);
-        }
-        
-        if (completedSeries.length === 0) {
-          if (balanceChart) {
-            balanceChart.destroy();
-            balanceChart = null;
-            lastChartDataHash = null;
-          }
-          return;
-        }
-        
-        // Строим данные графика
-        const initialDeposit = globalStats.initialDeposit || 100;
-        let runningBalance = initialDeposit;
-        
-        const labels = ['Старт'];
-        const balanceData = [initialDeposit];
-        const pointColors = ['#3b82f6'];
-        const pointSizes = [3];
-        const tooltips = ['Начальный депозит: $' + initialDeposit];
-        
-        completedSeries.forEach(s => {
-          runningBalance += (s.totalPnL || 0);
-          const time = new Date(s.endedAt || s.startedAt).toLocaleTimeString('ru', {hour:'2-digit', minute:'2-digit'});
-          labels.push(time);
-          balanceData.push(runningBalance);
-          
-          const color = s.status === 'won' ? '#22c55e' : s.status === 'lost' ? '#ef4444' : '#eab308';
-          pointColors.push(color);
-          pointSizes.push(3);
-          
-          const pnl = s.totalPnL >= 0 ? `+$${s.totalPnL.toFixed(2)}` : `-$${Math.abs(s.totalPnL).toFixed(2)}`;
-          const statusText = s.status === 'won' ? 'Профит' : s.status === 'lost' ? 'Убыток' : 'Отмена';
-          tooltips.push(`${s.asset.toUpperCase()} ${statusText}: ${pnl}`);
-        });
-        
-        // Проверяем, изменились ли данные графика
-        const chartDataHash = JSON.stringify({labels, balanceData, pointColors});
-        if (lastChartDataHash === chartDataHash && balanceChart) {
-          return; // Данные не изменились, не обновляем график
-        }
-        lastChartDataHash = chartDataHash;
-        
-        const ctx = document.getElementById('balanceChart').getContext('2d');
-        
-        // Оптимизация: обновляем данные вместо пересоздания графика
+      if (completedSeries.length === 0) {
         if (balanceChart) {
-          balanceChart.data.labels = labels;
-          balanceChart.data.datasets[0].data = balanceData;
-          balanceChart.data.datasets[0].pointBackgroundColor = pointColors;
-          balanceChart.data.datasets[0].pointBorderColor = pointColors;
-          balanceChart.update('none'); // 'none' отключает анимацию для быстрого обновления
-        } else {
-          balanceChart = new Chart(ctx, {
-            type: 'line',
-            data: {
-              labels: labels,
-              datasets: [{
-                label: 'Баланс',
-                data: balanceData,
-                borderColor: '#3b82f6',
-                backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                borderWidth: 2,
-                fill: true,
-                tension: 0.3,
-                pointBackgroundColor: pointColors,
-                pointBorderColor: pointColors,
-                pointRadius: pointSizes,
-                pointHoverRadius: 5,
-              }]
-            },
-            options: {
-              responsive: true,
-              maintainAspectRatio: false,
-              animation: false,
-              plugins: {
-                legend: { display: false },
-                tooltip: {
-                  callbacks: {
-                    label: (ctx) => tooltips[ctx.dataIndex],
-                    afterLabel: (ctx) => `Баланс: $${ctx.raw.toFixed(2)}`
-                  }
-                }
-              },
-              scales: {
-                x: {
-                  grid: { color: 'rgba(255,255,255,0.05)' },
-                  ticks: { color: '#71717a', font: { size: 10 } }
-                },
-                y: {
-                  grid: { color: 'rgba(255,255,255,0.05)' },
-                  ticks: { 
-                    color: '#71717a', 
-                    font: { size: 10 },
-                    callback: v => '$' + parseFloat(v).toFixed(0)
-                  }
-                }
+          balanceChart.destroy();
+          balanceChart = null;
+        }
+        return;
+      }
+      
+      // Строим данные графика
+      const initialDeposit = globalStats.initialDeposit || 100;
+      let runningBalance = initialDeposit;
+      
+      const labels = ['Старт'];
+      const balanceData = [initialDeposit];
+      const pointColors = ['#3b82f6'];
+      const pointSizes = [3];
+      const tooltips = ['Начальный депозит: $' + initialDeposit];
+      
+      completedSeries.forEach(s => {
+        runningBalance += (s.totalPnL || 0);
+        const time = new Date(s.endedAt || s.startedAt).toLocaleTimeString('ru', {hour:'2-digit', minute:'2-digit'});
+        labels.push(time);
+        balanceData.push(runningBalance);
+        
+        const color = s.status === 'won' ? '#22c55e' : s.status === 'lost' ? '#ef4444' : '#eab308';
+        pointColors.push(color);
+        pointSizes.push(3);
+        
+        const pnl = s.totalPnL >= 0 ? `+$${s.totalPnL.toFixed(2)}` : `-$${Math.abs(s.totalPnL).toFixed(2)}`;
+        const statusText = s.status === 'won' ? 'Профит' : s.status === 'lost' ? 'Убыток' : 'Отмена';
+        tooltips.push(`${s.asset.toUpperCase()} ${statusText}: ${pnl}`);
+      });
+      
+      const ctx = document.getElementById('balanceChart').getContext('2d');
+      
+      if (balanceChart) {
+        balanceChart.destroy();
+      }
+      
+      balanceChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Баланс',
+            data: balanceData,
+            borderColor: '#3b82f6',
+            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+            borderWidth: 2,
+            fill: true,
+            tension: 0.3,
+            pointBackgroundColor: pointColors,
+            pointBorderColor: pointColors,
+            pointRadius: pointSizes,
+            pointHoverRadius: 5,
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: (ctx) => tooltips[ctx.dataIndex],
+                afterLabel: (ctx) => `Баланс: $${ctx.raw.toFixed(2)}`
               }
             }
-          });
+          },
+          scales: {
+            x: {
+              grid: { color: 'rgba(255,255,255,0.05)' },
+              ticks: { color: '#71717a', font: { size: 10 } }
+            },
+            y: {
+              grid: { color: 'rgba(255,255,255,0.05)' },
+              ticks: { 
+                color: '#71717a', 
+                font: { size: 10 },
+                callback: v => '$' + parseFloat(v).toFixed(0)
+              }
+            }
+          }
         }
-      }, 1000); // Дебаунсинг 1 секунда
+      });
     }
     
     function setPeriod(period) {
       currentPeriod = period;
       showAll = false;
-      filteredSeriesCache = null; // Сбрасываем кэш при смене периода
       document.querySelectorAll('.period-btn[data-period]').forEach(el => {
         el.classList.toggle('active', el.dataset.period === period);
       });
-      updateStats(true); // Принудительный рендеринг
+      updateStats();
+      if (currentView === 'chart') {
+        renderChart();
+      } else {
+        const filteredSeries = filterSeries(allSeries);
+        document.getElementById('series-list').innerHTML = renderSeries(filteredSeries);
+      }
     }
     
     function toggleStats() {
@@ -615,15 +555,15 @@
       document.querySelectorAll('.filter-row .stat-item').forEach(el => {
         el.classList.toggle('active', el.dataset.filter === filter);
       });
-      // Перерисовываем серии (используем кэш если есть)
-      const filteredSeries = filteredSeriesCache || filterSeries(allSeries);
+      // Перерисовываем серии
+      const filteredSeries = filterSeries(allSeries);
       document.getElementById('series-list').innerHTML = renderSeries(filteredSeries);
       // График не фильтруем по типу — показываем все
     }
     
     function toggleShowAll() {
       showAll = !showAll;
-      const filteredSeries = filteredSeriesCache || filterSeries(allSeries);
+      const filteredSeries = filterSeries(allSeries);
       document.getElementById('series-list').innerHTML = renderSeries(filteredSeries);
     }
 
@@ -674,8 +614,10 @@
       }
       
       // Ограничиваем количество если не showAll
-      const totalCount = filtered.length;
-      const displaySeries = showAll ? filtered : filtered.slice(0, DEFAULT_LIMIT);
+      // Сортируем по дате (новые первыми) и берем последние 2
+      const sorted = [...filtered].sort((a, b) => new Date(b.startedAt) - new Date(a.startedAt));
+      const totalCount = sorted.length;
+      const displaySeries = showAll ? sorted : sorted.slice(0, DEFAULT_LIMIT); // Берем первые 2 (самые новые)
       const hasMore = totalCount > DEFAULT_LIMIT;
 
       const seriesHtml = displaySeries.map(s => {
@@ -705,18 +647,13 @@
         }
         const pnlText = s.totalPnL ? (s.totalPnL >= 0 ? `+$${s.totalPnL.toFixed(2)}` : `-$${Math.abs(s.totalPnL).toFixed(2)}`) : '';
 
-        // Оптимизация: ограничиваем количество событий в timeline для производительности
-        const events = (s.events || []);
-        const maxEvents = 10; // Показываем только последние 10 событий
-        const timelineEvents = events.length > maxEvents ? events.slice(-maxEvents) : events;
-        const timeline = timelineEvents.map(e => {
+        const timeline = (s.events || []).map(e => {
           const cls = getEventClass(e.type);
           return `<div class="timeline-event ${cls}">
             <span class="timeline-time">${fmtTime(e.timestamp)}</span>
             <span class="timeline-msg">${e.message || e.type}</span>
           </div>`;
         }).join('');
-        const moreEventsCount = events.length > maxEvents ? events.length - maxEvents : 0;
 
         // Получаем полный ID серии (может быть _id или id)
         const seriesId = s._id || s.id || '';
@@ -737,7 +674,7 @@
             ${s.totalCommission ? `<span style="color: var(--text2); font-size: 0.9em;">💸 $${s.totalCommission.toFixed(2)}</span>` : ''}
             <span>🕐 ${fmtTime(s.startedAt)}</span>
           </div>
-          <div class="timeline">${moreEventsCount > 0 ? `<div style="color: var(--text2); font-size: 10px; padding: 4px 0;">... еще ${moreEventsCount} событий</div>` : ''}${timeline}</div>
+          <div class="timeline">${timeline}</div>
         </div>`;
       }).join('');
       
@@ -773,143 +710,97 @@
     let currentBotId = 'bot1'; // Текущий выбранный бот
     let allBots = []; // Список всех ботов
     
-    function updateStats(forceRender = false) {
-      // Отменяем предыдущий отложенный вызов
-      if (updateStatsTimeout && !forceRender) {
-        clearTimeout(updateStatsTimeout);
+    // Загружаем статистику один раз при загрузке страницы
+    async function loadStats() {
+      try {
+        const res = await fetch(`/api/trading/stats?botId=${currentBotId}`);
+        globalStats = await res.json();
+      } catch(e) { 
+        console.error('Error loading stats:', e);
+        // Используем значения по умолчанию если запрос не удался
+        globalStats = { initialDeposit: 100, currentBalance: 100 };
+      }
+    }
+    
+    function updateStats() {
+      const filteredSeries = filterSeries(allSeries);
+      
+      // Stats - Row 1: Баланс и P&L
+      const initialDeposit = globalStats.initialDeposit || 100;
+      
+      // P&L зависит от периода и валюты
+      let pnl = 0;
+      let completedSeries = [];
+      let activeSeries = [];
+      
+      if (currentPeriod === 'all') {
+        // P&L "Всего" - считаем из всех завершенных серий выбранного бота (исключаем cooldown)
+        completedSeries = allSeries.filter(s => s.status !== 'active' && s.status !== 'cooldown');
+        activeSeries = allSeries.filter(s => s.status === 'active' || s.status === 'cooldown');
+        pnl = completedSeries.reduce((sum, s) => sum + (s.totalPnL || 0), 0);
+      } else {
+        // P&L за период — сумма из серий, которые ЗАКОНЧИЛИСЬ за последние 24 часа (исключаем cooldown)
+        // (используем endedAt, а не startedAt, потому что P&L фиксируется при завершении)
+        const dayAgo = Date.now() - 24 * 60 * 60 * 1000;
+        completedSeries = allSeries.filter(s => {
+          if (s.status === 'active' || s.status === 'cooldown') return false; // Исключаем активные и cooldown
+          const endTime = s.endedAt ? new Date(s.endedAt).getTime() : null;
+          return endTime && endTime > dayAgo; // Закончились за последние 24 часа
+        });
+        // Активные серии для "За сутки" - все активные и cooldown серии выбранного бота
+        activeSeries = allSeries.filter(s => s.status === 'active' || s.status === 'cooldown');
+        pnl = completedSeries.reduce((sum, s) => sum + (s.totalPnL || 0), 0);
       }
       
-      const doUpdate = () => {
-        const currentHash = getSeriesHash(allSeries);
-        const needsFullRender = forceRender || currentHash !== lastSeriesHash;
-        
-        // Кэшируем отфильтрованные серии
-        if (!filteredSeriesCache || needsFullRender) {
-          filteredSeriesCache = filterSeries(allSeries);
-          lastSeriesHash = currentHash;
-        }
-        const filteredSeries = filteredSeriesCache;
-        
-        // Stats - Row 1: Баланс и P&L всегда считаем из серий
-        const initialDeposit = globalStats.initialDeposit || 100;
-        
-        // Всегда считаем баланс и P&L из серий выбранного бота
-        let pnl = 0;
-        let completedSeries = [];
-        let activeSeries = [];
-        
-        if (currentPeriod === 'all') {
-          // P&L "Всего" - считаем из всех завершенных серий выбранного бота (исключаем cooldown)
-          completedSeries = allSeries.filter(s => s.status !== 'active' && s.status !== 'cooldown');
-          activeSeries = allSeries.filter(s => s.status === 'active' || s.status === 'cooldown');
-          pnl = completedSeries.reduce((sum, s) => sum + (s.totalPnL || 0), 0);
-        } else {
-          // P&L за период — сумма из серий, которые ЗАКОНЧИЛИСЬ за последние 24 часа (исключаем cooldown)
-          // (используем endedAt, а не startedAt, потому что P&L фиксируется при завершении)
-          const dayAgo = Date.now() - 24 * 60 * 60 * 1000;
-          completedSeries = allSeries.filter(s => {
-            if (s.status === 'active' || s.status === 'cooldown') return false; // Исключаем активные и cooldown
-            const endTime = s.endedAt ? new Date(s.endedAt).getTime() : null;
-            return endTime && endTime > dayAgo; // Закончились за последние 24 часа
-          });
-          // Активные серии для "За сутки" - все активные и cooldown серии выбранного бота
-          activeSeries = allSeries.filter(s => s.status === 'active' || s.status === 'cooldown');
-          pnl = completedSeries.reduce((sum, s) => sum + (s.totalPnL || 0), 0);
-        }
-        
-        // Заморожено — сумма инвестиций в активных сериях (исключаем cooldown, у них нет инвестиций)
-        const frozen = activeSeries.filter(s => s.status === 'active').reduce((sum, s) => sum + (s.totalInvested || 0), 0);
-        
-        // Баланс всегда пересчитываем из серий: initialDeposit + P&L - замороженные средства
-        const displayBalance = initialDeposit + pnl - frozen;
-        
-        // Процент к начальному депозиту
-        const percentChange = ((displayBalance - initialDeposit) / initialDeposit) * 100;
-        const percentText = percentChange >= 0 
-          ? `+${percentChange.toFixed(2)}%` 
-          : `${percentChange.toFixed(2)}%`;
-        
-        // Обновляем DOM только если значения изменились
-        const balanceKey = `balance_${displayBalance.toFixed(2)}_${percentText}`;
-        if (lastStatsValues.balance !== balanceKey) {
-          const balanceEl = document.getElementById('stat-balance');
-          balanceEl.innerHTML = `$${displayBalance.toFixed(2)} <span class="percent-change">(${percentText})</span>`;
-          balanceEl.className = 'stat-value ' + (displayBalance >= initialDeposit ? 'positive' : 'negative');
-          lastStatsValues.balance = balanceKey;
-        }
-        
-        const pnlKey = `${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}`;
-        if (lastStatsValues.pnl !== pnlKey) {
-          const pnlEl = document.getElementById('stat-pnl');
-          pnlEl.textContent = pnlKey;
-          pnlEl.className = 'stat-value ' + (pnl >= 0 ? 'positive' : 'negative');
-          lastStatsValues.pnl = pnlKey;
-        }
-        
-        // Статистика всегда считаем из серий
-        let seriesForStats;
-        if (currentPeriod === 'all') {
-          // Для "Всего" используем все серии выбранного бота
-          seriesForStats = allSeries;
-        } else {
-          // Для "За сутки" используем filteredSeries (уже отфильтрованы по периоду)
-          seriesForStats = filteredSeries;
-        }
-        
-        const wonSeries = seriesForStats.filter(s => s.status === 'won');
-        const lostSeries = seriesForStats.filter(s => s.status === 'lost');
-        const cancelledSeries = seriesForStats.filter(s => s.status === 'cancelled');
-        const totalCount = seriesForStats.length;
-        const wonCount = wonSeries.length;
-        const lostCount = lostSeries.length;
-        const cancelledCount = cancelledSeries.length;
-        const winLossSeries = wonCount + lostCount;
-        const winRate = winLossSeries > 0 ? ((wonCount / winLossSeries) * 100).toFixed(0) : 0;
-        
-        // Обновляем только если значения изменились
-        if (lastStatsValues.winrate !== winRate) {
-          document.getElementById('stat-winrate').textContent = `${winRate}%`;
-          lastStatsValues.winrate = winRate;
-        }
-        const frozenKey = frozen.toFixed(2);
-        if (lastStatsValues.frozen !== frozenKey) {
-          document.getElementById('stat-frozen').textContent = `$${frozenKey}`;
-          lastStatsValues.frozen = frozenKey;
-        }
-        
-        // Stats - Row 2 (фильтры) - обновляем только если изменились
-        const statsKey = `${totalCount}_${wonCount}_${lostCount}_${cancelledCount}_${activeSeries.length}`;
-        if (lastStatsValues.counts !== statsKey) {
-          document.getElementById('stat-total').textContent = totalCount;
-          document.getElementById('stat-wins').textContent = wonCount;
-          document.getElementById('stat-losses').textContent = lostCount;
-          document.getElementById('stat-cancelled').textContent = cancelledCount;
-          document.getElementById('stat-active').textContent = activeSeries.length;
-          lastStatsValues.counts = statsKey;
-        }
-        
-        // Перерисовываем серии только если нужно и данные изменились
-        if (currentView === 'list' && needsFullRender) {
-          document.getElementById('series-list').innerHTML = renderSeries(filteredSeries);
-        }
-        
-        // Обновляем график если активен
-        if (currentView === 'chart') {
-          renderChart();
-        }
-      };
+      // Заморожено — сумма инвестиций в активных сериях (исключаем cooldown, у них нет инвестиций)
+      const frozen = activeSeries.filter(s => s.status === 'active').reduce((sum, s) => sum + (s.totalInvested || 0), 0);
       
-      if (forceRender) {
-        doUpdate();
-      } else {
-        updateStatsTimeout = setTimeout(doUpdate, 1000); // Дебаунсинг 1 секунда
+      // Баланс пересчитываем из серий для согласованности: initialDeposit + P&L - Торгуется
+      const calculatedBalance = initialDeposit + pnl - frozen;
+      
+      // Процент к начальному депозиту
+      const percentChange = ((calculatedBalance - initialDeposit) / initialDeposit) * 100;
+      const percentText = percentChange >= 0 
+        ? `+${percentChange.toFixed(2)}%` 
+        : `${percentChange.toFixed(2)}%`;
+      
+      const balanceEl = document.getElementById('stat-balance');
+      balanceEl.innerHTML = `$${calculatedBalance.toFixed(2)} <span class="percent-change">(${percentText})</span>`;
+      balanceEl.className = 'stat-value ' + (calculatedBalance >= initialDeposit ? 'positive' : 'negative');
+      
+      const pnlEl = document.getElementById('stat-pnl');
+      pnlEl.textContent = `${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}`;
+      pnlEl.className = 'stat-value ' + (pnl >= 0 ? 'positive' : 'negative');
+      
+      // Считаем статистику из серий за период
+      const wonSeries = filteredSeries.filter(s => s.status === 'won');
+      const lostSeries = filteredSeries.filter(s => s.status === 'lost');
+      const cancelledSeries = filteredSeries.filter(s => s.status === 'cancelled');
+      const activeSeriesFiltered = filteredSeries.filter(s => s.status === 'active');
+      
+      const winLossSeries = wonSeries.length + lostSeries.length;
+      const winRate = winLossSeries > 0 ? ((wonSeries.length / winLossSeries) * 100).toFixed(0) : 0;
+      document.getElementById('stat-winrate').textContent = `${winRate}%`;
+      
+      document.getElementById('stat-frozen').textContent = `$${frozen.toFixed(2)}`;
+      
+      // Stats - Row 2 (фильтры)
+      document.getElementById('stat-total').textContent = filteredSeries.length;
+      document.getElementById('stat-wins').textContent = wonSeries.length;
+      document.getElementById('stat-losses').textContent = lostSeries.length;
+      document.getElementById('stat-cancelled').textContent = cancelledSeries.length;
+      document.getElementById('stat-active').textContent = activeSeries.length;
+      
+      // Перерисовываем серии
+      document.getElementById('series-list').innerHTML = renderSeries(filteredSeries);
+      
+      // Обновляем график если активен
+      if (currentView === 'chart') {
+        renderChart();
       }
     }
     
     async function loadBots() {
-      // Загружаем ботов только один раз при загрузке страницы
-      if (allBots.length > 0) return;
-      
       try {
         const res = await fetch('/api/trading/bots');
         allBots = await res.json();
@@ -933,56 +824,68 @@
       } catch(e) { console.error(e); }
     }
     
-    function selectBot(botId) {
+    async function selectBot(botId) {
       if (!botId) return;
       currentBotId = botId;
-      filteredSeriesCache = null; // Сбрасываем кэш при смене бота
       
       // Обновляем активную кнопку
       document.querySelectorAll('.bot-btn').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.botId === botId);
       });
       
-      loadTrading(); // Перезагружаем данные для выбранного бота
+      // При смене бота делаем полную перезагрузку
+      isInitialLoad = true;
+      await loadStats();
+      loadTrading();
     }
 
     async function loadTrading() {
-      // Не загружаем данные если страница не видна
-      if (!isPageVisible) return;
-      
       try {
-        const [statsRes, seriesRes] = await Promise.all([
-          fetch(`/api/trading/stats?botId=${currentBotId}`),
-          fetch(`/api/trading/series?limit=500&botId=${currentBotId}`), // Уменьшили лимит с 1000 до 500
-        ]);
-        globalStats = await statsRes.json();
+        // При первой загрузке загружаем все серии для статистики, при обновлении - только последние 2
+        const limit = isInitialLoad ? 2000 : 2;
+        const seriesRes = await fetch(`/api/trading/series?limit=${limit}&botId=${currentBotId}`);
         const newSeries = await seriesRes.json();
         
-        // Проверяем, изменились ли данные перед обновлением
-        const newHash = getSeriesHash(newSeries);
-        if (newHash !== lastSeriesHash) {
+        if (isInitialLoad) {
+          // При первой загрузке просто заменяем все серии
           allSeries = newSeries;
-          filteredSeriesCache = null; // Сбрасываем кэш при новых данных
-          updateStats(true); // Принудительный рендеринг при новых данных
+          isInitialLoad = false;
         } else {
-          // Данные не изменились, обновляем только статистику без перерисовки серий
-          updateStats(false);
+          // При обновлении мержим с существующими сериями
+          // Создаем Map для быстрого поиска по _id
+          const seriesMap = new Map(allSeries.map(s => [s._id?.toString() || s.id?.toString(), s]));
+          
+          // Обновляем или добавляем новые серии
+          newSeries.forEach(newS => {
+            const id = newS._id?.toString() || newS.id?.toString();
+            if (id) {
+              seriesMap.set(id, newS);
+            }
+          });
+          
+          // Преобразуем обратно в массив и сортируем по startedAt (новые первыми)
+          allSeries = Array.from(seriesMap.values()).sort((a, b) => {
+            const timeA = new Date(a.startedAt).getTime();
+            const timeB = new Date(b.startedAt).getTime();
+            return timeB - timeA;
+          });
         }
+        
+        updateStats();
       } catch(e) { console.error(e); }
     }
 
-    loadBots();
-    loadMarkets();
-    loadTrading();
-    
-    // Оптимизация интервалов: увеличиваем интервал и используем проверку видимости
-    setInterval(() => {
-      if (isPageVisible) loadMarkets();
-    }, 5000); // Увеличили с 3 до 5 секунд
-    
-    setInterval(() => {
-      if (isPageVisible) loadTrading();
-    }, 5000); // Увеличили с 3 до 5 секунд
+    // Инициализация при загрузке страницы
+    async function init() {
+      await loadBots();
+      await loadStats(); // Загружаем статистику один раз
+      loadMarkets();
+      loadTrading();
+    }
+
+    init();
+    setInterval(loadMarkets, 5000); // Обновление каждые 5 секунд
+    setInterval(loadTrading, 5000); // Обновление каждые 5 секунд
   </script>
 </body>
 </html>

@@ -26,10 +26,6 @@ function createServer(port = 3000, tradingEmulators = null) {
     res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
   });
 
-  app.get('/dashboard-old', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'dashboard_old.html'));
-  });
-
   app.get('/monitor', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'monitor.html'));
   });
